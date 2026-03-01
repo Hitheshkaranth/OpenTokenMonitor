@@ -614,14 +614,6 @@ body {
   width: 30px;
 }
 
-.provider-card__big-num {
-  font-size: 18px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  line-height: 1;
-  flex-shrink: 0;
-}
-
 .provider-card__sub {
   font-size: 9px;
   color: var(--text-muted);
@@ -638,27 +630,6 @@ body {
 }
 
 .provider-card__bar-fill {
-  height: 100%;
-  border-radius: inherit;
-  transition: width 0.4s ease, background-color 0.3s ease;
-}
-
-.provider-card__week-num {
-  font-size: 12px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  flex-shrink: 0;
-}
-
-.provider-card__week-bar {
-  flex: 1;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-}
-
-.provider-card__week-bar > div {
   height: 100%;
   border-radius: inherit;
   transition: width 0.4s ease, background-color 0.3s ease;

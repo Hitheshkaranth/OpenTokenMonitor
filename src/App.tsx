@@ -195,6 +195,15 @@ const App: React.FC = () => {
     }
   };
 
+  const refreshCliStats = async () => {
+    try { setCliHistory(await invoke<CliActivity[]>('get_claude_history')); } catch {}
+    try { setCodexHistory(await invoke<CliActivity[]>('get_codex_history')); } catch {}
+    try { setGeminiStats(await invoke<GeminiStats>('get_gemini_stats')); } catch {}
+    try { setClaudeStats(await invoke<CliSummaryStats>('get_claude_stats')); } catch {}
+    try { setCodexStats(await invoke<CliSummaryStats>('get_codex_stats')); } catch {}
+    try { setClaudeCache(await invoke<ClaudeUsageCache>('get_claude_usage_cache')); } catch {}
+  };
+
   const saveConfig = async (newConfig: AppConfig) => {
     const normalized = normalizeConfig(newConfig);
     const store = await load('config.json', { defaults: { config: DEFAULT_CONFIG } });
@@ -241,7 +250,7 @@ const App: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '6px' }}>
-          <button className="icon-btn" onClick={() => { refreshData(config); refreshUsageWindows(config.usageAuth ?? DEFAULT_USAGE_AUTH); }} title="Refresh">
+          <button className="icon-btn" onClick={() => { refreshData(config); refreshUsageWindows(config.usageAuth ?? DEFAULT_USAGE_AUTH); refreshCliStats(); }} title="Refresh">
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
           <button className="icon-btn" onClick={() => setView('settings')} title="Settings">
@@ -278,7 +287,7 @@ const App: React.FC = () => {
         <button className={`tab-btn${mainView === 'trends' ? ' tab-btn--active' : ''}`} onClick={() => setMainView('trends')}><PieChart size={12} /> Trends</button>
       </div>
 
-      <main style={{ flex: 1, overflowY: mainView === 'home' ? 'hidden' : 'auto', padding: '10px 12px 12px', minHeight: 0 }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: mainView === 'home' ? 'hidden' : 'auto', padding: '10px 12px 12px', minHeight: 0 }}>
         {mainView === 'home' && (
           <HomeLimits limits={exactLimits} />
         )}

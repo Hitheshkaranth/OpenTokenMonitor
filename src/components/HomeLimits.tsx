@@ -27,20 +27,11 @@ function barColor(remaining: number, limit: number, providerColor: string): stri
   return providerColor;
 }
 
-function barWidth(remaining: number, limit: number): string {
-  if (limit <= 0) return '0%';
-  return `${Math.min(100, Math.round((remaining / limit) * 100))}%`;
-}
 
 const HomeLimits: React.FC<HomeLimitsProps> = ({ limits }) => {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', height: '100%' }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '2px',
-      }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)' }}>
           Usage Limits
         </span>
@@ -49,23 +40,22 @@ const HomeLimits: React.FC<HomeLimitsProps> = ({ limits }) => {
         </span>
       </div>
 
-      <div className="provider-cards">
+      <div className="home-rows">
         {PROVIDERS.map(({ key, label, color }) => {
-          const data   = limits[key];
-          const w4h    = data.fourHour;
-          const wk     = data.weekly;
+          const data    = limits[key];
+          const w4h     = data.fourHour;
+          const wk      = data.weekly;
           const color4h = barColor(w4h.remaining, w4h.limit, color);
           const colorWk = barColor(wk.remaining,  wk.limit,  color);
 
           return (
-            <div key={key} className="provider-card">
-              {/* Header row */}
-              <div className="provider-card__header">
-                <span className="provider-card__dot" style={{ background: color }} />
-                <span className="provider-card__name">{label}</span>
-                <em className={`source-pill source-pill--${w4h.source}`}>{w4h.source}</em>
+            <div key={key} className="home-row">
+              {/* Provider identity */}
+              <div className="home-row__provider">
+                <span className="home-row__dot" style={{ background: color }} />
+                <span className="home-row__name">{label}</span>
                 <button
-                  className="provider-card__link"
+                  className="home-row__link"
                   onClick={() => { openUrl(usageUrls[key]).catch((e) => console.warn('Could not open URL:', e)); }}
                   title={`View ${label} usage online`}
                   style={{ color }}
@@ -74,34 +64,26 @@ const HomeLimits: React.FC<HomeLimitsProps> = ({ limits }) => {
                 </button>
               </div>
 
+              <span className="home-row__sep" />
+
               {/* 4-hour window */}
-              <div className="provider-card__row">
-                <span className="provider-card__label">4H</span>
-                <span className="provider-card__combined-num" style={{ color: color4h }}>
+              <div className="home-row__window">
+                <span className="home-row__win-label">4H</span>
+                <span className="home-row__win-num" style={{ color: color4h }}>
                   {w4h.remaining}/{w4h.limit}
                 </span>
-                <div className="provider-card__bar-track">
-                  <div
-                    className="provider-card__bar-fill"
-                    style={{ width: barWidth(w4h.remaining, w4h.limit), background: color4h }}
-                  />
-                </div>
-                <span className="provider-card__reset">↻ {formatReset(w4h.resetAt, 'fourHour')}</span>
+                <span className="home-row__win-reset">↻ {formatReset(w4h.resetAt, 'fourHour')}</span>
               </div>
 
+              <span className="home-row__sep" />
+
               {/* Weekly window */}
-              <div className="provider-card__row">
-                <span className="provider-card__label">WEEK</span>
-                <span className="provider-card__combined-num" style={{ color: colorWk }}>
+              <div className="home-row__window">
+                <span className="home-row__win-label">WEEK</span>
+                <span className="home-row__win-num" style={{ color: colorWk }}>
                   {wk.remaining}/{wk.limit}
                 </span>
-                <div className="provider-card__bar-track">
-                  <div
-                    className="provider-card__bar-fill"
-                    style={{ width: barWidth(wk.remaining, wk.limit), background: colorWk }}
-                  />
-                </div>
-                <span className="provider-card__reset">↻ {formatReset(wk.resetAt, 'weekly')}</span>
+                <span className="home-row__win-reset">↻ {formatReset(wk.resetAt, 'weekly')}</span>
               </div>
             </div>
           );

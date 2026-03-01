@@ -503,6 +503,7 @@ fn watch_gemini(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
@@ -533,7 +534,8 @@ pub fn run() {
             let _ = tauri::tray::TrayIconBuilder::new()
                 .icon(tray_icon)
                 .menu(&tray_menu)
-                // Right-click menu handler
+                .show_menu_on_left_click(false)
+                // Right-click context menu handler
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => app.exit(0),
                     "show-hide" => {
@@ -548,9 +550,13 @@ pub fn run() {
                     }
                     _ => {}
                 })
-                // Left-click toggles the window (existing behaviour)
+                // Left-click toggles the window
                 .on_tray_icon_event(|tray, event| {
-                    if let tauri::tray::TrayIconEvent::Click { .. } = event {
+                    if let tauri::tray::TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event {
                         let app = tray.app_handle();
                         if let Some(w) = app.get_webview_window("main") {
                             if w.is_visible().unwrap_or(false) {

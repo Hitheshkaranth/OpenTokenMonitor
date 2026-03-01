@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "store:allow-load",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-save",
+    "http:default",
+    "fs:default",
+    "notification:default",
+    "shell:allow-open",
+    "core:window:allow-start-dragging",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus"
+  ]
+}

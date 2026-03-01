@@ -13,73 +13,103 @@ const usageUrls: Record<string, string> = {
   google: 'https://aistudio.google.com/',
 };
 
+const PROVIDERS = [
+  { key: 'anthropic' as const, label: 'Claude',  color: 'var(--claude-primary)'  },
+  { key: 'openai'    as const, label: 'Codex',   color: 'var(--openai-primary)'  },
+  { key: 'google'    as const, label: 'Gemini',  color: 'var(--gemini-primary)'  },
+];
+
+function barColor(remaining: number, limit: number, providerColor: string): string {
+  if (limit <= 0) return providerColor;
+  const pct = remaining / limit;
+  if (pct <= 0.10) return '#F87171';
+  if (pct <= 0.30) return '#FBBF24';
+  return providerColor;
+}
+
+function barWidth(remaining: number, limit: number): string {
+  if (limit <= 0) return '0%';
+  return `${Math.min(100, Math.round((remaining / limit) * 100))}%`;
+}
+
 const HomeLimits: React.FC<HomeLimitsProps> = ({ limits }) => {
-
-  const rows = [
-    { key: 'anthropic' as const, label: 'Claude', color: 'var(--claude-primary)', data: limits.anthropic },
-    { key: 'openai' as const, label: 'Codex', color: 'var(--openai-primary)', data: limits.openai },
-    { key: 'google' as const, label: 'Gemini', color: 'var(--gemini-primary)', data: limits.google },
-  ];
-
   return (
-    <section className="home-limit-matrix">
-      <div className="home-limit-matrix__head">
-        <span>Limits Dashboard</span>
-        <span>{limits.lastSyncAt ? `Synced ${formatTime(limits.lastSyncAt)}` : 'Sync pending'}</span>
-      </div>
-      <div className="home-limit-matrix__reset">
-        <span>4h reset {formatReset(rows[0].data.fourHour.resetAt)}</span>
-        <span>Week reset {formatReset(rows[0].data.weekly.resetAt)}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', height: '100%' }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '2px',
+      }}>
+        <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)' }}>
+          Usage Limits
+        </span>
+        <span style={{ fontSize: '9px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+          {limits.lastSyncAt ? `synced ${formatTime(limits.lastSyncAt)}` : 'sync pending'}
+        </span>
       </div>
 
-      <div className="home-limit-table">
-        <div className="home-limit-table__header">Model</div>
-        <div className="home-limit-table__header">4h Remaining</div>
-        <div className="home-limit-table__header">Weekly Remaining</div>
+      <div className="provider-cards">
+        {PROVIDERS.map(({ key, label, color }) => {
+          const data   = limits[key];
+          const w4h    = data.fourHour;
+          const wk     = data.weekly;
+          const color4h = barColor(w4h.remaining, w4h.limit, color);
+          const colorWk = barColor(wk.remaining,  wk.limit,  color);
 
-        {rows.map((row) => {
-          const left4h = row.data.fourHour.remaining;
-          const leftWeek = row.data.weekly.remaining;
           return (
-            <React.Fragment key={row.key}>
-              <div className="home-limit-cell home-limit-cell--model">
-                <span className="home-limit-dot" style={{ background: row.color }} />
-                <span>{row.label}</span>
-                <em className={`source-pill source-pill--${row.data.fourHour.source}`}>{row.data.fourHour.source}</em>
-              </div>
-              <div className="home-limit-cell">
-                <strong style={{ color: row.color }}>{left4h} left</strong>
-                <small>used {row.data.fourHour.used} / {row.data.fourHour.limit}</small>
-              </div>
-              <div className="home-limit-cell" style={{ position: 'relative' }}>
-                <strong style={{ color: row.color }}>{leftWeek} left</strong>
-                <small>used {row.data.weekly.used} / {row.data.weekly.limit}</small>
+            <div key={key} className="provider-card">
+              {/* Header row */}
+              <div className="provider-card__header">
+                <span className="provider-card__dot" style={{ background: color }} />
+                <span className="provider-card__name">{label}</span>
+                <em className={`source-pill source-pill--${w4h.source}`}>{w4h.source}</em>
                 <button
-                  onClick={() => { openUrl(usageUrls[row.key]).catch((e) => console.warn('Could not open URL:', e)); }}
-                  title={`View ${row.label} usage online`}
-                  style={{
-                    position: 'absolute',
-                    top: '4px',
-                    right: '4px',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: row.color,
-                    padding: '2px',
-                    opacity: 0.7,
-                    lineHeight: 1,
-                  }}
+                  className="provider-card__link"
+                  onClick={() => { openUrl(usageUrls[key]).catch((e) => console.warn('Could not open URL:', e)); }}
+                  title={`View ${label} usage online`}
+                  style={{ color }}
                 >
                   <ExternalLink size={10} />
                 </button>
               </div>
-            </React.Fragment>
+
+              {/* 4-hour window */}
+              <div className="provider-card__row">
+                <span className="provider-card__label">4H</span>
+                <span className="provider-card__combined-num" style={{ color: color4h }}>
+                  {w4h.remaining}/{w4h.limit}
+                </span>
+                <div className="provider-card__bar-track">
+                  <div
+                    className="provider-card__bar-fill"
+                    style={{ width: barWidth(w4h.remaining, w4h.limit), background: color4h }}
+                  />
+                </div>
+                <span className="provider-card__reset">↻ {formatReset(w4h.resetAt, 'fourHour')}</span>
+              </div>
+
+              {/* Weekly window */}
+              <div className="provider-card__row">
+                <span className="provider-card__label">WEEK</span>
+                <span className="provider-card__combined-num" style={{ color: colorWk }}>
+                  {wk.remaining}/{wk.limit}
+                </span>
+                <div className="provider-card__bar-track">
+                  <div
+                    className="provider-card__bar-fill"
+                    style={{ width: barWidth(wk.remaining, wk.limit), background: colorWk }}
+                  />
+                </div>
+                <span className="provider-card__reset">↻ {formatReset(wk.resetAt, 'weekly')}</span>
+              </div>
+            </div>
           );
         })}
       </div>
 
       {renderSyncErrors(limits.syncErrors)}
-    </section>
+    </div>
   );
 };
 
@@ -96,15 +126,27 @@ function renderSyncErrors(syncErrors?: ExactUsageLimits['syncErrors']) {
   );
 }
 
-function formatReset(value?: string): string {
-  if (!value) return '--';
-  const dt = new Date(value);
-  if (Number.isNaN(dt.getTime())) return value;
-  return dt.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-}
-
 function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function formatReset(resetAt: string | undefined, type: 'fourHour' | 'weekly'): string {
+  if (!resetAt) return '--';
+  const d = new Date(resetAt);
+  if (isNaN(d.getTime())) return '--';
+
+  if (type === 'fourHour') {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  // Weekly: show day abbreviation if within 8 days, else "in Xd"
+  const diffMs = d.getTime() - Date.now();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return 'now';
+  if (diffDays <= 8) {
+    return d.toLocaleDateString([], { weekday: 'short' });
+  }
+  return `in ${diffDays}d`;
 }
 
 export default HomeLimits;

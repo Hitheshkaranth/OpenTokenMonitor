@@ -544,3 +544,139 @@ body {
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+
+/* ── Provider Cards (Home tab) ── */
+.provider-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+
+.provider-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+  justify-content: center;
+}
+
+.provider-card__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.provider-card__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.provider-card__name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.provider-card__link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0.55;
+  line-height: 1;
+  transition: opacity 0.15s;
+}
+.provider-card__link:hover { opacity: 1; }
+
+.provider-card__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.provider-card__label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  width: 30px;
+}
+
+.provider-card__big-num {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.provider-card__sub {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.provider-card__bar-track {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.provider-card__bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.4s ease, background-color 0.3s ease;
+}
+
+.provider-card__week-num {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.provider-card__week-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.provider-card__week-bar > div {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.4s ease, background-color 0.3s ease;
+}
+
+.provider-card__combined-num {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.provider-card__reset {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-left: auto;
+}

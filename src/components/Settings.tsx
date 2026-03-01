@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronLeft, Lock, ExternalLink } from 'lucide-react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { AppConfig, ProviderName } from '../types';
 
 interface SettingsProps {
@@ -114,6 +115,47 @@ const Settings: React.FC<SettingsProps> = ({ config, onSave, onBack }) => {
                 }}
               />
             </div>
+          ))}
+        </section>
+
+        <section style={{ marginBottom: '24px' }}>
+          <h3 style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Platform Usage
+          </h3>
+          <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: '1.5' }}>
+            Open the official usage dashboard for each platform in your browser.
+          </p>
+
+          {[
+            { label: 'Claude', color: 'var(--claude-primary)', url: 'https://claude.ai/settings/usage' },
+            { label: 'Codex', color: 'var(--openai-primary)', url: 'https://chatgpt.com/codex/settings/usage' },
+            { label: 'Gemini', color: 'var(--gemini-primary)', url: 'https://aistudio.google.com/' },
+          ].map(({ label, color, url }) => (
+            <button
+              key={label}
+              onClick={() => openUrl(url)}
+              style={{
+                width: '100%',
+                marginBottom: '8px',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: `1px solid ${color}33`,
+                background: `${color}11`,
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 600,
+              }}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, display: 'inline-block' }} />
+                View {label} Usage
+              </span>
+              <ExternalLink size={12} style={{ color, opacity: 0.8 }} />
+            </button>
           ))}
         </section>
 

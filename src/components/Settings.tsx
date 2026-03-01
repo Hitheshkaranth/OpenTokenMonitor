@@ -133,7 +133,7 @@ const Settings: React.FC<SettingsProps> = ({ config, onSave, onBack }) => {
           ].map(({ label, color, url }) => (
             <button
               key={label}
-              onClick={() => openUrl(url)}
+              onClick={() => { openUrl(url).catch((e) => console.warn('Could not open URL:', e)); }}
               style={{
                 width: '100%',
                 marginBottom: '8px',

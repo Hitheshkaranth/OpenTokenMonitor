@@ -7,12 +7,13 @@ interface HomeLimitsProps {
   limits: ExactUsageLimits;
 }
 
+const usageUrls: Record<string, string> = {
+  anthropic: 'https://claude.ai/settings/usage',
+  openai: 'https://chatgpt.com/codex/settings/usage',
+  google: 'https://aistudio.google.com/',
+};
+
 const HomeLimits: React.FC<HomeLimitsProps> = ({ limits }) => {
-  const usageUrls: Record<string, string> = {
-    anthropic: 'https://claude.ai/settings/usage',
-    openai: 'https://chatgpt.com/codex/settings/usage',
-    google: 'https://aistudio.google.com/',
-  };
 
   const rows = [
     { key: 'anthropic' as const, label: 'Claude', color: 'var(--claude-primary)', data: limits.anthropic },
@@ -54,7 +55,7 @@ const HomeLimits: React.FC<HomeLimitsProps> = ({ limits }) => {
                 <strong style={{ color: row.color }}>{leftWeek} left</strong>
                 <small>used {row.data.weekly.used} / {row.data.weekly.limit}</small>
                 <button
-                  onClick={() => openUrl(usageUrls[row.key])}
+                  onClick={() => { openUrl(usageUrls[row.key]).catch((e) => console.warn('Could not open URL:', e)); }}
                   title={`View ${row.label} usage online`}
                   style={{
                     position: 'absolute',

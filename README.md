@@ -1,43 +1,49 @@
 # OpenTokenMonitor
 
-<p align="center">
-  <img src="./open_token_monitor_icon.png" width="80" alt="OpenTokenMonitor logo" />
-</p>
-
-OpenTokenMonitor is a desktop Tauri app that tracks local AI CLI activity in one always-on-top widget.
-
-It reads local history/state from:
-- Claude Code (`~/.claude`)
-- OpenAI Codex (`~/.codex`)
-- Gemini CLI (`~/.gemini`)
-
-Optional provider API keys can be added in Settings for usage/cost views.
+Desktop monitor for AI CLI usage across Claude Code, OpenAI Codex, and Gemini CLI.
 
 ![OpenTokenMonitor screenshot](./open_token_display.png)
 
-## Features
+## Overview
 
-- Live CLI activity stream for Claude, Codex, and Gemini.
-- Provider summary cards (commands, sessions, projects, and cached Claude usage when available).
-- Home limits view with recent usage windows.
-- 7-day trends chart.
-- Frameless, draggable, always-on-top mini window.
-- Tray icon with show/hide and quit actions.
+OpenTokenMonitor is a small always-on-top desktop widget built with Tauri. It watches local CLI history/state files and gives you a unified live view of:
+
+- recent commands
+- per-provider usage summaries
+- basic trend signals
+- optional API-backed usage/cost views when keys are configured
+
+The app is local-first and works without API keys for activity tracking.
+
+## Key Features
+
+- Real-time activity feed for Claude, Codex, and Gemini CLI events.
+- Provider cards with command/session/project metrics.
+- Home limits panel with recent usage windows.
+- Trends tab for recent usage visualization.
+- Tray integration (show/hide + quit).
+- Frameless, draggable, always-on-top desktop window.
 
 ## Tech Stack
 
-- Frontend: React + TypeScript + Vite
-- Desktop shell: Tauri v2
-- Backend: Rust (Tokio + notify filesystem watchers)
+- React 19
+- TypeScript 5
+- Vite 7
+- Tauri v2
+- Rust (Tokio + notify)
+- Lucide React
+- Tauri plugins: store, http, fs, shell, notification
 
-## Prerequisites
+## Getting Started
 
-- Node.js 18+ (Node.js 20+ recommended)
+### Prerequisites
+
+- Node.js 18+ (20+ recommended)
 - npm 9+
 - Rust stable toolchain (`rustup`)
-- Tauri system prerequisites for your OS: <https://v2.tauri.app/start/prerequisites/>
+- OS dependencies for Tauri: <https://v2.tauri.app/start/prerequisites/>
 
-## Quick Start (Development)
+### Development
 
 ```bash
 git clone https://github.com/<your-org>/OpenTokenMonitor.git
@@ -48,82 +54,59 @@ npm run tauri dev
 
 ## Usage
 
-1. Start the app (`npm run tauri dev` in development, or launch installed app).
-2. Run commands in Claude/Codex/Gemini CLIs as normal.
-3. Watch `Live` and `Stats` tabs update from local history files.
-4. Open `Settings` to:
-   - Add optional API keys.
-   - Configure refresh interval.
-   - Configure usage auth bridge values if needed.
-5. Use `-` button to hide to tray; click tray icon or tray menu to restore.
+1. Launch the app.
+2. Run `claude`, `codex`, or Gemini CLI commands in your normal workflow.
+3. Track activity in `Live`, provider status in `Stats`, and trends in `Trends`.
+4. Open `Settings` to configure API keys and refresh behavior.
+5. Use the `-` control to hide to tray and restore from tray icon/menu.
 
-## Build Options
+## Build
 
-### Frontend-only build
+### Frontend build
 
 ```bash
 npm run build
 ```
 
-Outputs static assets into `dist/`.
-
-### Desktop app build (default targets for current OS)
+### Desktop build
 
 ```bash
 npm run tauri build
 ```
 
-Bundle outputs are under:
-- `src-tauri/target/release/bundle/`
+Artifacts are generated under `src-tauri/target/release/bundle/`.
 
-### Target-specific desktop build
-
-Use Tauri arguments after `--`:
+### Build by bundle target
 
 ```bash
-# example: Windows NSIS bundle
 npm run tauri build -- --bundles nsis
-
-# example: Linux deb bundle
 npm run tauri build -- --bundles deb
 ```
 
-Common bundle types by platform:
+Supported bundles vary by platform:
+
 - Windows: `nsis`, `msi`
 - macOS: `dmg`, `app`
 - Linux: `deb`, `appimage`, `rpm`
 
 ## Quality Checks
 
-Run these before pushing:
-
 ```bash
-# TypeScript + Vite production build
 npm run build
-
-# Rust compile check for backend
 cargo check --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Optional full packaging check:
-
-```bash
-npm run tauri build
-```
-
-## Project Layout
+## Project Structure
 
 ```text
 .
-|-- src/                 # React frontend
-|-- src-tauri/           # Rust + Tauri backend
-|-- public/              # Static assets
-|-- docs/                # Planning notes
-|-- open_token_display.png
-`-- open_token_monitor_icon.png
+|-- src/         # React UI
+|-- src-tauri/   # Rust + Tauri runtime
+|-- public/      # Static assets
+`-- docs/        # Design and implementation notes
 ```
 
-## Notes
+## License
 
-- No cloud sync is required for local CLI activity tracking.
-- If a provider shows no activity, verify that provider CLI has created its local history/state files.
+Licensed under the MIT License. See [LICENSE](./LICENSE).

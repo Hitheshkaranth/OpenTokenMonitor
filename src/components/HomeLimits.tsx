@@ -1,4 +1,6 @@
 import React from 'react';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import { ExternalLink } from 'lucide-react';
 import { ExactUsageLimits } from '../types';
 
 interface HomeLimitsProps {
@@ -6,6 +8,12 @@ interface HomeLimitsProps {
 }
 
 const HomeLimits: React.FC<HomeLimitsProps> = ({ limits }) => {
+  const usageUrls: Record<string, string> = {
+    anthropic: 'https://claude.ai/settings/usage',
+    openai: 'https://chatgpt.com/codex/settings/usage',
+    google: 'https://aistudio.google.com/',
+  };
+
   const rows = [
     { key: 'anthropic' as const, label: 'Claude', color: 'var(--claude-primary)', data: limits.anthropic },
     { key: 'openai' as const, label: 'Codex', color: 'var(--openai-primary)', data: limits.openai },
@@ -42,9 +50,27 @@ const HomeLimits: React.FC<HomeLimitsProps> = ({ limits }) => {
                 <strong style={{ color: row.color }}>{left4h} left</strong>
                 <small>used {row.data.fourHour.used} / {row.data.fourHour.limit}</small>
               </div>
-              <div className="home-limit-cell">
+              <div className="home-limit-cell" style={{ position: 'relative' }}>
                 <strong style={{ color: row.color }}>{leftWeek} left</strong>
                 <small>used {row.data.weekly.used} / {row.data.weekly.limit}</small>
+                <button
+                  onClick={() => openUrl(usageUrls[row.key])}
+                  title={`View ${row.label} usage online`}
+                  style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: row.color,
+                    padding: '2px',
+                    opacity: 0.7,
+                    lineHeight: 1,
+                  }}
+                >
+                  <ExternalLink size={10} />
+                </button>
               </div>
             </React.Fragment>
           );

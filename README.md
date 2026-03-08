@@ -1,97 +1,109 @@
 # OpenTokenMonitor
 
-**A sleek, local-first desktop monitor for your AI command-line tool usage.**
+A local-first desktop monitor for Claude, Codex, and Gemini CLI usage.
 
-<div>
-  <img src="https://img.shields.io/badge/Tauri-26C0FF?style=for-the-badge&logo=tauri&logoColor=white" alt="Tauri" />
-  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
-  <img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust" />
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" alt="License: MIT" />
-</div>
+[![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
+[![React](https://img.shields.io/badge/React-19-20232A?logo=react&logoColor=61DAFB)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Rust](https://img.shields.io/badge/Rust-2021-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Vite](https://img.shields.io/badge/Vite-7.x-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-<br/>
+![OpenTokenMonitor screenshot](./docs/images/app-screenshot-2026-03-08.png)
 
-![OpenTokenMonitor screenshot](./open_token_display.png)
+## Features
 
-## Overview
+- Unified dashboard for Claude, Codex, and Gemini activity
+- Local log scanning with optional live API enrichment
+- Provider status cards, usage windows, trends, and cost tracking
+- System tray support for always-available monitoring
+- Cross-platform desktop app via Tauri (Windows, macOS, Linux)
 
-OpenTokenMonitor is a lightweight, always-on-top desktop widget that gives you a unified, real-time view of your AI CLI tool activity. It's designed for developers who frequently use command-line AI tools and want to keep track of their usage patterns and costs without interrupting their workflow.
+## Supported Providers
 
-The application is **local-first**, meaning it works out-of-the-box by securely reading local history files. For enhanced, real-time data, you can optionally add API keys to see live token counts and rate limits directly from provider APIs.
+- Claude CLI (Anthropic)
+- Codex CLI (OpenAI)
+- Gemini CLI (Google)
 
-## ✨ Key Features
+## Tech Stack
 
--   **Unified Dashboard:** A single place to monitor usage across multiple AI providers.
--   **Live Activity Feed:** See your CLI commands from different tools appear in real-time.
--   **Provider-Specific Stats:** Get detailed metrics like commands per day, unique projects, and active sessions.
--   **Usage Trends:** Visualize your activity over time to understand your habits.
--   **System Tray Integration:** Runs discreetly in your system tray for easy access.
--   **Live API Integration (Optional):** Add your API keys to see up-to-the-minute token consumption and rate-limit data from supported providers.
--   **Cross-Platform:** Works on Windows, macOS, and Linux.
+- Frontend: React 19, TypeScript, Vite, Zustand, Recharts, Framer Motion
+- Desktop shell: Tauri 2
+- Backend/core: Rust, Tokio, Reqwest, Rusqlite, Notify
 
-## ✅ Supported Providers
-
--   **Anthropic** (Claude CLI)
--   **OpenAI** (Codex CLI)
--   **Google** (Gemini CLI)
-
-## 🚀 Installation
-
-Pre-built binaries for Windows, macOS, and Linux are available on the **[GitHub Releases](https://github.com/side-quests/OpenTokenMonitor/releases)** page.
-
-1.  Go to the latest release.
-2.  Download the appropriate installer for your operating system (e.g., `.msi` for Windows, `.dmg` for macOS, `.deb` or `.AppImage` for Linux).
-3.  Run the installer.
-
-## ⚙️ How It Works
-
-OpenTokenMonitor uses a hybrid approach to gather your usage data:
-
-1.  **Local File Monitoring:** A high-performance Rust core continuously watches the history and log files created by the official Claude, Codex, and Gemini CLIs. This provides a secure, private, and key-free way to track your activity.
-2.  **Direct API Calls:** For live data, the frontend uses an HTTP client to query provider APIs (e.g., Anthropic's rate-limit endpoint). This data is layered on top of the local history to give you the most accurate, real-time view possible. Your API keys are stored locally and are never sent anywhere except the intended provider.
-
-For a more detailed technical breakdown, see the [**Architecture Document**](./ARCHITECTURE.md).
-
-## 🧑‍💻 For Developers
-
-Interested in contributing? Welcome!
+## Quick Start
 
 ### Prerequisites
 
--   **Node.js:** v18+ (v20+ recommended)
--   **Rust:** Latest stable toolchain (install via `rustup`)
--   **OS Dependencies:** Follow the [Tauri prerequisites guide](https://v2.tauri.app/start/prerequisites/) for your specific OS.
+- Node.js 18+ (Node.js 20+ recommended)
+- Rust stable toolchain (`rustup`)
+- Tauri OS prerequisites: https://v2.tauri.app/start/prerequisites/
 
-### Development Setup
+### Install
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/side-quests/OpenTokenMonitor.git
-    cd OpenTokenMonitor
-    ```
+```bash
+git clone https://github.com/side-quests/OpenTokenMonitor.git
+cd OpenTokenMonitor
+npm install
+```
 
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
+### Run (Web UI Only)
 
-3.  **Run the development server:**
-    ```bash
-    npm run tauri dev
-    ```
-    This will launch the application in a live-reloading development window.
+```bash
+npm run dev
+```
 
-### Build From Source
+### Run (Desktop App with Tauri)
 
-You can build the application for your local platform with the following command:
+```bash
+npm run tauri dev
+```
+
+### Build Frontend
+
+```bash
+npm run build
+```
+
+### Build Desktop App
 
 ```bash
 npm run tauri build
 ```
 
-The compiled application will be located in `src-tauri/target/release/bundle/`.
+## NPM Scripts
 
-## 📄 License
+- `npm run dev` - Start Vite dev server
+- `npm run build` - Type-check and build frontend (`tsc && vite build`)
+- `npm run preview` - Preview production frontend build
+- `npm run tauri dev` - Run Tauri desktop app in development
+- `npm run tauri build` - Build desktop installers/bundles
 
-This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
+## How It Works
+
+1. Rust backend watches local CLI/session/log files and parses usage signals.
+2. Frontend requests provider snapshots through Tauri commands.
+3. Optional provider API calls enrich local data with live limit/usage status.
+4. Aggregated state is rendered as cards, meters, trends, and overview widgets.
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper implementation details.
+
+## Project Structure
+
+```text
+.
+|- src/                 # React UI (components, stores, hooks, styles)
+|- src-tauri/           # Rust/Tauri backend and desktop config
+|- public/              # Static assets
+|- docs/images/         # README and documentation images
+|- ARCHITECTURE.md      # System architecture notes
+```
+
+## Releases
+
+Prebuilt binaries are published on GitHub Releases:
+https://github.com/side-quests/OpenTokenMonitor/releases
+
+## License
+
+MIT - see [LICENSE](./LICENSE).

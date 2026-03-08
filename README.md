@@ -1,6 +1,6 @@
-# OpenTokenMonitor
+![OpenTokenMonitor](./docs/images/open_token_display.png)
 
-A local-first desktop monitor for Claude, Codex, and Gemini CLI usage.
+Local-first desktop monitor for Claude, Codex, and Gemini usage.
 
 [![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-19-20232A?logo=react&logoColor=61DAFB)](https://react.dev/)
@@ -11,13 +11,13 @@ A local-first desktop monitor for Claude, Codex, and Gemini CLI usage.
 
 ![OpenTokenMonitor screenshot](./docs/images/app-screenshot-2026-03-08.png)
 
-## Features
+## Highlights
 
-- Unified dashboard for Claude, Codex, and Gemini activity
-- Local log scanning with optional live API enrichment
-- Provider status cards, usage windows, trends, and cost tracking
-- System tray support for always-available monitoring
-- Cross-platform desktop app via Tauri (Windows, macOS, Linux)
+- Unified dashboard for Claude, Codex, and Gemini
+- Live usage windows, trends, and cost tracking
+- Local log scanning with optional API/cookie enrichment
+- Native system tray + frameless desktop UI
+- Built with Tauri (Windows, macOS, Linux)
 
 ## Supported Providers
 
@@ -25,19 +25,19 @@ A local-first desktop monitor for Claude, Codex, and Gemini CLI usage.
 - Codex CLI (OpenAI)
 - Gemini CLI (Google)
 
-## Tech Stack
+## Stack
 
-- Frontend: React 19, TypeScript, Vite, Zustand, Recharts, Framer Motion
+- Frontend: React 19, TypeScript, Zustand, Recharts, Framer Motion, Vite
 - Desktop shell: Tauri 2
-- Backend/core: Rust, Tokio, Reqwest, Rusqlite, Notify
+- Backend: Rust, Tokio, Reqwest, Rusqlite, Notify
 
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ (Node.js 20+ recommended)
-- Rust stable toolchain (`rustup`)
-- Tauri OS prerequisites: https://v2.tauri.app/start/prerequisites/
+- Node.js 18+ (20+ recommended)
+- Rust stable (`rustup`)
+- Tauri platform prerequisites: https://v2.tauri.app/start/prerequisites/
 
 ### Install
 
@@ -47,63 +47,74 @@ cd OpenTokenMonitor
 npm install
 ```
 
-### Run (Web UI Only)
+### Run
 
 ```bash
+# Web UI only
 npm run dev
-```
 
-### Run (Desktop App with Tauri)
-
-```bash
+# Desktop app (Tauri)
 npm run tauri dev
 ```
 
-### Build Frontend
+### Build
 
 ```bash
+# Frontend
 npm run build
+
+# Desktop installers/bundles
+npm run tauri build
 ```
 
-### Build Desktop App
+## Scripts
+
+- `npm run dev` - Start Vite dev server
+- `npm run build` - Type-check and build frontend
+- `npm run preview` - Preview production frontend build
+- `npm run tauri dev` - Run desktop app in development
+- `npm run tauri build` - Build desktop installers
+
+## Architecture
+
+1. Rust/Tauri backend scans local provider data (`.claude`, `.codex`, `.gemini`) and keeps usage snapshots updated.
+2. Provider modules merge local file parsing with optional API/cookie/CLI enrichment when available.
+3. React frontend calls Tauri commands to fetch usage/status, then stores and normalizes state in Zustand.
+4. UI components render provider cards, meters, countdown windows, trends, and overview panels in real time.
+5. Tray integration keeps the app available in the background while preserving a lightweight desktop footprint.
+
+Detailed notes: [ARCHITECTURE.md](./ARCHITECTURE.md)
+
+## Build Outputs (Including Direct .exe)
+
+After running:
 
 ```bash
 npm run tauri build
 ```
 
-## NPM Scripts
+Windows build artifacts are generated under `src-tauri/target/release/` and `src-tauri/target/release/bundle/`.
 
-- `npm run dev` - Start Vite dev server
-- `npm run build` - Type-check and build frontend (`tsc && vite build`)
-- `npm run preview` - Preview production frontend build
-- `npm run tauri dev` - Run Tauri desktop app in development
-- `npm run tauri build` - Build desktop installers/bundles
+- Direct executable for immediate use: `src-tauri/target/release/*.exe`
+- Installer packages (depending on target config): `src-tauri/target/release/bundle/msi/*.msi`
 
-## How It Works
+Use the direct `.exe` when you want to run the app immediately without installing.
 
-1. Rust backend watches local CLI/session/log files and parses usage signals.
-2. Frontend requests provider snapshots through Tauri commands.
-3. Optional provider API calls enrich local data with live limit/usage status.
-4. Aggregated state is rendered as cards, meters, trends, and overview widgets.
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for deeper implementation details.
-
-## Project Structure
+## Project Layout
 
 ```text
 .
-|- src/                 # React UI (components, stores, hooks, styles)
-|- src-tauri/           # Rust/Tauri backend and desktop config
+|- src/                 # React UI (components, hooks, stores, styles)
+|- src-tauri/           # Rust/Tauri backend
 |- public/              # Static assets
-|- docs/images/         # README and documentation images
-|- ARCHITECTURE.md      # System architecture notes
+|- docs/images/         # README screenshots
+|- ARCHITECTURE.md      # Architecture notes
 ```
 
 ## Releases
 
-Prebuilt binaries are published on GitHub Releases:
 https://github.com/side-quests/OpenTokenMonitor/releases
 
 ## License
 
-MIT - see [LICENSE](./LICENSE).
+MIT. See [LICENSE](./LICENSE).

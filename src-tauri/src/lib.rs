@@ -139,6 +139,12 @@ async fn set_refresh_cadence(cadence: RefreshCadence, app: AppHandle, state: Sta
     Ok(())
 }
 
+#[tauri::command]
+async fn quit_app(app: AppHandle) -> Result<(), String> {
+    app.exit(0);
+    Ok(())
+}
+
 fn restart_scheduler(app: &AppHandle, state: &AppState, cadence: RefreshCadence) {
     let app_handle = app.clone();
     state.scheduler.restart(cadence, move || {
@@ -310,6 +316,7 @@ pub fn run() {
             set_api_key,
             get_provider_status,
             set_refresh_cadence,
+            quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,4 +1,5 @@
 import { PropsWithChildren } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { BarChart3, Home, Settings2 } from 'lucide-react';
 import GlassPill from '@/components/glass/GlassPill';
@@ -31,8 +32,8 @@ const AppShell = ({ children, activeTab, onTabChange, onOpenSettings, onOpenTren
 
   return (
     <div className="glass-panel" style={{ height: '100%', padding: 10, paddingTop: 14, display: 'grid', gridTemplateRows: 'auto auto auto 1fr', gap: 10 }}>
-      <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+        <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
           <img
             src="/open_token_monitor_icon.png"
             alt="OpenTokenMonitor logo"
@@ -59,7 +60,7 @@ const AppShell = ({ children, activeTab, onTabChange, onOpenSettings, onOpenTren
             type="button"
             aria-label="Close"
             title="Close"
-            onClick={() => getCurrentWindow().close()}
+            onClick={() => invoke('quit_app')}
             style={{ width: 12, height: 12, borderRadius: 999, border: 0, background: '#ff5f57', cursor: 'pointer' }}
           />
         </div>

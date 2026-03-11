@@ -1,7 +1,13 @@
 {
-  "name": "tauri-app",
+  "name": "open-token-monitor",
   "private": true,
   "version": "0.1.0",
+  "description": "Local-first desktop monitor for Claude, Codex, and Gemini usage.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/side-quests/OpenTokenMonitor.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

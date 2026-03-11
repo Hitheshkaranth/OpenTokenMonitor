@@ -12,7 +12,7 @@ pub struct CodexCliWindow {
 }
 
 pub fn fetch_usage() -> Result<CodexCliWindow, String> {
-    let output = Command::new("codex")
+    let output = Command::new(codex_command())
         .args(["--usage", "--json"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -39,6 +39,16 @@ pub fn fetch_usage() -> Result<CodexCliWindow, String> {
         weekly_limit,
         resets_at,
     })
+}
+
+#[cfg(target_os = "windows")]
+fn codex_command() -> &'static str {
+    "codex.cmd"
+}
+
+#[cfg(not(target_os = "windows"))]
+fn codex_command() -> &'static str {
+    "codex"
 }
 
 fn pick_u64(value: &Value, path: &[&str]) -> Option<u64> {

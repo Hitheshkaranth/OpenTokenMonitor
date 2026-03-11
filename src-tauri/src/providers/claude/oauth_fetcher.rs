@@ -13,35 +13,72 @@ pub struct ClaudeOauthWindow {
 
 pub async fn fetch_usage(token: &str) -> Result<ClaudeOauthWindow, String> {
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(7))
+        .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| e.to_string())?;
 
-    let res = client
-        .get("https://api.anthropic.com/api/oauth/usage")
-        .header(AUTHORIZATION, format!("Bearer {token}"))
-        .header("anthropic-beta", "oauth-2025-04-20")
-        .header(USER_AGENT, "claude-code/latest")
-        .send()
-        .await
-        .map_err(|e| e.to_string())?;
+    // Retry up to 3 times with exponential backoff for 429 errors
+    let mut last_err = String::new();
+    for attempt in 0..3 {
+        if attempt > 0 {
+            let delay = std::time::Duration::from_millis(500 * (1 << attempt)); // 1s, 2s
+            tokio::time::sleep(delay).await;
+        }
 
-    if !res.status().is_success() {
-        return Err(format!("Claude OAuth endpoint returned {}", res.status()));
+        let res = match client
+            .get("https://api.anthropic.com/api/oauth/usage")
+            .header(AUTHORIZATION, format!("Bearer {token}"))
+            .header("anthropic-beta", "oauth-2025-04-20")
+            .header(USER_AGENT, "claude-code/latest")
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                last_err = format!("request failed: {e}");
+                eprintln!("[claude] OAuth attempt {}: {last_err}", attempt + 1);
+                continue;
+            }
+        };
+
+        let status = res.status();
+        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            let body = res.text().await.unwrap_or_default();
+            last_err = format!("429 rate limited (attempt {}): {body}", attempt + 1);
+            eprintln!("[claude] OAuth: {last_err}");
+            continue;
+        }
+
+        if !status.is_success() {
+            let body = res.text().await.unwrap_or_default();
+            return Err(format!("Claude OAuth returned {status}: {body}"));
+        }
+
+        // Success — parse response
+        let payload = res.json::<Value>().await.map_err(|e| e.to_string())?;
+        return parse_usage_response(payload);
     }
 
-    let payload = res.json::<Value>().await.map_err(|e| e.to_string())?;
+    Err(format!("Claude OAuth failed after 3 attempts: {last_err}"))
+}
+
+fn parse_usage_response(payload: Value) -> Result<ClaudeOauthWindow, String> {
     let f = payload.get("five_hour").cloned().unwrap_or(Value::Null);
     let s = payload.get("seven_day").cloned().unwrap_or(Value::Null);
     let o = payload.get("seven_day_opus").cloned().unwrap_or(Value::Null);
 
-    Ok(ClaudeOauthWindow {
+    let window = ClaudeOauthWindow {
         five_hour_utilization: f.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
         seven_day_utilization: s.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
         seven_day_opus_utilization: o.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
         five_hour_resets_at: parse_dt(f.get("resets_at").and_then(Value::as_str)),
         seven_day_resets_at: parse_dt(s.get("resets_at").and_then(Value::as_str)),
-    })
+    };
+    eprintln!(
+        "[claude] OAuth OK: 5h={:.1}% 7d={:.1}% opus={:.1}%",
+        window.five_hour_utilization, window.seven_day_utilization, window.seven_day_opus_utilization
+    );
+    Ok(window)
 }
 
 fn parse_dt(value: Option<&str>) -> Option<DateTime<Utc>> {

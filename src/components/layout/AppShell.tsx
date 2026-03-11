@@ -5,16 +5,18 @@ import { BarChart3, Home, Settings2 } from 'lucide-react';
 import GlassPill from '@/components/glass/GlassPill';
 import ProviderLogo from '@/components/providers/ProviderLogo';
 import { ProviderTab } from '@/types';
+import { isTauriRuntime } from '@/utils/runtime';
 
 type AppShellProps = PropsWithChildren<{
   activeTab: ProviderTab;
+  demoMode: boolean;
   onTabChange: (tab: ProviderTab) => void;
   onOpenSettings: () => void;
   onOpenTrends: () => void;
   settingsOpen: boolean;
 }>;
 
-const AppShell = ({ children, activeTab, onTabChange, onOpenSettings, onOpenTrends, settingsOpen }: AppShellProps) => {
+const AppShell = ({ children, activeTab, demoMode, onTabChange, onOpenSettings, onOpenTrends, settingsOpen }: AppShellProps) => {
   const selectedSegment: 'overview' | 'trends' | 'filters' = settingsOpen
     ? 'filters'
     : activeTab === 'overview'
@@ -22,6 +24,7 @@ const AppShell = ({ children, activeTab, onTabChange, onOpenSettings, onOpenTren
       : 'trends';
 
   const onToggleMaximize = async () => {
+    if (!isTauriRuntime()) return;
     const win = getCurrentWindow();
     if (await win.isMaximized()) {
       await win.unmaximize();
@@ -31,8 +34,8 @@ const AppShell = ({ children, activeTab, onTabChange, onOpenSettings, onOpenTren
   };
 
   return (
-    <div className="glass-panel" style={{ height: '100%', padding: 10, paddingTop: 14, display: 'grid', gridTemplateRows: 'auto auto auto 1fr', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+    <div className="glass-panel" data-tauri-drag-region style={{ height: '100%', padding: 10, paddingTop: 14, display: 'grid', gridTemplateRows: 'auto auto auto 1fr', gap: 10 }}>
+      <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
         <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
           <img
             src="/open_token_monitor_icon.png"
@@ -40,13 +43,20 @@ const AppShell = ({ children, activeTab, onTabChange, onOpenSettings, onOpenTren
             style={{ width: 18, height: 18, objectFit: 'contain' }}
           />
           <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--text-secondary)' }}>OpenToken Monitor</div>
+          {demoMode ? (
+            <span className="glass-pill" style={{ fontSize: 10, padding: '2px 8px' }}>
+              Demo
+            </span>
+          ) : null}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
             type="button"
             aria-label="Minimize"
             title="Minimize"
-            onClick={() => getCurrentWindow().hide()}
+            onClick={() => {
+              if (isTauriRuntime()) getCurrentWindow().hide();
+            }}
             style={{ width: 12, height: 12, borderRadius: 999, border: 0, background: '#febc2e', cursor: 'pointer' }}
           />
           <button
@@ -60,7 +70,9 @@ const AppShell = ({ children, activeTab, onTabChange, onOpenSettings, onOpenTren
             type="button"
             aria-label="Close"
             title="Close"
-            onClick={() => invoke('quit_app')}
+            onClick={() => {
+              if (isTauriRuntime()) invoke('quit_app');
+            }}
             style={{ width: 12, height: 12, borderRadius: 999, border: 0, background: '#ff5f57', cursor: 'pointer' }}
           />
         </div>

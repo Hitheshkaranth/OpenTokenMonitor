@@ -10,11 +10,13 @@ type SettingsState = {
   apiKeys: Record<ProviderId, string>;
   theme: ThemeMode;
   widgetMode: boolean;
+  demoMode: boolean;
   setProviderEnabled: (provider: ProviderId, enabled: boolean) => void;
   setRefreshCadence: (cadence: RefreshCadence) => void;
   setApiKey: (provider: ProviderId, key: string) => void;
   setTheme: (theme: ThemeMode) => void;
   setWidgetMode: (enabled: boolean) => void;
+  setDemoMode: (enabled: boolean) => void;
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -25,12 +27,14 @@ export const useSettingsStore = create<SettingsState>()(
       apiKeys: { claude: '', codex: '', gemini: '' },
       theme: 'system',
       widgetMode: false,
+      demoMode: false,
       setProviderEnabled: (provider, enabled) =>
         set((state) => ({ enabledProviders: { ...state.enabledProviders, [provider]: enabled } })),
       setRefreshCadence: (cadence) => set({ refreshCadence: cadence }),
       setApiKey: (provider, key) => set((state) => ({ apiKeys: { ...state.apiKeys, [provider]: key } })),
       setTheme: (theme) => set({ theme }),
       setWidgetMode: (enabled) => set({ widgetMode: enabled }),
+      setDemoMode: (enabled) => set({ demoMode: enabled }),
     }),
     {
       name: 'otm-settings-v2',

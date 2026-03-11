@@ -1,3 +1,4 @@
+mod bearer_fetcher;
 mod cookie_fetcher;
 mod descriptor;
 mod log_parser;
@@ -52,6 +53,32 @@ impl UsageProvider for CodexProvider {
             }
         }
 
+        // Try Bearer token from ~/.codex/auth.json
+        let auth = read_codex_auth_bridge();
+        eprintln!("[codex] auth token len={}, source={}", auth.access_token.len(), auth.source_path);
+        if !auth.access_token.is_empty() {
+            match bearer_fetcher::fetch_usage(&auth.access_token).await {
+                Ok(bearer) => {
+                    eprintln!("[codex] bearer OK: session={}/{} weekly={}/{}", bearer.session_used, bearer.session_limit, bearer.weekly_used, bearer.weekly_limit);
+                    return Ok(UsageSnapshot {
+                        provider: ProviderId::Codex,
+                        windows: vec![
+                            UsageWindow::new(WindowType::Session, bearer.session_used, bearer.session_limit, bearer.resets_at),
+                            UsageWindow::new(WindowType::Weekly, bearer.weekly_used, bearer.weekly_limit, bearer.weekly_resets_at),
+                        ],
+                        credits: None,
+                        plan: None,
+                        fetched_at: Utc::now(),
+                        source: DataSource::Oauth,
+                        stale: false,
+                    });
+                }
+                Err(e) => {
+                    eprintln!("[codex] bearer FAILED: {e}");
+                }
+            }
+        }
+
         if let Ok(cli) = rpc_fetcher::fetch_usage() {
             return Ok(UsageSnapshot {
                 provider: ProviderId::Codex,
@@ -68,11 +95,15 @@ impl UsageProvider for CodexProvider {
         }
 
         let (session, weekly) = log_parser::usage_windows();
+        // Local log tokens are raw counts; approximate Pro plan limits.
+        // Real limits come from bearer API when available.
+        let session_limit = 500_000;
+        let weekly_limit = 5_000_000;
         Ok(UsageSnapshot {
             provider: ProviderId::Codex,
             windows: vec![
-                UsageWindow::new(WindowType::Session, session, 60_000, Some(Utc::now() + Duration::hours(5))),
-                UsageWindow::new(WindowType::Weekly, weekly, 600_000, Some(Utc::now() + Duration::days(7))),
+                UsageWindow::new(WindowType::Session, session, session_limit, Some(Utc::now() + Duration::hours(5))),
+                UsageWindow::new(WindowType::Weekly, weekly, weekly_limit, Some(Utc::now() + Duration::days(7))),
             ],
             credits: None,
             plan: None,

@@ -1,10 +1,11 @@
 type GlassToggleProps = {
   checked: boolean;
   onChange: (next: boolean) => void;
-  label: string;
+  label?: string;
+  color?: string;
 };
 
-const GlassToggle = ({ checked, onChange, label }: GlassToggleProps) => {
+const GlassToggle = ({ checked, onChange, label = 'Toggle', color }: GlassToggleProps) => {
   return (
     <button
       type="button"
@@ -25,7 +26,7 @@ const GlassToggle = ({ checked, onChange, label }: GlassToggleProps) => {
           height: 14,
           borderRadius: 99,
           border: '1px solid var(--glass-border)',
-          background: checked ? 'var(--toggle-track-on)' : 'var(--toggle-track-off)',
+          background: checked ? color ?? 'var(--toggle-track-on)' : 'var(--toggle-track-off)',
           position: 'relative',
         }}
       >

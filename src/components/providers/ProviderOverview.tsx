@@ -10,6 +10,13 @@ const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex'
 
 const pctUsed = (utilization?: number) => Math.max(0, Math.min(100, utilization ?? 0));
 
+const formatTokens = (n?: number | null) => {
+  if (n == null) return '—';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+  return String(n);
+};
+
 const secsToHours = (secs?: number) => {
   if (!secs || secs <= 0) return 0;
   return Math.max(0, Math.ceil(secs / 3600));
@@ -61,10 +68,10 @@ const ProviderOverview = ({ snapshots, trends }: ProviderOverviewProps) => {
                     </span>
                   </div>
                   <div className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, letterSpacing: '.04em', color: 'var(--text-secondary)' }}>
-                    Session
+                    Session · {formatTokens(session?.used)} / {formatTokens(session?.limit)}
                   </div>
-                  <div className="glass-pill" style={{ width: '100%', padding: 0, height: 8, overflow: 'hidden' }}>
-                    <div style={{ width: `${sessionUsedPct}%`, height: '100%', background: 'linear-gradient(90deg, #f59e0b, #fb923c)' }} />
+                  <div className="glass-pill" style={{ width: '100%', padding: 0, height: 8, overflow: 'hidden', display: 'block' }}>
+                    <div style={{ width: `${sessionUsedPct}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #f59e0b, #fb923c)', transition: 'width .45s cubic-bezier(.22,.9,.24,1)' }} />
                   </div>
                 </div>
 
@@ -78,10 +85,10 @@ const ProviderOverview = ({ snapshots, trends }: ProviderOverviewProps) => {
                     </span>
                   </div>
                   <div className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, letterSpacing: '.04em', color: 'var(--text-secondary)' }}>
-                    Weekly
+                    Weekly · {formatTokens(weekly?.used)} / {formatTokens(weekly?.limit)}
                   </div>
-                  <div className="glass-pill" style={{ width: '100%', padding: 0, height: 8, overflow: 'hidden' }}>
-                    <div style={{ width: `${weeklyUsedPct}%`, height: '100%', background: 'linear-gradient(90deg, #ef4444, #f87171)' }} />
+                  <div className="glass-pill" style={{ width: '100%', padding: 0, height: 8, overflow: 'hidden', display: 'block' }}>
+                    <div style={{ width: `${weeklyUsedPct}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #ef4444, #f87171)', transition: 'width .45s cubic-bezier(.22,.9,.24,1)' }} />
                   </div>
                 </div>
               </div>

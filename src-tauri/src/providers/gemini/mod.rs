@@ -65,11 +65,14 @@ impl UsageProvider for GeminiProvider {
         }
 
         let daily = local_daily_count();
+        // Local session counts are raw; use generous limits for sensible utilization display
+        let daily_limit = daily.max(1000);
+        let session_limit = daily.max(2000);
         Ok(UsageSnapshot {
             provider: ProviderId::Gemini,
             windows: vec![
-                UsageWindow::new(WindowType::Daily, daily, 1000, Some(Utc::now() + Duration::days(1))),
-                UsageWindow::new(WindowType::Session, daily, 2000, Some(Utc::now() + Duration::hours(4))),
+                UsageWindow::new(WindowType::Daily, daily, daily_limit, Some(Utc::now() + Duration::days(1))),
+                UsageWindow::new(WindowType::Session, daily, session_limit, Some(Utc::now() + Duration::hours(4))),
             ],
             credits: None,
             plan: None,

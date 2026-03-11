@@ -30,10 +30,20 @@ pub async fn refresh_all(
     ctx: &FetchContext,
 ) -> Result<Vec<UsageSnapshot>, String> {
     let mut out = Vec::new();
+    let mut errors = Vec::new();
     for provider in ProviderId::all() {
-        if let Ok(snapshot) = refresh_provider(registry, store, provider, ctx).await {
-            out.push(snapshot);
+        match refresh_provider(registry, store, provider, ctx).await {
+            Ok(snapshot) => out.push(snapshot),
+            Err(err) => errors.push(format!("{}: {}", provider.as_str(), err)),
         }
     }
+
+    if out.is_empty() {
+        if errors.is_empty() {
+            return Err("No providers produced usage data".to_string());
+        }
+        return Err(format!("All providers failed to refresh. {}", errors.join(" | ")));
+    }
+
     Ok(out)
 }

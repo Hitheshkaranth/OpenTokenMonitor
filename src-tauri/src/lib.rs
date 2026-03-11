@@ -103,12 +103,16 @@ async fn refresh_provider(
 ) -> Result<UsageSnapshot, String> {
     let snapshot = aggregator::refresh_provider(&state.registry, &state.store, provider, &state.fetch_context()).await?;
     let _ = app.emit("usage-updated", snapshot.clone());
+    if let Ok(all) = state.store.get_all_snapshots() {
+        update_tray_tooltip(&app, &all);
+    }
     Ok(snapshot)
 }
 
 #[tauri::command]
 async fn refresh_all(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<UsageSnapshot>, String> {
     let snapshots = aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context()).await?;
+    update_tray_tooltip(&app, &snapshots);
     let _ = app.emit("usage-updated", snapshots.clone());
     Ok(snapshots)
 }
@@ -158,6 +162,7 @@ fn restart_scheduler(app: &AppHandle, state: &AppState, cadence: RefreshCadence)
             )
             .await
             {
+                update_tray_tooltip(&app_inner, &snapshots);
                 let _ = app_inner.emit("usage-updated", snapshots);
             }
         });
@@ -178,10 +183,48 @@ fn start_file_watchers(app: &AppHandle) {
             )
             .await
             {
+                if let Ok(all) = state.store.get_all_snapshots() {
+                    update_tray_tooltip(&app_inner, &all);
+                }
                 let _ = app_inner.emit("usage-updated", snapshot);
             }
         });
     });
+}
+
+fn snapshot_percent(snapshot: &UsageSnapshot) -> f64 {
+    snapshot.windows.first().map(|w| w.utilization).unwrap_or(0.0)
+}
+
+fn format_tray_tooltip(snapshots: &[UsageSnapshot]) -> String {
+    let mut claude = 0.0;
+    let mut codex = 0.0;
+    let mut gemini = 0.0;
+
+    for snapshot in snapshots {
+        let p = snapshot_percent(snapshot);
+        match snapshot.provider {
+            ProviderId::Claude => claude = p,
+            ProviderId::Codex => codex = p,
+            ProviderId::Gemini => gemini = p,
+        }
+    }
+
+    format!(
+        "OpenTokenMonitor\nClaude: {:.0}%  Codex: {:.0}%  Gemini: {:.0}%",
+        claude, codex, gemini
+    )
+}
+
+fn update_tray_tooltip(app: &AppHandle, snapshots: &[UsageSnapshot]) {
+    let tooltip = format_tray_tooltip(snapshots);
+    if let Some(tray_state) = app.try_state::<TrayState>() {
+        if let Ok(mut icon_slot) = tray_state._icon.lock() {
+            if let Some(icon) = icon_slot.as_mut() {
+                let _ = icon.set_tooltip(Some(tooltip));
+            }
+        }
+    }
 }
 
 fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
@@ -253,6 +296,7 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     app.manage(TrayState {
         _icon: Mutex::new(Some(tray_icon)),
     });
+    update_tray_tooltip(app.handle(), &[]);
 
     Ok(())
 }
@@ -289,6 +333,7 @@ pub fn run() {
                 )
                 .await
                 {
+                    update_tray_tooltip(&app_handle, &snapshots);
                     let _ = app_handle.emit("usage-updated", snapshots);
                 }
             });

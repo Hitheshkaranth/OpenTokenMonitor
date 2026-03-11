@@ -189,19 +189,42 @@ pub fn read_claude_oauth_credentials() -> ClaudeOauthCredentials {
         return ClaudeOauthCredentials::default();
     };
 
-    let scopes = pick_first_array_strings(&json, &[&["scopes"], &["scope"], &["oauth", "scopes"]]);
+    let scopes = pick_first_array_strings(&json, &[
+        &["claudeAiOauth", "scopes"],
+        &["scopes"],
+        &["scope"],
+        &["oauth", "scopes"],
+    ]);
     ClaudeOauthCredentials {
         access_token: pick_first_str(
             &json,
-            &[&["access_token"], &["accessToken"], &["oauth", "access_token"]],
+            &[
+                &["claudeAiOauth", "accessToken"],
+                &["claudeAiOauth", "access_token"],
+                &["access_token"],
+                &["accessToken"],
+                &["oauth", "access_token"],
+            ],
         )
         .unwrap_or_default(),
         refresh_token: pick_first_str(
             &json,
-            &[&["refresh_token"], &["refreshToken"], &["oauth", "refresh_token"]],
+            &[
+                &["claudeAiOauth", "refreshToken"],
+                &["claudeAiOauth", "refresh_token"],
+                &["refresh_token"],
+                &["refreshToken"],
+                &["oauth", "refresh_token"],
+            ],
         ),
         scopes,
-        expires_at: pick_first_u64(&json, &[&["expires_at"], &["expiresAt"], &["exp"]]),
+        expires_at: pick_first_u64(&json, &[
+            &["claudeAiOauth", "expiresAt"],
+            &["claudeAiOauth", "expires_at"],
+            &["expires_at"],
+            &["expiresAt"],
+            &["exp"],
+        ]),
         source_path: path.display().to_string(),
     }
 }
@@ -722,12 +745,42 @@ fn get_at_path<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
 }
 
 fn day_from_json_or_now(json: &Value) -> String {
-    let ts = pick_first_u64(json, &[&["timestamp"], &["ts"], &["created_at"], &["message", "created_at"]]).unwrap_or_else(epoch_ms_now);
-    if ts > 10_000_000_000 {
-        day_from_ms(ts)
-    } else {
-        day_from_ms(ts.saturating_mul(1000))
+    // First try numeric timestamps
+    if let Some(ts) = pick_first_u64(json, &[&["timestamp"], &["ts"], &["created_at"], &["message", "created_at"]]) {
+        return if ts > 10_000_000_000 {
+            day_from_ms(ts)
+        } else {
+            day_from_ms(ts.saturating_mul(1000))
+        };
     }
+
+    // Then try ISO 8601 / RFC 3339 string timestamps (e.g. "2026-01-16T18:10:57.334Z")
+    for path in &[&["timestamp"][..], &["ts"], &["created_at"], &["message", "created_at"]] {
+        if let Some(s) = get_at_path(json, path).and_then(|v| v.as_str()) {
+            if let Some(day) = try_iso_to_day(s) {
+                return day;
+            }
+        }
+    }
+
+    // Fallback to current time
+    day_from_ms(epoch_ms_now())
+}
+
+/// Extract "YYYY-MM-DD" from an ISO 8601 / RFC 3339 string like "2026-01-16T18:10:57.334Z".
+fn try_iso_to_day(s: &str) -> Option<String> {
+    // Expect at least "YYYY-MM-DD" (10 chars) with dashes at positions 4 and 7
+    if s.len() >= 10 && s.as_bytes()[4] == b'-' && s.as_bytes()[7] == b'-' {
+        let date_part = &s[..10];
+        // Basic validation: all other chars should be digits
+        let valid = date_part.bytes().enumerate().all(|(i, b)| {
+            if i == 4 || i == 7 { b == b'-' } else { b.is_ascii_digit() }
+        });
+        if valid {
+            return Some(date_part.to_string());
+        }
+    }
+    None
 }
 
 fn day_from_ms(ms: u64) -> String {

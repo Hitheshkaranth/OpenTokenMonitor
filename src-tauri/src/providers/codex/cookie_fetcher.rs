@@ -17,7 +17,7 @@ pub async fn fetch_usage(cookie: &str) -> Result<CodexCookieWindow, String> {
         .map_err(|e| e.to_string())?;
 
     let res = client
-        .get("https://chatgpt.com/backend-api/codex/settings/usage")
+        .get("https://chatgpt.com/backend-api/codex/usage")
         .header("cookie", cookie)
         .header("user-agent", "OpenTokenMonitor/2.0")
         .send()

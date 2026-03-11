@@ -1,5 +1,6 @@
 use serde_json::Value;
 use std::process::Command;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone)]
 pub struct GeminiCliStats {
@@ -10,7 +11,11 @@ pub struct GeminiCliStats {
 }
 
 pub fn fetch_stats() -> Result<GeminiCliStats, String> {
-    let output = Command::new("gemini")
+    if !supports_stats_command() {
+        return Err("gemini CLI does not support --stats".to_string());
+    }
+
+    let output = Command::new(gemini_command())
         .args(["--stats", "--json"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -31,4 +36,28 @@ pub fn fetch_stats() -> Result<GeminiCliStats, String> {
         session_used,
         session_limit,
     })
+}
+
+fn supports_stats_command() -> bool {
+    static SUPPORTS: OnceLock<bool> = OnceLock::new();
+    *SUPPORTS.get_or_init(|| {
+        let Ok(output) = Command::new(gemini_command()).arg("--help").output() else {
+            return false;
+        };
+        if !output.status.success() {
+            return false;
+        }
+        let help = String::from_utf8_lossy(&output.stdout);
+        help.contains("--stats")
+    })
+}
+
+#[cfg(target_os = "windows")]
+fn gemini_command() -> &'static str {
+    "gemini.cmd"
+}
+
+#[cfg(not(target_os = "windows"))]
+fn gemini_command() -> &'static str {
+    "gemini"
 }

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use chrono::Utc;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItemBuilder};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -13,7 +14,10 @@ mod watchers;
 use providers::registry::ProviderRegistry;
 use providers::FetchContext;
 use usage::aggregator;
-use usage::models::{CostEntry, ProviderId, ProviderStatus, RefreshCadence, TrendData, UsageSnapshot};
+use usage::models::{
+    AlertSeverity, CostEntry, ModelBreakdownEntry, ProviderId, ProviderStatus, RefreshCadence, TrendData, UsageAlert,
+    UsageReport, UsageSnapshot,
+};
 use usage::store::UsageStore;
 use watchers::poll_scheduler::PollScheduler;
 
@@ -93,6 +97,31 @@ async fn get_cost_history(provider: ProviderId, days: u32, state: State<'_, AppS
 #[tauri::command]
 async fn get_usage_trends(provider: ProviderId, state: State<'_, AppState>) -> Result<TrendData, String> {
     state.store.get_usage_trends(provider, 30)
+}
+
+#[tauri::command]
+async fn get_model_breakdown(
+    provider: ProviderId,
+    days: u32,
+    state: State<'_, AppState>,
+) -> Result<Vec<ModelBreakdownEntry>, String> {
+    state.store.get_model_breakdown(provider, days)
+}
+
+#[tauri::command]
+async fn export_usage_report(days: u32, state: State<'_, AppState>) -> Result<UsageReport, String> {
+    let snapshots = state.store.get_all_snapshots()?;
+    let mut model_breakdowns = Vec::new();
+    for provider in ProviderId::all() {
+        model_breakdowns.extend(state.store.get_model_breakdown(provider, days.max(1))?);
+    }
+
+    Ok(UsageReport {
+        generated_at: Utc::now(),
+        alerts: build_alerts(&snapshots),
+        snapshots,
+        model_breakdowns,
+    })
 }
 
 #[tauri::command]
@@ -194,6 +223,52 @@ fn start_file_watchers(app: &AppHandle) {
 
 fn snapshot_percent(snapshot: &UsageSnapshot) -> f64 {
     snapshot.windows.first().map(|w| w.utilization).unwrap_or(0.0)
+}
+
+fn build_alerts(snapshots: &[UsageSnapshot]) -> Vec<UsageAlert> {
+    let mut alerts = Vec::new();
+    for snapshot in snapshots {
+        for window in &snapshot.windows {
+            let utilization = window.utilization.clamp(0.0, 100.0);
+            let (threshold_percent, severity) = if utilization >= 95.0 {
+                (95, Some(AlertSeverity::Critical))
+            } else if utilization >= 90.0 {
+                (90, Some(AlertSeverity::High))
+            } else if utilization >= 75.0 {
+                (75, Some(AlertSeverity::Warning))
+            } else {
+                (0, None)
+            };
+
+            let Some(severity) = severity else { continue };
+            alerts.push(UsageAlert {
+                provider: snapshot.provider,
+                window_type: window.window_type,
+                utilization,
+                threshold_percent,
+                severity,
+                message: format!(
+                    "{} {} reached {:.0}% (threshold {}%)",
+                    snapshot.provider.as_str(),
+                    format_window_label(window.window_type),
+                    utilization,
+                    threshold_percent
+                ),
+            });
+        }
+    }
+    alerts
+}
+
+fn format_window_label(window_type: usage::models::WindowType) -> &'static str {
+    match window_type {
+        usage::models::WindowType::FiveHour => "5h window",
+        usage::models::WindowType::SevenDay => "7d window",
+        usage::models::WindowType::Daily => "daily window",
+        usage::models::WindowType::Monthly => "monthly window",
+        usage::models::WindowType::Session => "session window",
+        usage::models::WindowType::Weekly => "weekly window",
+    }
 }
 
 fn format_tray_tooltip(snapshots: &[UsageSnapshot]) -> String {
@@ -301,6 +376,50 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use usage::models::{DataProvenance, DataSource, UsageUnit, UsageWindow, WindowAccuracy, WindowType};
+
+    fn snapshot_with_utilization(provider: ProviderId, utilization: f64) -> UsageSnapshot {
+        UsageSnapshot {
+            provider,
+            windows: vec![UsageWindow {
+                window_type: WindowType::Weekly,
+                utilization,
+                used: None,
+                limit: None,
+                remaining: None,
+                resets_at: None,
+                reset_countdown_secs: None,
+                unit: UsageUnit::Percent,
+                accuracy: WindowAccuracy::PercentOnly,
+                note: None,
+            }],
+            credits: None,
+            plan: None,
+            fetched_at: Utc::now(),
+            source: DataSource::LocalLog,
+            provenance: DataProvenance::DerivedLocal,
+            stale: false,
+        }
+    }
+
+    #[test]
+    fn build_alerts_respects_threshold_bands() {
+        let alerts = build_alerts(&[
+            snapshot_with_utilization(ProviderId::Claude, 76.0),
+            snapshot_with_utilization(ProviderId::Codex, 91.0),
+            snapshot_with_utilization(ProviderId::Gemini, 96.0),
+        ]);
+
+        assert_eq!(alerts.len(), 3);
+        assert_eq!(alerts[0].threshold_percent, 75);
+        assert_eq!(alerts[1].threshold_percent, 90);
+        assert_eq!(alerts[2].threshold_percent, 95);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -356,6 +475,8 @@ pub fn run() {
             get_all_snapshots,
             get_cost_history,
             get_usage_trends,
+            get_model_breakdown,
+            export_usage_report,
             refresh_provider,
             refresh_all,
             set_api_key,

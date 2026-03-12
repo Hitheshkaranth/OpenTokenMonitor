@@ -11,7 +11,8 @@ use chrono::{Duration, Utc};
 
 use crate::providers::{FetchContext, ProviderDescriptor, UsageProvider};
 use crate::usage::models::{
-    CostEntry, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot, UsageWindow, WindowType,
+    CostEntry, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot, UsageUnit,
+    UsageWindow, WindowType,
 };
 
 /// Minimum seconds between OAuth API calls to avoid 429s.
@@ -44,13 +45,28 @@ impl ClaudeProvider {
         Ok(UsageSnapshot {
             provider: ProviderId::Claude,
             windows: vec![
-                UsageWindow::new(WindowType::FiveHour, day_tokens, five_hour_limit, Some(now + Duration::hours(5))),
-                UsageWindow::new(WindowType::SevenDay, week_tokens, seven_day_limit, Some(now + Duration::days(7))),
+                UsageWindow::approximate(
+                    WindowType::FiveHour,
+                    day_tokens,
+                    five_hour_limit,
+                    Some(now + Duration::hours(5)),
+                    UsageUnit::Tokens,
+                    "Estimated from Claude local logs until OAuth rolling-window data is available.",
+                ),
+                UsageWindow::approximate(
+                    WindowType::SevenDay,
+                    week_tokens,
+                    seven_day_limit,
+                    Some(now + Duration::days(7)),
+                    UsageUnit::Tokens,
+                    "Estimated from Claude seven-day log totals, not the provider's live subscription counter.",
+                ),
             ],
             credits: None,
             plan: None,
             fetched_at: now,
             source: DataSource::LocalLog,
+            provenance: DataProvenance::DerivedLocal,
             stale: false,
         })
     }
@@ -106,22 +122,33 @@ impl UsageProvider for ClaudeProvider {
                     }
                 }
                 Ok(oauth) => {
-                    let five_limit = 100u64;
-                    let week_limit = 1000u64;
-                    let five_used = ((oauth.five_hour_utilization / 100.0) * five_limit as f64) as u64;
-                    let week_used = ((oauth.seven_day_utilization / 100.0) * week_limit as f64) as u64;
-                    let opus_used = ((oauth.seven_day_opus_utilization / 100.0) * week_limit as f64) as u64;
                     let snapshot = UsageSnapshot {
                         provider: ProviderId::Claude,
                         windows: vec![
-                            UsageWindow::new(WindowType::FiveHour, five_used, five_limit, oauth.five_hour_resets_at),
-                            UsageWindow::new(WindowType::SevenDay, week_used, week_limit, oauth.seven_day_resets_at),
-                            UsageWindow::new(WindowType::Weekly, opus_used, week_limit, oauth.seven_day_resets_at),
+                            UsageWindow::percent(
+                                WindowType::FiveHour,
+                                oauth.five_hour_utilization,
+                                oauth.five_hour_resets_at,
+                                "Claude OAuth reports utilization for the 5-hour subscriber window.",
+                            ),
+                            UsageWindow::percent(
+                                WindowType::SevenDay,
+                                oauth.seven_day_utilization,
+                                oauth.seven_day_resets_at,
+                                "Claude OAuth reports utilization for the 7-day subscriber window.",
+                            ),
+                            UsageWindow::percent(
+                                WindowType::Weekly,
+                                oauth.seven_day_opus_utilization,
+                                oauth.seven_day_resets_at,
+                                "Opus weekly usage is exposed as utilization percent, not absolute tokens.",
+                            ),
                         ],
                         credits: None,
                         plan: None,
                         fetched_at: Utc::now(),
                         source: DataSource::Oauth,
+                        provenance: DataProvenance::Internal,
                         stale: false,
                     };
                     if let Ok(mut guard) = self.oauth_cache.lock() {

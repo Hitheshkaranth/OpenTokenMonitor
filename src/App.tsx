@@ -39,12 +39,16 @@ const App = () => {
 
   const snapshots = useUsageStore((s) => s.snapshots);
   const trends = useUsageStore((s) => s.trends);
+  const modelBreakdowns = useUsageStore((s) => s.modelBreakdowns);
   const statuses = useUsageStore((s) => s.statuses);
+  const alerts = useUsageStore((s) => s.alerts);
   const loading = useUsageStore((s) => s.loading);
   const error = useUsageStore((s) => s.error);
   const refreshProvider = useUsageStore((s) => s.refreshProvider);
   const refreshAll = useUsageStore((s) => s.refreshAll);
   const fetchTrend = useUsageStore((s) => s.fetchTrend);
+  const fetchModelBreakdown = useUsageStore((s) => s.fetchModelBreakdown);
+  const fetchUsageReport = useUsageStore((s) => s.fetchUsageReport);
   const setApiKeyRemote = useUsageStore((s) => s.setApiKey);
   const setCadenceRemote = useUsageStore((s) => s.setCadence);
 
@@ -72,6 +76,17 @@ const App = () => {
     }
     setTab('overview');
   }, [tab, enabledProviders, activeProviders]);
+
+  useEffect(() => {
+    if (!activeProviders.some((provider) => Boolean(snapshots[provider]))) return;
+    fetchUsageReport().catch(() => undefined);
+  }, [
+    activeProviders,
+    snapshots.claude?.fetched_at,
+    snapshots.codex?.fetched_at,
+    snapshots.gemini?.fetched_at,
+    fetchUsageReport,
+  ]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -113,6 +128,7 @@ const App = () => {
     try {
       await refreshAll();
       await Promise.all((['claude', 'codex', 'gemini'] as ProviderId[]).map((provider) => fetchTrend(provider)));
+      await fetchUsageReport();
     } catch (error) {
       console.error('refresh all failed', error);
     } finally {
@@ -169,9 +185,13 @@ const App = () => {
         <ProviderCard
           snapshot={snapshots[currentProvider!]}
           trend={trends[currentProvider!]}
+          breakdown={modelBreakdowns[currentProvider!]}
+          alerts={alerts[currentProvider!]}
           onRefresh={() => {
             refreshProvider(currentProvider!);
             fetchTrend(currentProvider!);
+            fetchModelBreakdown(currentProvider!);
+            fetchUsageReport();
           }}
         />
       </ErrorBoundary>
@@ -191,6 +211,7 @@ const App = () => {
           setSettingsOpen(false);
           setTab(next);
           if (next !== 'overview') fetchTrend(next as ProviderId);
+          if (next !== 'overview') fetchModelBreakdown(next as ProviderId);
         }}
         onOpenSettings={() => setSettingsOpen((v) => !v)}
         onOpenTrends={() => {
@@ -288,6 +309,7 @@ const App = () => {
               <DiagnosticsPanel
                 statuses={statuses}
                 snapshots={snapshots}
+                alerts={alerts}
                 globalError={error}
                 demoMode={demoMode}
               />

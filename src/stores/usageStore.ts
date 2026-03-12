@@ -1,7 +1,17 @@
 import { invoke } from '@tauri-apps/api/core';
 import { create } from 'zustand';
-import { CostEntry, ProviderId, ProviderStatus, RefreshCadence, TrendData, UsageSnapshot } from '@/types';
-import { makeMockSnapshot, makeMockTrend } from '@/utils/mockData';
+import {
+  CostEntry,
+  ModelBreakdownEntry,
+  ProviderId,
+  ProviderStatus,
+  RefreshCadence,
+  TrendData,
+  UsageAlert,
+  UsageReport,
+  UsageSnapshot,
+} from '@/types';
+import { makeMockModelBreakdown, makeMockSnapshot, makeMockTrend, makeMockUsageReport } from '@/utils/mockData';
 import { isTauriRuntime } from '@/utils/runtime';
 import { useSettingsStore } from '@/stores/settingsStore';
 
@@ -9,7 +19,10 @@ type UsageState = {
   snapshots: Record<ProviderId, UsageSnapshot | undefined>;
   costHistory: Record<ProviderId, CostEntry[]>;
   trends: Record<ProviderId, TrendData | undefined>;
+  modelBreakdowns: Record<ProviderId, ModelBreakdownEntry[]>;
   statuses: Record<ProviderId, ProviderStatus | undefined>;
+  alerts: Record<ProviderId, UsageAlert[]>;
+  latestReport?: UsageReport;
   loading: boolean;
   error?: string;
   fetchSnapshot: (provider: ProviderId) => Promise<void>;
@@ -18,6 +31,8 @@ type UsageState = {
   refreshAll: () => Promise<void>;
   fetchCostHistory: (provider: ProviderId, days?: number) => Promise<void>;
   fetchTrend: (provider: ProviderId) => Promise<void>;
+  fetchModelBreakdown: (provider: ProviderId, days?: number) => Promise<void>;
+  fetchUsageReport: (days?: number) => Promise<void>;
   fetchStatus: (provider: ProviderId) => Promise<void>;
   setApiKey: (provider: ProviderId, key: string) => Promise<void>;
   setCadence: (cadence: RefreshCadence) => Promise<void>;
@@ -47,7 +62,10 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   snapshots: EMPTY_SNAPSHOTS,
   costHistory: { claude: [], codex: [], gemini: [] },
   trends: { claude: undefined, codex: undefined, gemini: undefined },
+  modelBreakdowns: { claude: [], codex: [], gemini: [] },
   statuses: { claude: undefined, codex: undefined, gemini: undefined },
+  alerts: { claude: [], codex: [], gemini: [] },
+  latestReport: undefined,
   loading: false,
   error: undefined,
 
@@ -62,7 +80,23 @@ export const useUsageStore = create<UsageState>((set, get) => ({
 
   fetchAll: async () => {
     if (shouldUseDemoData()) {
-      set({ snapshots: demoSnapshotMap(), loading: false, error: undefined });
+      const report = makeMockUsageReport();
+      set({
+        snapshots: demoSnapshotMap(),
+        modelBreakdowns: {
+          claude: report.model_breakdowns.filter((entry) => entry.provider === 'claude'),
+          codex: report.model_breakdowns.filter((entry) => entry.provider === 'codex'),
+          gemini: report.model_breakdowns.filter((entry) => entry.provider === 'gemini'),
+        },
+        alerts: {
+          claude: report.alerts.filter((alert) => alert.provider === 'claude'),
+          codex: report.alerts.filter((alert) => alert.provider === 'codex'),
+          gemini: report.alerts.filter((alert) => alert.provider === 'gemini'),
+        },
+        latestReport: report,
+        loading: false,
+        error: undefined,
+      });
       return;
     }
     set({ loading: true, error: undefined });
@@ -89,7 +123,23 @@ export const useUsageStore = create<UsageState>((set, get) => ({
 
   refreshAll: async () => {
     if (shouldUseDemoData()) {
-      set({ snapshots: demoSnapshotMap(), error: undefined, loading: false });
+      const report = makeMockUsageReport();
+      set({
+        snapshots: demoSnapshotMap(),
+        modelBreakdowns: {
+          claude: report.model_breakdowns.filter((entry) => entry.provider === 'claude'),
+          codex: report.model_breakdowns.filter((entry) => entry.provider === 'codex'),
+          gemini: report.model_breakdowns.filter((entry) => entry.provider === 'gemini'),
+        },
+        alerts: {
+          claude: report.alerts.filter((alert) => alert.provider === 'claude'),
+          codex: report.alerts.filter((alert) => alert.provider === 'codex'),
+          gemini: report.alerts.filter((alert) => alert.provider === 'gemini'),
+        },
+        latestReport: report,
+        error: undefined,
+        loading: false,
+      });
       return;
     }
     set({ loading: true, error: undefined });
@@ -133,6 +183,50 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     }
     const trend = await invoke<TrendData>('get_usage_trends', { provider });
     set((state) => ({ trends: { ...state.trends, [provider]: trend } }));
+  },
+
+  fetchModelBreakdown: async (provider, days = 30) => {
+    if (shouldUseDemoData()) {
+      set((state) => ({ modelBreakdowns: { ...state.modelBreakdowns, [provider]: makeMockModelBreakdown(provider) } }));
+      return;
+    }
+    const breakdown = await invoke<ModelBreakdownEntry[]>('get_model_breakdown', { provider, days });
+    set((state) => ({ modelBreakdowns: { ...state.modelBreakdowns, [provider]: breakdown } }));
+  },
+
+  fetchUsageReport: async (days = 30) => {
+    if (shouldUseDemoData()) {
+      const report = makeMockUsageReport();
+      set({
+        latestReport: report,
+        alerts: {
+          claude: report.alerts.filter((alert) => alert.provider === 'claude'),
+          codex: report.alerts.filter((alert) => alert.provider === 'codex'),
+          gemini: report.alerts.filter((alert) => alert.provider === 'gemini'),
+        },
+        modelBreakdowns: {
+          claude: report.model_breakdowns.filter((entry) => entry.provider === 'claude'),
+          codex: report.model_breakdowns.filter((entry) => entry.provider === 'codex'),
+          gemini: report.model_breakdowns.filter((entry) => entry.provider === 'gemini'),
+        },
+      });
+      return;
+    }
+
+    const report = await invoke<UsageReport>('export_usage_report', { days });
+    set({
+      latestReport: report,
+      alerts: {
+        claude: report.alerts.filter((alert) => alert.provider === 'claude'),
+        codex: report.alerts.filter((alert) => alert.provider === 'codex'),
+        gemini: report.alerts.filter((alert) => alert.provider === 'gemini'),
+      },
+      modelBreakdowns: {
+        claude: report.model_breakdowns.filter((entry) => entry.provider === 'claude'),
+        codex: report.model_breakdowns.filter((entry) => entry.provider === 'codex'),
+        gemini: report.model_breakdowns.filter((entry) => entry.provider === 'gemini'),
+      },
+    });
   },
 
   fetchStatus: async (provider) => {

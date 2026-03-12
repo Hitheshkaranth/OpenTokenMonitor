@@ -1,4 +1,4 @@
-import { ProviderId, TrendData, UsageSnapshot } from '@/types';
+import { ModelBreakdownEntry, ProviderId, TrendData, UsageAlert, UsageReport, UsageSnapshot } from '@/types';
 
 const providerOrder: ProviderId[] = ['claude', 'codex', 'gemini'];
 
@@ -20,6 +20,7 @@ export const makeMockSnapshot = (provider: ProviderId, now = Date.now()): UsageS
     provider,
     fetched_at: new Date(now).toISOString(),
     source: 'local_log',
+    provenance: 'derived_local',
     stale: false,
     windows: [
       {
@@ -29,6 +30,8 @@ export const makeMockSnapshot = (provider: ProviderId, now = Date.now()): UsageS
         limit: sessionLimit,
         remaining: sessionLimit - sessionUsed,
         reset_countdown_secs: 60 * 60 * 2,
+        unit: 'tokens',
+        accuracy: 'exact',
       },
       {
         window_type: 'weekly',
@@ -37,6 +40,8 @@ export const makeMockSnapshot = (provider: ProviderId, now = Date.now()): UsageS
         limit: weeklyLimit,
         remaining: weeklyLimit - weeklyUsed,
         reset_countdown_secs: 60 * 60 * 24 * 3,
+        unit: 'tokens',
+        accuracy: 'exact',
       },
     ],
     credits: {
@@ -70,3 +75,55 @@ export const makeMockTrend = (provider: ProviderId, days = 30, now = Date.now())
   };
 };
 
+export const makeMockModelBreakdown = (provider: ProviderId): ModelBreakdownEntry[] => {
+  const base: Array<[string, number, number]> = provider === 'claude'
+    ? [
+        ['claude-sonnet', 140_000, 9.2],
+        ['claude-opus', 48_000, 14.8],
+      ]
+    : provider === 'codex'
+      ? [
+          ['gpt-5', 180_000, 4.7],
+          ['gpt-5-mini', 72_000, 0.9],
+        ]
+      : [
+          ['gemini-2.5-pro', 96_000, 0],
+          ['gemini-2.5-flash', 210_000, 0],
+        ];
+
+  return base.map(([model, total_tokens, estimated_cost_usd]) => ({
+    provider,
+    model,
+    days: 30,
+    input_tokens: Math.round(Number(total_tokens) * 0.62),
+    output_tokens: Math.round(Number(total_tokens) * 0.28),
+    cache_read_tokens: Math.round(Number(total_tokens) * 0.07),
+    cache_write_tokens: Math.round(Number(total_tokens) * 0.03),
+    total_tokens: Number(total_tokens),
+    estimated_cost_usd: Number(estimated_cost_usd),
+  }));
+};
+
+export const makeMockAlerts = (snapshots: UsageSnapshot[]): UsageAlert[] =>
+  snapshots.flatMap((snapshot) =>
+    snapshot.windows
+      .filter((window) => (window.utilization ?? 0) >= 75)
+      .map((window) => ({
+        provider: snapshot.provider,
+        window_type: window.window_type,
+        utilization: window.utilization,
+        threshold_percent: window.utilization >= 95 ? 95 : window.utilization >= 90 ? 90 : 75,
+        severity: window.utilization >= 95 ? 'critical' : window.utilization >= 90 ? 'high' : 'warning',
+        message: `${snapshot.provider} ${window.window_type} is at ${window.utilization.toFixed(0)}%`,
+      }))
+  );
+
+export const makeMockUsageReport = (now = Date.now()): UsageReport => {
+  const snapshots = providerOrder.map((provider) => makeMockSnapshot(provider, now));
+  return {
+    generated_at: new Date(now).toISOString(),
+    snapshots,
+    alerts: makeMockAlerts(snapshots),
+    model_breakdowns: providerOrder.flatMap((provider) => makeMockModelBreakdown(provider)),
+  };
+};

@@ -2,8 +2,12 @@ export type ProviderId = 'claude' | 'codex' | 'gemini';
 export type ProviderTab = ProviderId | 'overview';
 
 export type DataSource = 'oauth' | 'cookie' | 'cli' | 'local_log';
+export type DataProvenance = 'official' | 'internal' | 'derived_local';
 
 export type WindowType = 'five_hour' | 'seven_day' | 'daily' | 'monthly' | 'session' | 'weekly';
+export type UsageUnit = 'tokens' | 'requests' | 'percent' | 'unknown';
+export type WindowAccuracy = 'exact' | 'approximate' | 'percent_only';
+export type AlertSeverity = 'warning' | 'high' | 'critical';
 
 export type RefreshCadence = 'manual' | 'every30s' | 'every1m' | 'every2m' | 'every5m' | 'every15m';
 
@@ -15,6 +19,9 @@ export interface UsageWindow {
   remaining?: number;
   resets_at?: string;
   reset_countdown_secs?: number;
+  unit?: UsageUnit;
+  accuracy?: WindowAccuracy;
+  note?: string;
 }
 
 export interface UsageSnapshot {
@@ -24,6 +31,7 @@ export interface UsageSnapshot {
   plan?: { tier?: string; note?: string };
   fetched_at: string;
   source: DataSource;
+  provenance?: DataProvenance;
   stale: boolean;
 }
 
@@ -50,6 +58,34 @@ export interface TrendData {
   points: TrendPoint[];
   total_cost_usd: number;
   total_tokens: number;
+}
+
+export interface ModelBreakdownEntry {
+  provider: ProviderId;
+  model: string;
+  days: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+}
+
+export interface UsageAlert {
+  provider: ProviderId;
+  window_type: WindowType;
+  utilization: number;
+  threshold_percent: number;
+  severity: AlertSeverity;
+  message: string;
+}
+
+export interface UsageReport {
+  generated_at: string;
+  snapshots: UsageSnapshot[];
+  alerts: UsageAlert[];
+  model_breakdowns: ModelBreakdownEntry[];
 }
 
 export type ProviderHealth = 'active' | 'waiting' | 'error';

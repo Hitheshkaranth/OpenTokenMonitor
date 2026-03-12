@@ -8,7 +8,8 @@ use serde_json::Value;
 
 use crate::providers::{FetchContext, ProviderDescriptor, UsageProvider};
 use crate::usage::models::{
-    CostEntry, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot, UsageWindow, WindowType,
+    CostEntry, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot, UsageUnit,
+    UsageWindow, WindowType,
 };
 
 pub struct GeminiProvider {
@@ -37,13 +38,26 @@ impl UsageProvider for GeminiProvider {
                 return Ok(UsageSnapshot {
                     provider: ProviderId::Gemini,
                     windows: vec![
-                        UsageWindow::new(WindowType::Daily, quota.daily_used, quota.daily_limit, quota.resets_at),
-                        UsageWindow::new(WindowType::Session, quota.rpm_used, quota.rpm_limit, Some(Utc::now() + Duration::minutes(1))),
+                        UsageWindow::exact(
+                            WindowType::Daily,
+                            quota.daily_used,
+                            quota.daily_limit,
+                            quota.resets_at,
+                            UsageUnit::Requests,
+                        ),
+                        UsageWindow::exact(
+                            WindowType::Session,
+                            quota.rpm_used,
+                            quota.rpm_limit,
+                            Some(Utc::now() + Duration::minutes(1)),
+                            UsageUnit::Requests,
+                        ),
                     ],
                     credits: None,
                     plan: None,
                     fetched_at: Utc::now(),
                     source: DataSource::Oauth,
+                    provenance: DataProvenance::Official,
                     stale: false,
                 });
             }
@@ -53,13 +67,26 @@ impl UsageProvider for GeminiProvider {
             return Ok(UsageSnapshot {
                 provider: ProviderId::Gemini,
                 windows: vec![
-                    UsageWindow::new(WindowType::Daily, stats.daily_used, stats.daily_limit, Some(Utc::now() + Duration::days(1))),
-                    UsageWindow::new(WindowType::Session, stats.session_used, stats.session_limit, Some(Utc::now() + Duration::hours(1))),
+                    UsageWindow::exact(
+                        WindowType::Daily,
+                        stats.daily_used,
+                        stats.daily_limit,
+                        Some(Utc::now() + Duration::days(1)),
+                        UsageUnit::Requests,
+                    ),
+                    UsageWindow::exact(
+                        WindowType::Session,
+                        stats.session_used,
+                        stats.session_limit,
+                        Some(Utc::now() + Duration::hours(1)),
+                        UsageUnit::Tokens,
+                    ),
                 ],
                 credits: None,
                 plan: None,
                 fetched_at: Utc::now(),
                 source: DataSource::Cli,
+                provenance: DataProvenance::Official,
                 stale: false,
             });
         }
@@ -71,13 +98,28 @@ impl UsageProvider for GeminiProvider {
         Ok(UsageSnapshot {
             provider: ProviderId::Gemini,
             windows: vec![
-                UsageWindow::new(WindowType::Daily, daily, daily_limit, Some(Utc::now() + Duration::days(1))),
-                UsageWindow::new(WindowType::Session, daily, session_limit, Some(Utc::now() + Duration::hours(4))),
+                UsageWindow::approximate(
+                    WindowType::Daily,
+                    daily,
+                    daily_limit,
+                    Some(Utc::now() + Duration::days(1)),
+                    UsageUnit::Unknown,
+                    "Estimated from local Gemini session files; official daily quota data requires live auth or CLI stats.",
+                ),
+                UsageWindow::approximate(
+                    WindowType::Session,
+                    daily,
+                    session_limit,
+                    Some(Utc::now() + Duration::hours(4)),
+                    UsageUnit::Unknown,
+                    "Estimated from local Gemini session files; not an official provider remaining counter.",
+                ),
             ],
             credits: None,
             plan: None,
             fetched_at: Utc::now(),
             source: DataSource::LocalLog,
+            provenance: DataProvenance::DerivedLocal,
             stale: false,
         })
     }

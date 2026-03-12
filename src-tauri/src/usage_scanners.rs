@@ -50,6 +50,17 @@ pub struct CodexDailyUsagePoint {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct CodexModelDailyUsagePoint {
+    pub day: String,
+    pub model: String,
+    pub input_tokens: u64,
+    pub cached_input_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
+    pub cost_usd: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ClaudeCostSnapshot {
     pub source: String,
     pub input_tokens: u64,
@@ -75,6 +86,18 @@ pub struct ClaudeDailyUsagePoint {
     pub cost_usd: f64,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ClaudeModelDailyUsagePoint {
+    pub day: String,
+    pub model: String,
+    pub input_tokens: u64,
+    pub cache_read_input_tokens: u64,
+    pub cache_creation_input_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
+    pub cost_usd: f64,
+}
+
 #[derive(Clone, Debug, Default)]
 struct CodexRunningTotals {
     input: u64,
@@ -92,6 +115,7 @@ struct CodexContribution {
     total: u64,
     cost: f64,
     daily: HashMap<String, CodexDailyUsagePoint>,
+    daily_by_model: HashMap<String, CodexModelDailyUsagePoint>,
     is_archived: bool,
     mtime_ms: u64,
 }
@@ -121,6 +145,7 @@ struct ClaudeContribution {
     total: u64,
     cost: f64,
     daily: HashMap<String, ClaudeDailyUsagePoint>,
+    daily_by_model: HashMap<String, ClaudeModelDailyUsagePoint>,
     deduped_chunks: u64,
 }
 
@@ -243,6 +268,13 @@ pub fn scan_codex_daily_usage() -> Vec<CodexDailyUsagePoint> {
     guard.codex_daily()
 }
 
+pub fn scan_codex_model_daily_usage() -> Vec<CodexModelDailyUsagePoint> {
+    let cache = CODEX_CACHE.get_or_init(|| Mutex::new(CodexScannerCache::default()));
+    let mut guard = cache.lock().expect("codex scanner cache lock poisoned");
+    guard.refresh_codex();
+    guard.codex_model_daily()
+}
+
 pub fn scan_claude_cost_snapshot() -> ClaudeCostSnapshot {
     let cache = CLAUDE_CACHE.get_or_init(|| Mutex::new(ClaudeScannerCache::default()));
     let mut guard = cache.lock().expect("claude scanner cache lock poisoned");
@@ -255,6 +287,13 @@ pub fn scan_claude_daily_usage() -> Vec<ClaudeDailyUsagePoint> {
     let mut guard = cache.lock().expect("claude scanner cache lock poisoned");
     guard.refresh_claude();
     guard.claude_daily()
+}
+
+pub fn scan_claude_model_daily_usage() -> Vec<ClaudeModelDailyUsagePoint> {
+    let cache = CLAUDE_CACHE.get_or_init(|| Mutex::new(ClaudeScannerCache::default()));
+    let mut guard = cache.lock().expect("claude scanner cache lock poisoned");
+    guard.refresh_claude();
+    guard.claude_model_daily()
 }
 impl CodexScannerCache {
     fn refresh_codex(&mut self) {
@@ -328,6 +367,27 @@ impl CodexScannerCache {
         }
         let mut out: Vec<_> = merged.into_values().collect();
         out.sort_by(|a, b| a.day.cmp(&b.day));
+        out
+    }
+
+    fn codex_model_daily(&self) -> Vec<CodexModelDailyUsagePoint> {
+        let mut merged = HashMap::<String, CodexModelDailyUsagePoint>::new();
+        for item in dedupe_codex_contributions(self.files.values().map(|f| f.contribution.clone()).collect()) {
+            for (key, point) in item.daily_by_model {
+                let slot = merged.entry(key).or_insert_with(|| CodexModelDailyUsagePoint {
+                    day: point.day.clone(),
+                    model: point.model.clone(),
+                    ..CodexModelDailyUsagePoint::default()
+                });
+                slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
+                slot.cached_input_tokens = slot.cached_input_tokens.saturating_add(point.cached_input_tokens);
+                slot.output_tokens = slot.output_tokens.saturating_add(point.output_tokens);
+                slot.total_tokens = slot.total_tokens.saturating_add(point.total_tokens);
+                slot.cost_usd += point.cost_usd;
+            }
+        }
+        let mut out: Vec<_> = merged.into_values().collect();
+        out.sort_by(|a, b| a.day.cmp(&b.day).then(a.model.cmp(&b.model)));
         out
     }
 }
@@ -409,6 +469,28 @@ impl ClaudeScannerCache {
         out.sort_by(|a, b| a.day.cmp(&b.day));
         out
     }
+
+    fn claude_model_daily(&self) -> Vec<ClaudeModelDailyUsagePoint> {
+        let mut merged = HashMap::<String, ClaudeModelDailyUsagePoint>::new();
+        for file in self.files.values() {
+            for (key, point) in &file.contribution.daily_by_model {
+                let slot = merged.entry(key.clone()).or_insert_with(|| ClaudeModelDailyUsagePoint {
+                    day: point.day.clone(),
+                    model: point.model.clone(),
+                    ..ClaudeModelDailyUsagePoint::default()
+                });
+                slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
+                slot.cache_read_input_tokens = slot.cache_read_input_tokens.saturating_add(point.cache_read_input_tokens);
+                slot.cache_creation_input_tokens = slot.cache_creation_input_tokens.saturating_add(point.cache_creation_input_tokens);
+                slot.output_tokens = slot.output_tokens.saturating_add(point.output_tokens);
+                slot.total_tokens = slot.total_tokens.saturating_add(point.total_tokens);
+                slot.cost_usd += point.cost_usd;
+            }
+        }
+        let mut out: Vec<_> = merged.into_values().collect();
+        out.sort_by(|a, b| a.day.cmp(&b.day).then(a.model.cmp(&b.model)));
+        out
+    }
 }
 fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
     let Ok(mut file) = File::open(path) else { return; };
@@ -481,14 +563,14 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
                 cache.contribution.output = cache.contribution.output.saturating_add(delta_output);
                 cache.contribution.total = cache.contribution.total.saturating_add(delta_total);
                 cache.contribution.cost += delta_cost;
-                cache.contribution.model_hint = Some(model_norm);
+                cache.contribution.model_hint = Some(model_norm.clone());
                 if cache.contribution.session_id.is_none() {
                     cache.contribution.session_id = cache.session_id.clone();
                 }
 
                 let day = day_from_json_or_now(&json);
                 let daily = cache.contribution.daily.entry(day.clone()).or_insert_with(|| CodexDailyUsagePoint {
-                    day,
+                    day: day.clone(),
                     ..CodexDailyUsagePoint::default()
                 });
                 daily.input_tokens = daily.input_tokens.saturating_add(delta_input);
@@ -496,6 +578,22 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
                 daily.output_tokens = daily.output_tokens.saturating_add(delta_output);
                 daily.total_tokens = daily.total_tokens.saturating_add(delta_total);
                 daily.cost_usd += delta_cost;
+
+                let model_key = format!("{day}|{model_norm}");
+                let model_daily = cache
+                    .contribution
+                    .daily_by_model
+                    .entry(model_key)
+                    .or_insert_with(|| CodexModelDailyUsagePoint {
+                        day: day.clone(),
+                        model: model_norm.clone(),
+                        ..CodexModelDailyUsagePoint::default()
+                    });
+                model_daily.input_tokens = model_daily.input_tokens.saturating_add(delta_input);
+                model_daily.cached_input_tokens = model_daily.cached_input_tokens.saturating_add(delta_cached);
+                model_daily.output_tokens = model_daily.output_tokens.saturating_add(delta_output);
+                model_daily.total_tokens = model_daily.total_tokens.saturating_add(delta_total);
+                model_daily.cost_usd += delta_cost;
             }
             _ => {}
         }
@@ -550,7 +648,7 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
 
         let day = day_from_json_or_now(&json);
         let daily = cache.contribution.daily.entry(day.clone()).or_insert_with(|| ClaudeDailyUsagePoint {
-            day,
+            day: day.clone(),
             ..ClaudeDailyUsagePoint::default()
         });
         daily.input_tokens = daily.input_tokens.saturating_add(input);
@@ -559,6 +657,23 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
         daily.output_tokens = daily.output_tokens.saturating_add(output);
         daily.total_tokens = daily.total_tokens.saturating_add(total);
         daily.cost_usd += cost;
+
+        let model_key = format!("{day}|{model_norm}");
+        let model_daily = cache
+            .contribution
+            .daily_by_model
+            .entry(model_key)
+            .or_insert_with(|| ClaudeModelDailyUsagePoint {
+                day: day.clone(),
+                model: model_norm.clone(),
+                ..ClaudeModelDailyUsagePoint::default()
+            });
+        model_daily.input_tokens = model_daily.input_tokens.saturating_add(input);
+        model_daily.cache_read_input_tokens = model_daily.cache_read_input_tokens.saturating_add(cache_read);
+        model_daily.cache_creation_input_tokens = model_daily.cache_creation_input_tokens.saturating_add(cache_create);
+        model_daily.output_tokens = model_daily.output_tokens.saturating_add(output);
+        model_daily.total_tokens = model_daily.total_tokens.saturating_add(total);
+        model_daily.cost_usd += cost;
     }
 }
 fn dedupe_codex_contributions(items: Vec<CodexContribution>) -> Vec<CodexContribution> {

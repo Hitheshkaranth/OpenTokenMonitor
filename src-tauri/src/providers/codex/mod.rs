@@ -9,7 +9,8 @@ use chrono::{Duration, Utc};
 
 use crate::providers::{FetchContext, ProviderDescriptor, UsageProvider};
 use crate::usage::models::{
-    CostEntry, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot, UsageWindow, WindowType,
+    CostEntry, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot, UsageUnit,
+    UsageWindow, WindowType,
 };
 use crate::usage_scanners::read_codex_auth_bridge;
 
@@ -40,13 +41,26 @@ impl UsageProvider for CodexProvider {
                     return Ok(UsageSnapshot {
                         provider: ProviderId::Codex,
                         windows: vec![
-                            UsageWindow::new(WindowType::Session, cookie_snapshot.session_used, cookie_snapshot.session_limit, cookie_snapshot.resets_at),
-                            UsageWindow::new(WindowType::Weekly, cookie_snapshot.weekly_used, cookie_snapshot.weekly_limit, cookie_snapshot.resets_at),
+                            UsageWindow::exact(
+                                WindowType::Session,
+                                cookie_snapshot.session_used,
+                                cookie_snapshot.session_limit,
+                                cookie_snapshot.resets_at,
+                                UsageUnit::Unknown,
+                            ),
+                            UsageWindow::exact(
+                                WindowType::Weekly,
+                                cookie_snapshot.weekly_used,
+                                cookie_snapshot.weekly_limit,
+                                cookie_snapshot.resets_at,
+                                UsageUnit::Unknown,
+                            ),
                         ],
                         credits: None,
                         plan: None,
                         fetched_at: Utc::now(),
                         source: DataSource::Cookie,
+                        provenance: DataProvenance::Internal,
                         stale: false,
                     });
                 }
@@ -63,13 +77,24 @@ impl UsageProvider for CodexProvider {
                     return Ok(UsageSnapshot {
                         provider: ProviderId::Codex,
                         windows: vec![
-                            UsageWindow::new(WindowType::Session, bearer.session_used, bearer.session_limit, bearer.resets_at),
-                            UsageWindow::new(WindowType::Weekly, bearer.weekly_used, bearer.weekly_limit, bearer.weekly_resets_at),
+                            UsageWindow::percent(
+                                WindowType::Session,
+                                bearer.session_used as f64,
+                                bearer.resets_at,
+                                "ChatGPT Codex bearer usage exposes percent of the current session window.",
+                            ),
+                            UsageWindow::percent(
+                                WindowType::Weekly,
+                                bearer.weekly_used as f64,
+                                bearer.weekly_resets_at,
+                                "ChatGPT Codex bearer usage exposes percent of the current weekly window.",
+                            ),
                         ],
                         credits: None,
                         plan: None,
                         fetched_at: Utc::now(),
                         source: DataSource::Oauth,
+                        provenance: DataProvenance::Internal,
                         stale: false,
                     });
                 }
@@ -83,13 +108,26 @@ impl UsageProvider for CodexProvider {
             return Ok(UsageSnapshot {
                 provider: ProviderId::Codex,
                 windows: vec![
-                    UsageWindow::new(WindowType::Session, cli.session_used, cli.session_limit, cli.resets_at),
-                    UsageWindow::new(WindowType::Weekly, cli.weekly_used, cli.weekly_limit, cli.resets_at),
+                    UsageWindow::exact(
+                        WindowType::Session,
+                        cli.session_used,
+                        cli.session_limit,
+                        cli.resets_at,
+                        UsageUnit::Unknown,
+                    ),
+                    UsageWindow::exact(
+                        WindowType::Weekly,
+                        cli.weekly_used,
+                        cli.weekly_limit,
+                        cli.resets_at,
+                        UsageUnit::Unknown,
+                    ),
                 ],
                 credits: None,
                 plan: None,
                 fetched_at: Utc::now(),
                 source: DataSource::Cli,
+                provenance: DataProvenance::Official,
                 stale: false,
             });
         }
@@ -102,13 +140,28 @@ impl UsageProvider for CodexProvider {
         Ok(UsageSnapshot {
             provider: ProviderId::Codex,
             windows: vec![
-                UsageWindow::new(WindowType::Session, session, session_limit, Some(Utc::now() + Duration::hours(5))),
-                UsageWindow::new(WindowType::Weekly, weekly, weekly_limit, Some(Utc::now() + Duration::days(7))),
+                UsageWindow::approximate(
+                    WindowType::Session,
+                    session,
+                    session_limit,
+                    Some(Utc::now() + Duration::hours(5)),
+                    UsageUnit::Tokens,
+                    "Estimated from local Codex session logs until a live usage window is available.",
+                ),
+                UsageWindow::approximate(
+                    WindowType::Weekly,
+                    weekly,
+                    weekly_limit,
+                    Some(Utc::now() + Duration::days(7)),
+                    UsageUnit::Tokens,
+                    "Estimated from rolling seven-day Codex log totals, not an official quota endpoint.",
+                ),
             ],
             credits: None,
             plan: None,
             fetched_at: Utc::now(),
             source: DataSource::LocalLog,
+            provenance: DataProvenance::DerivedLocal,
             stale: false,
         })
     }

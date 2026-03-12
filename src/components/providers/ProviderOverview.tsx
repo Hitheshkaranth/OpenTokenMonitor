@@ -1,6 +1,7 @@
 import GlassPanel from '@/components/glass/GlassPanel';
 import ProviderLogo from '@/components/providers/ProviderLogo';
 import { ProviderId, TrendData, UsageSnapshot } from '@/types';
+import { countdownLabel, windowLabel, windowValueLabel } from '@/utils/usageWindows';
 
 const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'gemini' }> = {
   claude: { label: 'Claude', tint: 'claude' },
@@ -9,23 +10,6 @@ const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex'
 };
 
 const pctUsed = (utilization?: number) => Math.max(0, Math.min(100, utilization ?? 0));
-
-const formatTokens = (n?: number | null) => {
-  if (n == null) return '—';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
-};
-
-const secsToHours = (secs?: number) => {
-  if (!secs || secs <= 0) return 0;
-  return Math.max(0, Math.ceil(secs / 3600));
-};
-
-const secsToDays = (secs?: number) => {
-  if (!secs || secs <= 0) return 0;
-  return Math.max(0, Math.ceil(secs / 86400));
-};
 
 type ProviderOverviewProps = {
   snapshots: Record<ProviderId, UsageSnapshot | undefined>;
@@ -41,12 +25,10 @@ const ProviderOverview = ({ snapshots, trends }: ProviderOverviewProps) => {
         {rows.map((provider) => {
           const snapshot = snapshots[provider];
           const trend = trends[provider];
-          const session = snapshot?.windows.find((w) => w.window_type === 'session' || w.window_type === 'five_hour' || w.window_type === 'daily');
-          const weekly = snapshot?.windows.find((w) => w.window_type === 'weekly' || w.window_type === 'seven_day');
-          const sessionUsedPct = pctUsed(session?.utilization);
-          const weeklyUsedPct = pctUsed(weekly?.utilization);
-          const hoursLeft = secsToHours(session?.reset_countdown_secs);
-          const daysLeft = secsToDays(weekly?.reset_countdown_secs);
+          const primary = snapshot?.windows[0];
+          const secondary = snapshot?.windows[1];
+          const primaryUsedPct = pctUsed(primary?.utilization);
+          const secondaryUsedPct = pctUsed(secondary?.utilization);
 
           return (
             <GlassPanel key={provider} tint={providerMeta[provider].tint} className="hover-lift" style={{ padding: 10, minWidth: 0, height: 182 }}>
@@ -61,34 +43,34 @@ const ProviderOverview = ({ snapshots, trends }: ProviderOverviewProps) => {
                 <div style={{ display: 'grid', gap: 4 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 6, minWidth: 0 }}>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, lineHeight: 1, color: 'var(--text-primary)' }}>
-                      {sessionUsedPct.toFixed(0)}%
+                      {primaryUsedPct.toFixed(0)}%
                     </span>
                     <span className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, letterSpacing: '.03em', whiteSpace: 'nowrap' }}>
-                      {hoursLeft}h left
+                      {countdownLabel(primary)}
                     </span>
                   </div>
                   <div className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, letterSpacing: '.04em', color: 'var(--text-secondary)' }}>
-                    Session · {formatTokens(session?.used)} / {formatTokens(session?.limit)}
+                    {windowLabel(primary)} - {windowValueLabel(primary)}
                   </div>
                   <div className="glass-pill" style={{ width: '100%', padding: 0, height: 8, overflow: 'hidden', display: 'block' }}>
-                    <div style={{ width: `${sessionUsedPct}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #f59e0b, #fb923c)', transition: 'width .45s cubic-bezier(.22,.9,.24,1)' }} />
+                    <div style={{ width: `${primaryUsedPct}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #f59e0b, #fb923c)', transition: 'width .45s cubic-bezier(.22,.9,.24,1)' }} />
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gap: 4 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 6, minWidth: 0 }}>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, lineHeight: 1, color: 'var(--text-primary)' }}>
-                      {weeklyUsedPct.toFixed(0)}%
+                      {secondaryUsedPct.toFixed(0)}%
                     </span>
                     <span className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, letterSpacing: '.03em', whiteSpace: 'nowrap' }}>
-                      {daysLeft}d left
+                      {countdownLabel(secondary)}
                     </span>
                   </div>
                   <div className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, letterSpacing: '.04em', color: 'var(--text-secondary)' }}>
-                    Weekly · {formatTokens(weekly?.used)} / {formatTokens(weekly?.limit)}
+                    {windowLabel(secondary)} - {windowValueLabel(secondary)}
                   </div>
                   <div className="glass-pill" style={{ width: '100%', padding: 0, height: 8, overflow: 'hidden', display: 'block' }}>
-                    <div style={{ width: `${weeklyUsedPct}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #ef4444, #f87171)', transition: 'width .45s cubic-bezier(.22,.9,.24,1)' }} />
+                    <div style={{ width: `${secondaryUsedPct}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #ef4444, #f87171)', transition: 'width .45s cubic-bezier(.22,.9,.24,1)' }} />
                   </div>
                 </div>
               </div>

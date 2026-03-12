@@ -9,6 +9,15 @@ pub struct ClaudeOauthWindow {
     pub seven_day_opus_utilization: f64,
     pub five_hour_resets_at: Option<DateTime<Utc>>,
     pub seven_day_resets_at: Option<DateTime<Utc>>,
+    /// Extra/Max usage credits info (when enabled on the plan).
+    pub extra_usage: Option<ExtraUsageInfo>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExtraUsageInfo {
+    pub monthly_limit_usd: f64,
+    pub used_credits_usd: f64,
+    pub utilization: f64,
 }
 
 pub async fn fetch_usage(token: &str) -> Result<ClaudeOauthWindow, String> {
@@ -67,16 +76,30 @@ fn parse_usage_response(payload: Value) -> Result<ClaudeOauthWindow, String> {
     let s = payload.get("seven_day").cloned().unwrap_or(Value::Null);
     let o = payload.get("seven_day_opus").cloned().unwrap_or(Value::Null);
 
+    let extra_usage = payload.get("extra_usage").and_then(|eu| {
+        let enabled = eu.get("is_enabled").and_then(Value::as_bool).unwrap_or(false);
+        if !enabled { return None; }
+        Some(ExtraUsageInfo {
+            monthly_limit_usd: eu.get("monthly_limit").and_then(Value::as_f64).unwrap_or(0.0),
+            used_credits_usd: eu.get("used_credits").and_then(Value::as_f64).unwrap_or(0.0),
+            utilization: eu.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
+        })
+    });
+
     let window = ClaudeOauthWindow {
         five_hour_utilization: f.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
         seven_day_utilization: s.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
         seven_day_opus_utilization: o.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
         five_hour_resets_at: parse_dt(f.get("resets_at").and_then(Value::as_str)),
         seven_day_resets_at: parse_dt(s.get("resets_at").and_then(Value::as_str)),
+        extra_usage,
     };
     eprintln!(
-        "[claude] OAuth OK: 5h={:.1}% 7d={:.1}% opus={:.1}%",
-        window.five_hour_utilization, window.seven_day_utilization, window.seven_day_opus_utilization
+        "[claude] OAuth OK: 5h={:.1}% 7d={:.1}% opus={:.1}%{}",
+        window.five_hour_utilization,
+        window.seven_day_utilization,
+        window.seven_day_opus_utilization,
+        window.extra_usage.as_ref().map(|eu| format!(" extra={:.1}%", eu.utilization)).unwrap_or_default(),
     );
     Ok(window)
 }

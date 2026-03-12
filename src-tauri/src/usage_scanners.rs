@@ -149,13 +149,26 @@ struct ClaudeContribution {
     deduped_chunks: u64,
 }
 
+/// Token values previously added for a given streaming message,
+/// so that when a later chunk arrives we can subtract the old and add the new.
+#[derive(Clone, Debug, Default)]
+struct ClaudeStreamEntry {
+    input: u64,
+    cache_read: u64,
+    cache_create: u64,
+    output: u64,
+    cost: f64,
+    day: String,
+    model: String,
+}
+
 #[derive(Clone, Debug, Default)]
 struct ClaudeFileCache {
     mtime_ms: u64,
     size: u64,
     parsed_bytes: u64,
     contribution: ClaudeContribution,
-    seen_stream_ids: HashSet<String>,
+    seen_stream_ids: HashMap<String, ClaudeStreamEntry>,
 }
 
 #[derive(Default)]
@@ -618,16 +631,6 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
         if json.get("type").and_then(|v| v.as_str()) != Some("assistant") { continue; }
         let Some(usage) = json.get("message").and_then(|m| m.get("usage")) else { continue; };
 
-        let message_id = pick_first_str(&json, &[&["message", "id"], &["message_id"]]).unwrap_or_default();
-        let request_id = pick_first_str(&json, &[&["requestId"], &["request_id"], &["request", "id"]]).unwrap_or_default();
-        if !message_id.is_empty() && !request_id.is_empty() {
-            let dedupe_key = format!("{message_id}:{request_id}");
-            if !cache.seen_stream_ids.insert(dedupe_key) {
-                cache.contribution.deduped_chunks = cache.contribution.deduped_chunks.saturating_add(1);
-                continue;
-            }
-        }
-
         let input = pick_first_u64(usage, &[&["input_tokens"]]).unwrap_or(0);
         let cache_read = pick_first_u64(usage, &[&["cache_read_input_tokens"]]).unwrap_or(0);
         let cache_create = pick_first_u64(usage, &[&["cache_creation_input_tokens"]]).unwrap_or(0);
@@ -638,6 +641,51 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
         let model_norm = normalize_claude_model(&model);
         let cost = claude_cost_usd(&model_norm, input, cache_read, cache_create, output);
         let total = input.saturating_add(cache_create).saturating_add(output);
+        let day = day_from_json_or_now(&json);
+
+        // Claude Code logs multiple streaming chunks per message, each with the same
+        // message_id:request_id. Later chunks carry the final (larger) output_tokens.
+        // When we see a duplicate key, subtract the old values and add the new ones
+        // so we always reflect the latest (most complete) token counts.
+        let message_id = pick_first_str(&json, &[&["message", "id"], &["message_id"]]).unwrap_or_default();
+        let request_id = pick_first_str(&json, &[&["requestId"], &["request_id"], &["request", "id"]]).unwrap_or_default();
+        if !message_id.is_empty() && !request_id.is_empty() {
+            let dedupe_key = format!("{message_id}:{request_id}");
+            if let Some(prev) = cache.seen_stream_ids.get(&dedupe_key) {
+                // Subtract previous chunk's contribution before adding the new one
+                cache.contribution.deduped_chunks = cache.contribution.deduped_chunks.saturating_add(1);
+                let prev_total = prev.input.saturating_add(prev.cache_create).saturating_add(prev.output);
+                cache.contribution.input = cache.contribution.input.saturating_sub(prev.input);
+                cache.contribution.cache_read_input = cache.contribution.cache_read_input.saturating_sub(prev.cache_read);
+                cache.contribution.cache_creation_input = cache.contribution.cache_creation_input.saturating_sub(prev.cache_create);
+                cache.contribution.output = cache.contribution.output.saturating_sub(prev.output);
+                cache.contribution.total = cache.contribution.total.saturating_sub(prev_total);
+                cache.contribution.cost -= prev.cost;
+
+                if let Some(daily) = cache.contribution.daily.get_mut(&prev.day) {
+                    daily.input_tokens = daily.input_tokens.saturating_sub(prev.input);
+                    daily.cache_read_input_tokens = daily.cache_read_input_tokens.saturating_sub(prev.cache_read);
+                    daily.cache_creation_input_tokens = daily.cache_creation_input_tokens.saturating_sub(prev.cache_create);
+                    daily.output_tokens = daily.output_tokens.saturating_sub(prev.output);
+                    daily.total_tokens = daily.total_tokens.saturating_sub(prev_total);
+                    daily.cost_usd -= prev.cost;
+                }
+
+                let prev_model_key = format!("{}|{}", prev.day, prev.model);
+                if let Some(md) = cache.contribution.daily_by_model.get_mut(&prev_model_key) {
+                    md.input_tokens = md.input_tokens.saturating_sub(prev.input);
+                    md.cache_read_input_tokens = md.cache_read_input_tokens.saturating_sub(prev.cache_read);
+                    md.cache_creation_input_tokens = md.cache_creation_input_tokens.saturating_sub(prev.cache_create);
+                    md.output_tokens = md.output_tokens.saturating_sub(prev.output);
+                    md.total_tokens = md.total_tokens.saturating_sub(prev_total);
+                    md.cost_usd -= prev.cost;
+                }
+            }
+            cache.seen_stream_ids.insert(dedupe_key, ClaudeStreamEntry {
+                input, cache_read, cache_create, output, cost,
+                day: day.clone(), model: model_norm.clone(),
+            });
+        }
 
         cache.contribution.input = cache.contribution.input.saturating_add(input);
         cache.contribution.cache_read_input = cache.contribution.cache_read_input.saturating_add(cache_read);
@@ -646,7 +694,6 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
         cache.contribution.total = cache.contribution.total.saturating_add(total);
         cache.contribution.cost += cost;
 
-        let day = day_from_json_or_now(&json);
         let daily = cache.contribution.daily.entry(day.clone()).or_insert_with(|| ClaudeDailyUsagePoint {
             day: day.clone(),
             ..ClaudeDailyUsagePoint::default()
@@ -1009,6 +1056,7 @@ mod tests {
         let dir = temp_dir("claude-dedupe");
         let file = dir.join("session.jsonl");
         let mut f = OpenOptions::new().create(true).append(true).open(&file).unwrap();
+        // Two identical streaming chunks for the same message — should count once
         writeln!(
             f,
             "{{\"type\":\"assistant\",\"requestId\":\"r1\",\"message\":{{\"id\":\"m1\",\"model\":\"claude-3-7-sonnet\",\"usage\":{{\"input_tokens\":10,\"cache_read_input_tokens\":2,\"cache_creation_input_tokens\":0,\"output_tokens\":3}}}}}}"
@@ -1025,6 +1073,51 @@ mod tests {
         assert_eq!(cache.contribution.input, 10);
         assert_eq!(cache.contribution.output, 3);
         assert_eq!(cache.contribution.deduped_chunks, 1);
+
+        let _ = remove_dir_all(dir);
+    }
+
+    #[test]
+    fn claude_streaming_chunks_keep_final_output_tokens() {
+        // Claude Code logs multiple streaming chunks per message.
+        // The first chunk has a small output_tokens (e.g. 2), intermediate chunks
+        // have partial counts, and the last chunk has the final count (e.g. 309).
+        // The parser must reflect the LAST chunk's values, not the first.
+        let dir = temp_dir("claude-streaming");
+        let file = dir.join("session.jsonl");
+        let mut f = OpenOptions::new().create(true).append(true).open(&file).unwrap();
+        // First streaming chunk — small output
+        writeln!(
+            f,
+            "{{\"type\":\"assistant\",\"requestId\":\"r1\",\"message\":{{\"id\":\"m1\",\"model\":\"claude-3-7-sonnet\",\"usage\":{{\"input_tokens\":3,\"cache_read_input_tokens\":100,\"cache_creation_input_tokens\":200,\"output_tokens\":2}}}}}}"
+        ).unwrap();
+        // Intermediate chunk
+        writeln!(
+            f,
+            "{{\"type\":\"assistant\",\"requestId\":\"r1\",\"message\":{{\"id\":\"m1\",\"model\":\"claude-3-7-sonnet\",\"usage\":{{\"input_tokens\":3,\"cache_read_input_tokens\":100,\"cache_creation_input_tokens\":200,\"output_tokens\":8}}}}}}"
+        ).unwrap();
+        // Final chunk — full output
+        writeln!(
+            f,
+            "{{\"type\":\"assistant\",\"requestId\":\"r1\",\"message\":{{\"id\":\"m1\",\"model\":\"claude-3-7-sonnet\",\"usage\":{{\"input_tokens\":3,\"cache_read_input_tokens\":100,\"cache_creation_input_tokens\":200,\"output_tokens\":309}}}}}}"
+        ).unwrap();
+        // Second message — single chunk (no streaming)
+        writeln!(
+            f,
+            "{{\"type\":\"assistant\",\"requestId\":\"r2\",\"message\":{{\"id\":\"m2\",\"model\":\"claude-3-7-sonnet\",\"usage\":{{\"input_tokens\":5,\"cache_read_input_tokens\":50,\"cache_creation_input_tokens\":0,\"output_tokens\":100}}}}}}"
+        ).unwrap();
+
+        let mut cache = ClaudeFileCache::default();
+        parse_claude_file_incremental(&file, &mut cache);
+
+        // Message m1: final values are input=3, cache_read=100, cache_create=200, output=309
+        // Message m2: input=5, cache_read=50, cache_create=0, output=100
+        // Totals: input=8, cache_read=150, cache_create=200, output=409
+        assert_eq!(cache.contribution.input, 8);
+        assert_eq!(cache.contribution.cache_read_input, 150);
+        assert_eq!(cache.contribution.cache_creation_input, 200);
+        assert_eq!(cache.contribution.output, 409);
+        assert_eq!(cache.contribution.deduped_chunks, 2); // two intermediate chunks replaced
 
         let _ = remove_dir_all(dir);
     }

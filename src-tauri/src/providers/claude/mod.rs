@@ -11,8 +11,8 @@ use chrono::{Duration, Utc};
 
 use crate::providers::{FetchContext, ProviderDescriptor, UsageProvider};
 use crate::usage::models::{
-    CostEntry, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot, UsageUnit,
-    UsageWindow, WindowType,
+    CostEntry, CreditsInfo, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot,
+    UsageUnit, UsageWindow, WindowType,
 };
 
 /// Minimum seconds between OAuth API calls to avoid 429s.
@@ -122,29 +122,39 @@ impl UsageProvider for ClaudeProvider {
                     }
                 }
                 Ok(oauth) => {
+                    let mut windows = vec![
+                        UsageWindow::percent(
+                            WindowType::FiveHour,
+                            oauth.five_hour_utilization,
+                            oauth.five_hour_resets_at,
+                            "Claude OAuth reports utilization for the 5-hour subscriber window.",
+                        ),
+                        UsageWindow::percent(
+                            WindowType::SevenDay,
+                            oauth.seven_day_utilization,
+                            oauth.seven_day_resets_at,
+                            "Claude OAuth reports utilization for the 7-day subscriber window.",
+                        ),
+                    ];
+                    // Only add the Opus window if the API actually reports it (non-zero)
+                    if oauth.seven_day_opus_utilization > 0.0 {
+                        windows.push(UsageWindow::percent(
+                            WindowType::Weekly,
+                            oauth.seven_day_opus_utilization,
+                            oauth.seven_day_resets_at,
+                            "Opus weekly usage is exposed as utilization percent, not absolute tokens.",
+                        ));
+                    }
+
+                    let credits = oauth.extra_usage.as_ref().map(|eu| CreditsInfo {
+                        balance_usd: Some(eu.monthly_limit_usd - eu.used_credits_usd),
+                        spent_usd: Some(eu.used_credits_usd),
+                    });
+
                     let snapshot = UsageSnapshot {
                         provider: ProviderId::Claude,
-                        windows: vec![
-                            UsageWindow::percent(
-                                WindowType::FiveHour,
-                                oauth.five_hour_utilization,
-                                oauth.five_hour_resets_at,
-                                "Claude OAuth reports utilization for the 5-hour subscriber window.",
-                            ),
-                            UsageWindow::percent(
-                                WindowType::SevenDay,
-                                oauth.seven_day_utilization,
-                                oauth.seven_day_resets_at,
-                                "Claude OAuth reports utilization for the 7-day subscriber window.",
-                            ),
-                            UsageWindow::percent(
-                                WindowType::Weekly,
-                                oauth.seven_day_opus_utilization,
-                                oauth.seven_day_resets_at,
-                                "Opus weekly usage is exposed as utilization percent, not absolute tokens.",
-                            ),
-                        ],
-                        credits: None,
+                        windows,
+                        credits,
                         plan: None,
                         fetched_at: Utc::now(),
                         source: DataSource::Oauth,

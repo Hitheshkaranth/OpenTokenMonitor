@@ -38,7 +38,7 @@ pub fn fetch_stats() -> Result<GeminiCliStats, String> {
     })
 }
 
-fn supports_stats_command() -> bool {
+pub fn supports_stats_command() -> bool {
     static SUPPORTS: OnceLock<bool> = OnceLock::new();
     *SUPPORTS.get_or_init(|| {
         let Ok(output) = Command::new(gemini_command()).arg("--help").output() else {
@@ -54,7 +54,7 @@ fn supports_stats_command() -> bool {
 
 #[cfg(target_os = "windows")]
 fn gemini_command() -> &'static str {
-    "gemini.cmd"
+    "gemini"
 }
 
 #[cfg(not(target_os = "windows"))]

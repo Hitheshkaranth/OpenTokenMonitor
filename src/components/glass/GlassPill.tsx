@@ -5,9 +5,10 @@ type GlassPillProps = PropsWithChildren<{
   active?: boolean;
   title?: string;
   className?: string;
+  style?: React.CSSProperties;
 }>;
 
-const GlassPill = ({ children, onClick, active = false, title, className = '' }: GlassPillProps) => {
+const GlassPill = ({ children, onClick, active = false, title, className = '', style }: GlassPillProps) => {
   return (
     <button
       type="button"
@@ -17,6 +18,7 @@ const GlassPill = ({ children, onClick, active = false, title, className = '' }:
         cursor: 'pointer',
         opacity: active ? 1 : 0.82,
         borderColor: active ? 'var(--control-border-strong)' : undefined,
+        ...style,
       }}
       onClick={onClick}
     >

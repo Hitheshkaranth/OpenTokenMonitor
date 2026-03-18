@@ -12,6 +12,7 @@ type NavBarProps = {
   onNavigate: (page: PageId) => void;
   onRefresh: () => void;
   refreshBusy: boolean;
+  onWidget: () => void;
 };
 
 const providers: { id: ProviderId; label: string; tint: string }[] = [
@@ -20,8 +21,7 @@ const providers: { id: ProviderId; label: string; tint: string }[] = [
   { id: 'gemini', label: 'Gemini', tint: 'gemini' },
 ];
 
-const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy }: NavBarProps) => {
-  const demoMode = useSettingsStore((s) => s.demoMode);
+const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy, onWidget }: NavBarProps) => {
   const enabledProviders = useSettingsStore((s) => s.enabledProviders);
   const statuses = useUsageStore((s) => s.statuses);
 
@@ -32,7 +32,6 @@ const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy }: NavBarProps)
         <div className="nav-brand" data-tauri-drag-region>
           <img src="/open_token_monitor_icon.png" alt="OTM" className="nav-logo" />
           <span className="nav-title">OpenToken Monitor</span>
-          {demoMode && <span className="glass-pill nav-demo-badge">Demo</span>}
         </div>
         <div className="nav-controls">
           <button
@@ -43,6 +42,16 @@ const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy }: NavBarProps)
             style={{ width: 26, height: 26, minWidth: 26 }}
           >
             <RefreshCw size={12} className={refreshBusy ? 'spin-icon' : ''} />
+          </button>
+          <button
+            className="glass-pill compact-action-btn"
+            onClick={onWidget}
+            title="Switch to widget view"
+            style={{ width: 26, height: 26, minWidth: 26 }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M9 1H3.5M9 1V6.5M9 1L1 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" transform="rotate(180 5 5)"/>
+            </svg>
           </button>
           <button type="button" aria-label="Minimize" title="Minimize" className="window-btn"
             onClick={() => { if (isTauriRuntime()) getCurrentWindow().minimize(); }}

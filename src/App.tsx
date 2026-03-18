@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { LogicalSize } from '@tauri-apps/api/dpi';
 import NavBar from '@/components/layout/Sidebar';
 import WidgetMode from '@/components/layout/WidgetMode';
 import ProviderCard from '@/components/providers/ProviderCard';
@@ -10,10 +12,12 @@ import { useUsageStore } from '@/stores/usageStore';
 import { useUsageData } from '@/hooks/useUsageData';
 import { useProviderStatus } from '@/hooks/useProviderStatus';
 import { useGlassTheme } from '@/hooks/useGlassTheme';
+import { isTauriRuntime } from '@/utils/runtime';
 import EmptyState from '@/components/states/EmptyState';
 import ErrorBoundary from '@/components/states/ErrorBoundary';
 import ErrorState from '@/components/states/ErrorState';
 import LoadingState from '@/components/states/LoadingState';
+
 
 const App = () => {
   const [page, setPage] = useState<PageId>('overview');
@@ -40,6 +44,33 @@ const App = () => {
   useUsageData();
   useProviderStatus();
   useGlassTheme(theme);
+
+  // Resize window when toggling widget mode
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    const win = getCurrentWindow();
+    const h = widgetMode ? 182 : 390;
+    (async () => {
+      try {
+        await win.setResizable(true);
+        // Clear all size constraints first
+        await win.setSizeConstraints({
+          minWidth: 360, maxWidth: 360,
+          minHeight: 100, maxHeight: 600,
+        });
+        // Now resize
+        await win.setSize(new LogicalSize(360, h));
+        // Lock to target
+        await win.setSizeConstraints({
+          minWidth: 360, maxWidth: 360,
+          minHeight: h, maxHeight: h,
+        });
+        await win.setResizable(false);
+      } catch (err) {
+        console.error('resize failed', err);
+      }
+    })();
+  }, [widgetMode]);
 
   const activeProviders = useMemo(
     () => (['claude', 'codex', 'gemini'] as ProviderId[]).filter((p) => enabledProviders[p]),
@@ -154,7 +185,7 @@ const App = () => {
         <EmptyState
           onOpenSettings={() => setPage('settings')}
           title="No usage data yet"
-          message="No provider returned usage statistics. Add credentials, verify local CLI logs, or enable Demo mode."
+          message="No provider returned usage statistics. Add credentials or verify local CLI logs."
           ctaLabel="Open Settings"
         />
       );
@@ -193,7 +224,7 @@ const App = () => {
   };
 
   if (widgetMode) {
-    return <WidgetMode snapshots={snapshots} onExpand={() => setWidgetMode(false)} />;
+    return <WidgetMode snapshots={snapshots} statuses={statuses} onExpand={() => setWidgetMode(false)} onRefresh={refreshEverything} refreshBusy={refreshBusy} />;
   }
 
   return (
@@ -204,6 +235,7 @@ const App = () => {
           onNavigate={setPage}
           onRefresh={refreshEverything}
           refreshBusy={refreshBusy}
+          onWidget={() => setWidgetMode(true)}
         />
         <div className="main-content soft-scroll" style={page === 'overview' ? { display: 'flex', flexDirection: 'column' } : undefined}>
           {renderContent()}

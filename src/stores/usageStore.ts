@@ -11,9 +11,7 @@ import {
   UsageReport,
   UsageSnapshot,
 } from '@/types';
-import { makeMockModelBreakdown, makeMockSnapshot, makeMockTrend, makeMockUsageReport } from '@/utils/mockData';
 import { isTauriRuntime } from '@/utils/runtime';
-import { useSettingsStore } from '@/stores/settingsStore';
 
 type UsageState = {
   snapshots: Record<ProviderId, UsageSnapshot | undefined>;
@@ -45,19 +43,6 @@ const EMPTY_SNAPSHOTS: Record<ProviderId, UsageSnapshot | undefined> = {
   gemini: undefined,
 };
 
-const PROVIDERS: ProviderId[] = ['claude', 'codex', 'gemini'];
-
-const shouldUseDemoData = () => !isTauriRuntime() || useSettingsStore.getState().demoMode;
-
-const demoSnapshotMap = () => {
-  const now = Date.now();
-  const map = { ...EMPTY_SNAPSHOTS };
-  PROVIDERS.forEach((provider) => {
-    map[provider] = makeMockSnapshot(provider, now);
-  });
-  return map;
-};
-
 export const useUsageStore = create<UsageState>((set, get) => ({
   snapshots: EMPTY_SNAPSHOTS,
   costHistory: { claude: [], codex: [], gemini: [] },
@@ -70,35 +55,13 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   error: undefined,
 
   fetchSnapshot: async (provider) => {
-    if (shouldUseDemoData()) {
-      set((state) => ({ snapshots: { ...state.snapshots, [provider]: makeMockSnapshot(provider) } }));
-      return;
-    }
+    if (!isTauriRuntime()) return;
     const snapshot = await invoke<UsageSnapshot>('get_usage_snapshot', { provider });
     set((state) => ({ snapshots: { ...state.snapshots, [provider]: snapshot } }));
   },
 
   fetchAll: async () => {
-    if (shouldUseDemoData()) {
-      const report = makeMockUsageReport();
-      set({
-        snapshots: demoSnapshotMap(),
-        modelBreakdowns: {
-          claude: report.model_breakdowns.filter((entry) => entry.provider === 'claude'),
-          codex: report.model_breakdowns.filter((entry) => entry.provider === 'codex'),
-          gemini: report.model_breakdowns.filter((entry) => entry.provider === 'gemini'),
-        },
-        alerts: {
-          claude: report.alerts.filter((alert) => alert.provider === 'claude'),
-          codex: report.alerts.filter((alert) => alert.provider === 'codex'),
-          gemini: report.alerts.filter((alert) => alert.provider === 'gemini'),
-        },
-        latestReport: report,
-        loading: false,
-        error: undefined,
-      });
-      return;
-    }
+    if (!isTauriRuntime()) return;
     set({ loading: true, error: undefined });
     try {
       const snapshots = await invoke<UsageSnapshot[]>('get_all_snapshots');
@@ -113,35 +76,13 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   },
 
   refreshProvider: async (provider) => {
-    if (shouldUseDemoData()) {
-      set((state) => ({ snapshots: { ...state.snapshots, [provider]: makeMockSnapshot(provider) } }));
-      return;
-    }
+    if (!isTauriRuntime()) return;
     const snapshot = await invoke<UsageSnapshot>('refresh_provider', { provider });
     set((state) => ({ snapshots: { ...state.snapshots, [provider]: snapshot } }));
   },
 
   refreshAll: async () => {
-    if (shouldUseDemoData()) {
-      const report = makeMockUsageReport();
-      set({
-        snapshots: demoSnapshotMap(),
-        modelBreakdowns: {
-          claude: report.model_breakdowns.filter((entry) => entry.provider === 'claude'),
-          codex: report.model_breakdowns.filter((entry) => entry.provider === 'codex'),
-          gemini: report.model_breakdowns.filter((entry) => entry.provider === 'gemini'),
-        },
-        alerts: {
-          claude: report.alerts.filter((alert) => alert.provider === 'claude'),
-          codex: report.alerts.filter((alert) => alert.provider === 'codex'),
-          gemini: report.alerts.filter((alert) => alert.provider === 'gemini'),
-        },
-        latestReport: report,
-        error: undefined,
-        loading: false,
-      });
-      return;
-    }
+    if (!isTauriRuntime()) return;
     set({ loading: true, error: undefined });
     try {
       const snapshots = await invoke<UsageSnapshot[]>('refresh_all');
@@ -156,63 +97,25 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   },
 
   fetchCostHistory: async (provider, days = 30) => {
-    if (shouldUseDemoData()) {
-      const trend = makeMockTrend(provider, days);
-      const history: CostEntry[] = trend.points.map((point) => ({
-        date: point.date,
-        provider,
-        model: 'demo-model',
-        input_tokens: Math.round(point.total_tokens * 0.6),
-        output_tokens: Math.round(point.total_tokens * 0.4),
-        cache_read_tokens: Math.round(point.total_tokens * 0.08),
-        cache_write_tokens: Math.round(point.total_tokens * 0.03),
-        estimated_cost_usd: point.cost_usd,
-      }));
-      set((state) => ({ costHistory: { ...state.costHistory, [provider]: history } }));
-      return;
-    }
+    if (!isTauriRuntime()) return;
     const history = await invoke<CostEntry[]>('get_cost_history', { provider, days });
     set((state) => ({ costHistory: { ...state.costHistory, [provider]: history } }));
   },
 
   fetchTrend: async (provider) => {
-    if (shouldUseDemoData()) {
-      const trend = makeMockTrend(provider, 30);
-      set((state) => ({ trends: { ...state.trends, [provider]: trend } }));
-      return;
-    }
+    if (!isTauriRuntime()) return;
     const trend = await invoke<TrendData>('get_usage_trends', { provider });
     set((state) => ({ trends: { ...state.trends, [provider]: trend } }));
   },
 
   fetchModelBreakdown: async (provider, days = 30) => {
-    if (shouldUseDemoData()) {
-      set((state) => ({ modelBreakdowns: { ...state.modelBreakdowns, [provider]: makeMockModelBreakdown(provider) } }));
-      return;
-    }
+    if (!isTauriRuntime()) return;
     const breakdown = await invoke<ModelBreakdownEntry[]>('get_model_breakdown', { provider, days });
     set((state) => ({ modelBreakdowns: { ...state.modelBreakdowns, [provider]: breakdown } }));
   },
 
   fetchUsageReport: async (days = 30) => {
-    if (shouldUseDemoData()) {
-      const report = makeMockUsageReport();
-      set({
-        latestReport: report,
-        alerts: {
-          claude: report.alerts.filter((alert) => alert.provider === 'claude'),
-          codex: report.alerts.filter((alert) => alert.provider === 'codex'),
-          gemini: report.alerts.filter((alert) => alert.provider === 'gemini'),
-        },
-        modelBreakdowns: {
-          claude: report.model_breakdowns.filter((entry) => entry.provider === 'claude'),
-          codex: report.model_breakdowns.filter((entry) => entry.provider === 'codex'),
-          gemini: report.model_breakdowns.filter((entry) => entry.provider === 'gemini'),
-        },
-      });
-      return;
-    }
-
+    if (!isTauriRuntime()) return;
     const report = await invoke<UsageReport>('export_usage_report', { days });
     set({
       latestReport: report,
@@ -230,20 +133,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   },
 
   fetchStatus: async (provider) => {
-    if (shouldUseDemoData()) {
-      set((state) => ({
-        statuses: {
-          ...state.statuses,
-          [provider]: {
-            provider,
-            health: 'active',
-            message: 'Demo mode active',
-            checked_at: new Date().toISOString(),
-          },
-        },
-      }));
-      return;
-    }
+    if (!isTauriRuntime()) return;
     const status = await invoke<ProviderStatus>('get_provider_status', { provider });
     set((state) => ({ statuses: { ...state.statuses, [provider]: status } }));
   },

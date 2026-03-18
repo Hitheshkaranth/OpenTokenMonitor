@@ -25,8 +25,6 @@ const SettingsPage = () => {
   const setTheme = useSettingsStore((s) => s.setTheme);
   const widgetMode = useSettingsStore((s) => s.widgetMode);
   const setWidgetMode = useSettingsStore((s) => s.setWidgetMode);
-  const demoMode = useSettingsStore((s) => s.demoMode);
-  const setDemoMode = useSettingsStore((s) => s.setDemoMode);
   const enabledProviders = useSettingsStore((s) => s.enabledProviders);
   const setProviderEnabled = useSettingsStore((s) => s.setProviderEnabled);
   const apiKeys = useSettingsStore((s) => s.apiKeys);
@@ -66,7 +64,6 @@ const SettingsPage = () => {
             <option value="light">Light</option>
           </select>
           <GlassToggle checked={widgetMode} onChange={setWidgetMode} label="Widget" />
-          <GlassToggle checked={demoMode} onChange={setDemoMode} label="Demo" />
         </div>
       </GlassPanel>
 
@@ -127,7 +124,6 @@ const SettingsPage = () => {
         snapshots={snapshots}
         alerts={alerts}
         globalError={error}
-        demoMode={demoMode}
       />
     </div>
   );

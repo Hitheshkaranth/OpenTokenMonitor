@@ -13,13 +13,11 @@ type DiagnosticsPanelProps = {
   snapshots: Record<ProviderId, UsageSnapshot | undefined>;
   alerts: Record<ProviderId, UsageAlert[]>;
   globalError?: string;
-  demoMode: boolean;
 };
 
-const DiagnosticsPanel = ({ statuses, snapshots, alerts, globalError, demoMode }: DiagnosticsPanelProps) => (
+const DiagnosticsPanel = ({ statuses, snapshots, alerts, globalError }: DiagnosticsPanelProps) => (
   <div className="glass-panel" style={{ padding: '6px 8px', display: 'grid', gap: 4 }}>
     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Diagnostics</div>
-    <div className="metric-label" style={{ fontSize: 9 }}>Demo mode: {demoMode ? 'ON' : 'OFF'}</div>
     {globalError && (
       <div className="metric-label" style={{ color: '#f87171', fontSize: 9 }}>
         Error: {globalError}

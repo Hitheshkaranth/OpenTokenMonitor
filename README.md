@@ -8,7 +8,9 @@
 [![Rust](https://img.shields.io/badge/Rust-2021-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-![OpenTokenMonitor Dashboard](./docs/images/app-overview.png)
+| Dashboard | Widget |
+|-----------|--------|
+| ![Dashboard](./docs/images/app-overview.png) | ![Widget](./docs/images/widget-view.png) |
 
 ## Why
 
@@ -17,21 +19,21 @@ If you use Claude, Codex, and Gemini through their CLIs or APIs, your usage is s
 ## Features
 
 - **Unified dashboard** for Claude, Codex, and Gemini usage in one compact 360x390 window
+- **Widget mode** — compact 360x182 view with Apple Activity Ring gauges and live health indicators
 - **Usage bars** with color-coded indicators (green / yellow / red) showing utilization at a glance
 - **Per-provider detail pages** with cost trends, model breakdowns, and threshold alerts
 - **Sparkline charts** showing 30-day cost trends inline on overview cards
 - **Glassmorphism UI** with provider-tinted cards, gradient accent bars, and animated health indicators
-- **Widget mode** for a minimal always-visible view of all three providers
 - **Keyboard shortcuts** for fast navigation (1/2/3 for providers, Ctrl+R refresh, Esc for home)
-- **Demo mode** with realistic mock data for trying the app without API credentials
-- **Local-first architecture** - reads from local CLI logs with no cloud dependency required
+- **Local-first architecture** — reads from local CLI logs with no cloud dependency required
+- **No text selection** — native desktop feel with non-selectable UI elements
 
 ## How It Works
 
 OpenTokenMonitor has two data paths:
 
-1. **Local file scanning** - The Rust backend watches and parses CLI history files from `~/.claude/`, `~/.codex/`, and `~/.gemini/`
-2. **Live API polling** - Fetches real-time usage data from provider APIs when credentials are configured
+1. **Local file scanning** — The Rust backend watches and parses CLI history files from `~/.claude/`, `~/.codex/`, and `~/.gemini/`
+2. **Live API polling** — Fetches real-time usage data from provider APIs when credentials are configured
 
 Each provider exposes different quota models, and the app respects that honestly:
 
@@ -43,15 +45,23 @@ Each provider exposes different quota models, and the app respects that honestly
 
 Usage accuracy is labeled transparently: `exact` for real counters, `approximate` for log-derived estimates, and `percent-only` when that's all the provider gives.
 
-## Quick Start
+## Installation
 
-### Prerequisites
+### Download (Windows)
 
+1. Go to the [Releases](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases) page
+2. Download the latest `.exe` installer (NSIS)
+3. Run the installer — no admin rights required
+4. Launch **OpenTokenMonitor** from the Start Menu
+
+### Build from Source
+
+**Prerequisites:**
 - [Node.js](https://nodejs.org/) 18+ (20+ recommended)
 - [Rust](https://rustup.rs/) stable toolchain
 - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS
 
-### Install and Run
+**Development:**
 
 ```bash
 git clone https://github.com/Hitheshkaranth/OpenTokenMonitor.git
@@ -60,28 +70,35 @@ npm install
 npm run tauri dev
 ```
 
-The app opens as a compact desktop widget. It automatically detects local CLI credentials and starts fetching usage data.
-
-### Build for Distribution
+**Release build (optimized, ~9MB binary, ~4MB installer):**
 
 ```bash
 npm run tauri build
 ```
 
-Outputs are in `src-tauri/target/release/bundle/` (MSI and NSIS installers on Windows).
+The NSIS installer is output to `src-tauri/target/release/bundle/nsis/`.
 
 ## Usage Guide
 
 ### Overview (Home)
 
 The home screen shows all three providers as cards with:
-- Provider logo and health status indicator
+- Provider logo and health status indicator (green = active, amber = waiting, red = error)
 - Usage bars for each quota window (color transitions green -> yellow -> red)
 - Inline sparkline for 30-day cost trend
 - Today's cost and 30-day total
 - Top model by token usage and active alert badges
 
 Click any card to drill into detailed breakdowns.
+
+### Widget Mode
+
+Toggle widget mode from the header to get a compact view with:
+- **Apple Activity Ring gauges** — concentric circular progress indicators for primary and secondary usage windows
+- **Provider logos** centered inside each ring
+- **Live health dots** — same green/amber/red indicators as the full dashboard
+- **Refresh button** — refresh all providers without expanding
+- **Expand button** — switch back to full dashboard
 
 ### Provider Detail
 
@@ -95,7 +112,6 @@ Each provider page shows:
 
 - **Theme**: System, Dark, or Light
 - **Widget mode**: Toggle compact always-on-top view
-- **Demo mode**: Use mock data without real credentials
 - **Provider toggles**: Enable/disable individual providers
 - **API keys**: Set or override auto-detected credentials
 - **Refresh cadence**: Manual, 30s, 1m, 2m, 5m, or 15m
@@ -114,7 +130,7 @@ Each provider page shows:
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React 19, TypeScript, Zustand 5, Recharts 3 |
-| Desktop | Tauri 2 (native webview, ~5MB binary) |
+| Desktop | Tauri 2 (native webview, ~9MB binary, ~4MB installer) |
 | Backend | Rust, Tokio, Reqwest, Rusqlite, Notify |
 | Build | Vite 7 |
 
@@ -126,26 +142,25 @@ src/                        # React frontend
     charts/                 # Sparkline, CostTrendChart
     glass/                  # GlassPanel, GlassButton, GlassToggle, GlassInput, GlassPill
     layout/                 # NavBar (Sidebar), WidgetMode
-    meters/                 # UsageBar, UsageMeter, WindowMeter
+    meters/                 # UsageBar, UsageMeter, WindowMeter, WidgetGauge
     providers/              # OverviewCard, ProviderCard, ProviderLogo, ProviderOverview
     settings/               # SettingsPage
     states/                 # EmptyState, ErrorState, LoadingState, DiagnosticsPanel
   hooks/                    # useUsageData, useProviderStatus, useGlassTheme
   stores/                   # Zustand stores (settings, usage)
   styles/                   # sidebar.css, settings.css
-  utils/                    # mockData, usageWindows, runtime detection
+  utils/                    # usageWindows, runtime detection
 src-tauri/                  # Rust backend
   src/providers/            # Claude, Codex, Gemini parsers
   src/usage/                # Storage, snapshots, reports
   src/watchers/             # Filesystem watchers for live updates
 public/providers/           # Provider logo assets
-docs/                       # Architecture, research, screenshots
+docs/                       # Architecture, screenshots
 ```
 
 ## Docs
 
 - [Architecture](./ARCHITECTURE.md) - Technical architecture and data flow
-- [Provider Research](./docs/research/provider-usage-research-2026-03-12.md) - How each provider's usage API works
 
 ## Limitations
 

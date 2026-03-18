@@ -10,7 +10,7 @@ import {
   UsageAlert,
   UsageSnapshot,
 } from '@/types';
-import { windowLabel, countdownLabel } from '@/utils/usageWindows';
+import { countdownLabel } from '@/utils/usageWindows';
 
 const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'gemini'; color: string }> = {
   claude: { label: 'Claude', tint: 'claude', color: '#d97757' },
@@ -53,10 +53,10 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
     <GlassPanel
       tint={meta.tint}
       className={`hover-lift overview-card accent-${provider}`}
-      style={{ padding: '8px 10px', cursor: 'pointer', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 6 }}
+      style={{ padding: '8px 10px', cursor: 'pointer', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 5 }}
       onClick={onClick}
     >
-      {/* Row 1: Provider identity + sparkline */}
+      {/* Row 1: Provider identity + cost + sparkline */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <ProviderLogo provider={provider} size={22} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 }}>
@@ -64,51 +64,54 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
             <span style={{ fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>{meta.label}</span>
             <span className={`nav-tab-dot ${healthClass}`} />
           </div>
-          <span className="metric-label" style={{ fontSize: 8 }}>
-            {windowLabel(primary)} {countdownLabel(primary)}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 9, fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+              ${costToday.toFixed(2)}
+            </span>
+            <span className="metric-label" style={{ fontSize: 8 }}>
+              / ${trend?.total_cost_usd.toFixed(2) ?? '0.00'} 30d
+            </span>
+          </div>
         </div>
         <div style={{ flex: 1, minWidth: 30 }}>
           <Sparkline points={trend?.points ?? []} color={meta.color} height={28} />
         </div>
       </div>
 
-      {/* Row 2: Usage bars */}
+      {/* Row 2: Usage bars with countdown labels */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <UsageBar pct={primaryPct} label={windowLabel(primary)?.split(' ')[0]} />
-        {secondary && <UsageBar pct={secondaryPct} label={windowLabel(secondary)?.split(' ')[0]} />}
+        <UsageBar pct={primaryPct} label={countdownLabel(primary)} />
+        {secondary && <UsageBar pct={secondaryPct} label={countdownLabel(secondary)} />}
       </div>
 
-      {/* Row 3: Cost + model + alerts */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-        <span className="glass-pill" style={{ fontSize: 9, padding: '1px 5px' }}>
-          ${costToday.toFixed(2)}
-        </span>
-        <span className="glass-pill" style={{ fontSize: 9, padding: '1px 5px' }}>
-          30d ${trend?.total_cost_usd.toFixed(2) ?? '0.00'}
-        </span>
-
-        {breakdown.length > 0 && (
-          <span className="metric-label" style={{ fontSize: 8, marginLeft: 'auto' }}>
-            {breakdown[0].model} · {formatTokens(breakdown[0].total_tokens)}
-          </span>
-        )}
-
-        {alerts.slice(0, 2).map((alert) => (
-          <span
-            key={`${alert.window_type}-${alert.threshold_percent}`}
-            className="glass-pill"
-            style={{
-              fontSize: 8,
-              padding: '0px 4px',
-              color: severityColor[alert.severity],
-              borderColor: severityColor[alert.severity],
-            }}
-          >
-            {alert.severity}
-          </span>
-        ))}
-      </div>
+      {/* Row 3: Model + alerts (compact) */}
+      {(breakdown.length > 0 || alerts.length > 0) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {breakdown.length > 0 && (
+            <span className="metric-label" style={{ fontSize: 8 }}>
+              {breakdown[0].model} · {formatTokens(breakdown[0].total_tokens)}
+            </span>
+          )}
+          {alerts.length > 0 && (
+            <div style={{ display: 'flex', gap: 3, marginLeft: 'auto' }}>
+              {alerts.slice(0, 2).map((alert) => (
+                <span
+                  key={`${alert.window_type}-${alert.threshold_percent}`}
+                  className="glass-pill"
+                  style={{
+                    fontSize: 8,
+                    padding: '0px 4px',
+                    color: severityColor[alert.severity],
+                    borderColor: severityColor[alert.severity],
+                  }}
+                >
+                  {alert.severity}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </GlassPanel>
   );
 };

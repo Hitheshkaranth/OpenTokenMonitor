@@ -41,3 +41,10 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 
 [dev-dependencies]
 tempfile = "3"
+
+[profile.release]
+strip = true          # Strip debug symbols → smaller binary
+lto = true            # Link-time optimization → smaller + faster
+codegen-units = 1     # Max optimization (slower compile, smaller output)
+opt-level = "s"       # Optimize for size
+panic = "abort"       # Smaller binary, no unwinding overhead

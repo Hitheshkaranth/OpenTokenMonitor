@@ -1,94 +1,39 @@
-import GlassPanel from '@/components/glass/GlassPanel';
-import ProviderLogo from '@/components/providers/ProviderLogo';
-import { ProviderId, TrendData, UsageSnapshot } from '@/types';
-import { countdownLabel, windowLabel, windowValueLabel } from '@/utils/usageWindows';
-
-const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'gemini' }> = {
-  claude: { label: 'Claude', tint: 'claude' },
-  codex: { label: 'Codex', tint: 'codex' },
-  gemini: { label: 'Gemini', tint: 'gemini' },
-};
-
-const pctUsed = (utilization?: number) => Math.max(0, Math.min(100, utilization ?? 0));
+import OverviewCard from '@/components/providers/OverviewCard';
+import {
+  ModelBreakdownEntry,
+  ProviderId,
+  ProviderStatus,
+  TrendData,
+  UsageAlert,
+  UsageSnapshot,
+} from '@/types';
 
 type ProviderOverviewProps = {
   snapshots: Record<ProviderId, UsageSnapshot | undefined>;
   trends: Record<ProviderId, TrendData | undefined>;
+  modelBreakdowns: Record<ProviderId, ModelBreakdownEntry[]>;
+  alerts: Record<ProviderId, UsageAlert[]>;
+  statuses: Record<ProviderId, ProviderStatus | undefined>;
+  onNavigate: (provider: ProviderId) => void;
 };
 
-const ProviderOverview = ({ snapshots, trends }: ProviderOverviewProps) => {
-  const rows: ProviderId[] = ['claude', 'codex', 'gemini'];
+const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
 
-  return (
-    <div style={{ display: 'grid', gap: 10 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
-        {rows.map((provider) => {
-          const snapshot = snapshots[provider];
-          const trend = trends[provider];
-          const primary = snapshot?.windows[0];
-          const secondary = snapshot?.windows[1];
-          const primaryUsedPct = pctUsed(primary?.utilization);
-          const secondaryUsedPct = pctUsed(secondary?.utilization);
-
-          return (
-            <GlassPanel key={provider} tint={providerMeta[provider].tint} className="hover-lift" style={{ padding: 10, minWidth: 0, height: 182 }}>
-              <div className="provider-name" style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                <ProviderLogo provider={provider} size={15} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14, lineHeight: 1.1 }}>
-                  {providerMeta[provider].label}
-                </span>
-              </div>
-
-              <div style={{ display: 'grid', gap: 8, marginTop: 8, minWidth: 0 }}>
-                <div style={{ display: 'grid', gap: 4 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 6, minWidth: 0 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, lineHeight: 1, color: 'var(--text-primary)' }}>
-                      {primaryUsedPct.toFixed(0)}%
-                    </span>
-                    <span className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, letterSpacing: '.03em', whiteSpace: 'nowrap' }}>
-                      {countdownLabel(primary)}
-                    </span>
-                  </div>
-                  <div className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, letterSpacing: '.04em', color: 'var(--text-secondary)' }}>
-                    {windowLabel(primary)} - {windowValueLabel(primary)}
-                  </div>
-                  <div className="glass-pill" style={{ width: '100%', padding: 0, height: 8, overflow: 'hidden', display: 'block' }}>
-                    <div style={{ width: `${primaryUsedPct}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #f59e0b, #fb923c)', transition: 'width .45s cubic-bezier(.22,.9,.24,1)' }} />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gap: 4 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 6, minWidth: 0 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, lineHeight: 1, color: 'var(--text-primary)' }}>
-                      {secondaryUsedPct.toFixed(0)}%
-                    </span>
-                    <span className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, letterSpacing: '.03em', whiteSpace: 'nowrap' }}>
-                      {countdownLabel(secondary)}
-                    </span>
-                  </div>
-                  <div className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, letterSpacing: '.04em', color: 'var(--text-secondary)' }}>
-                    {windowLabel(secondary)} - {windowValueLabel(secondary)}
-                  </div>
-                  <div className="glass-pill" style={{ width: '100%', padding: 0, height: 8, overflow: 'hidden', display: 'block' }}>
-                    <div style={{ width: `${secondaryUsedPct}%`, height: '100%', borderRadius: 999, background: 'linear-gradient(90deg, #ef4444, #f87171)', transition: 'width .45s cubic-bezier(.22,.9,.24,1)' }} />
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 8, minWidth: 0 }}>
-                <div className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {snapshot?.source ?? 'none'}
-                </div>
-                <div className="metric-label" style={{ fontSize: 10, lineHeight: 1.1, whiteSpace: 'nowrap' }}>
-                  ${trend?.total_cost_usd.toFixed(2) ?? '0.00'}
-                </div>
-              </div>
-            </GlassPanel>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
+const ProviderOverview = ({ snapshots, trends, modelBreakdowns, alerts, statuses, onNavigate }: ProviderOverviewProps) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
+    {providers.map((id) => (
+      <OverviewCard
+        key={id}
+        provider={id}
+        snapshot={snapshots[id]}
+        trend={trends[id]}
+        breakdown={modelBreakdowns[id]}
+        alerts={alerts[id]}
+        status={statuses[id]}
+        onClick={() => onNavigate(id)}
+      />
+    ))}
+  </div>
+);
 
 export default ProviderOverview;

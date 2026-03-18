@@ -39,7 +39,7 @@ const GlassInput = ({
           border: 'none',
           outline: 'none',
           color: 'var(--text-primary)',
-          fontFamily: monospace ? 'var(--font-mono)' : 'var(--font-display)',
+          fontFamily: monospace ? 'var(--font-mono)' : 'var(--font-ui)',
           minWidth: 0,
         }}
       />

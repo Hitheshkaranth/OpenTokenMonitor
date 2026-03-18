@@ -1,0 +1,296 @@
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+/* ── Top navigation bar ── */
+.nav-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 0;
+  flex-shrink: 0;
+}
+
+.nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-logo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.nav-title {
+  font-weight: 800;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  letter-spacing: .02em;
+}
+
+.nav-demo-badge {
+  font-size: 8px;
+  padding: 1px 5px;
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+}
+
+.nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.window-btn {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.8;
+  transition: opacity 0.15s ease;
+}
+
+.window-btn:hover {
+  opacity: 1;
+}
+
+/* ── Tab strip ── */
+.nav-tabs {
+  display: flex;
+  gap: 0;
+  background: color-mix(in srgb, var(--glass-bg) 50%, transparent);
+  border-radius: 10px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 60%, transparent);
+}
+
+.nav-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 4px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
+}
+
+.nav-tab:hover {
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--glass-bg) 60%, transparent);
+}
+
+.nav-tab.active {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.nav-tab.active.tint-claude {
+  background: linear-gradient(135deg, var(--claude-tint), color-mix(in srgb, var(--claude-tint) 40%, var(--glass-bg)));
+  box-shadow: 0 1px 8px rgba(217, 119, 87, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.nav-tab.active.tint-codex {
+  background: linear-gradient(135deg, var(--codex-tint), color-mix(in srgb, var(--codex-tint) 40%, var(--glass-bg)));
+  box-shadow: 0 1px 8px rgba(16, 163, 127, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.nav-tab.active.tint-gemini {
+  background: linear-gradient(135deg, var(--gemini-tint), color-mix(in srgb, var(--gemini-tint) 40%, var(--glass-bg)));
+  box-shadow: 0 1px 8px rgba(66, 133, 244, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* ── Health dot ── */
+.nav-tab-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.nav-tab-dot.health-active {
+  background: #34d399;
+  box-shadow: 0 0 5px rgba(52, 211, 153, 0.7);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.nav-tab-dot.health-waiting {
+  background: #fbbf24;
+  box-shadow: 0 0 4px rgba(251, 191, 36, 0.5);
+}
+
+.nav-tab-dot.health-error {
+  background: #f87171;
+  box-shadow: 0 0 4px rgba(248, 113, 113, 0.6);
+  animation: pulse-dot-error 1.5s ease-in-out infinite;
+}
+
+.nav-tab-dot.health-unknown {
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 5px rgba(52, 211, 153, 0.7); }
+  50% { box-shadow: 0 0 8px rgba(52, 211, 153, 0.4); }
+}
+
+@keyframes pulse-dot-error {
+  0%, 100% { box-shadow: 0 0 4px rgba(248, 113, 113, 0.6); }
+  50% { box-shadow: 0 0 8px rgba(248, 113, 113, 0.9); }
+}
+
+/* ── Overview card accent ── */
+.overview-card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.overview-card::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+}
+
+.overview-card.accent-claude::after { background: linear-gradient(180deg, #d97757, #d9775744); }
+.overview-card.accent-codex::after { background: linear-gradient(180deg, #10a37f, #10a37f44); }
+.overview-card.accent-gemini::after { background: linear-gradient(180deg, #4285f4, #4285f444); }
+
+/* ── Widget provider strip ── */
+.widget-strip {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.widget-strip::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+}
+
+.widget-strip.accent-claude::after { background: linear-gradient(180deg, #d97757, #d9775744); }
+.widget-strip.accent-codex::after { background: linear-gradient(180deg, #10a37f, #10a37f44); }
+.widget-strip.accent-gemini::after { background: linear-gradient(180deg, #4285f4, #4285f444); }
+
+/* ── Usage bar ── */
+.usage-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.usage-bar-label {
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--text-muted);
+  width: 28px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.usage-bar-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--meter-track);
+  position: relative;
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s cubic-bezier(0.22, 0.9, 0.24, 1);
+  position: relative;
+}
+
+.usage-bar-fill.bar-green {
+  background: linear-gradient(90deg, #22c55e88, #22c55e);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.3);
+}
+
+.usage-bar-fill.bar-yellow {
+  background: linear-gradient(90deg, #f59e0b88, #f59e0b);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.3);
+}
+
+.usage-bar-fill.bar-red {
+  background: linear-gradient(90deg, #ef444488, #ef4444);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.3);
+}
+
+.usage-bar-pct {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  width: 28px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* ── Main content ── */
+.main-content {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 10px 10px;
+  min-height: 0;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .nav-bar {
+    background: color-mix(in srgb, #112028 88%, white 12%);
+  }
+  .nav-tabs {
+    background: color-mix(in srgb, #112028 70%, white 30%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-tab-dot.health-active,
+  .nav-tab-dot.health-error {
+    animation: none;
+  }
+}

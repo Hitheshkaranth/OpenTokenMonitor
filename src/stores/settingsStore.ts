@@ -11,12 +11,14 @@ type SettingsState = {
   theme: ThemeMode;
   widgetMode: boolean;
   demoMode: boolean;
+  sidebarCollapsed: boolean;
   setProviderEnabled: (provider: ProviderId, enabled: boolean) => void;
   setRefreshCadence: (cadence: RefreshCadence) => void;
   setApiKey: (provider: ProviderId, key: string) => void;
   setTheme: (theme: ThemeMode) => void;
   setWidgetMode: (enabled: boolean) => void;
   setDemoMode: (enabled: boolean) => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -28,6 +30,7 @@ export const useSettingsStore = create<SettingsState>()(
       theme: 'system',
       widgetMode: false,
       demoMode: false,
+      sidebarCollapsed: false,
       setProviderEnabled: (provider, enabled) =>
         set((state) => ({ enabledProviders: { ...state.enabledProviders, [provider]: enabled } })),
       setRefreshCadence: (cadence) => set({ refreshCadence: cadence }),
@@ -35,6 +38,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTheme: (theme) => set({ theme }),
       setWidgetMode: (enabled) => set({ widgetMode: enabled }),
       setDemoMode: (enabled) => set({ demoMode: enabled }),
+      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
     }),
     {
       name: 'otm-settings-v2',

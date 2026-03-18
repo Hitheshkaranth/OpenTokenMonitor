@@ -17,28 +17,26 @@ type DiagnosticsPanelProps = {
 };
 
 const DiagnosticsPanel = ({ statuses, snapshots, alerts, globalError, demoMode }: DiagnosticsPanelProps) => (
-  <div className="glass-panel" style={{ padding: 10, display: 'grid', gap: 8 }}>
-    <div className="provider-name">Diagnostics</div>
-    <div className="metric-label">Demo mode: {demoMode ? 'ON' : 'OFF'}</div>
-    {globalError ? (
-      <div className="metric-label" style={{ color: '#f87171' }}>
-        Last refresh error: {globalError}
+  <div className="glass-panel" style={{ padding: '6px 8px', display: 'grid', gap: 4 }}>
+    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Diagnostics</div>
+    <div className="metric-label" style={{ fontSize: 9 }}>Demo mode: {demoMode ? 'ON' : 'OFF'}</div>
+    {globalError && (
+      <div className="metric-label" style={{ color: '#f87171', fontSize: 9 }}>
+        Error: {globalError}
       </div>
-    ) : (
-      <div className="metric-label">Last refresh error: none</div>
     )}
     {providers.map((provider) => {
       const status = statuses[provider];
       const snapshot = snapshots[provider];
       return (
-        <div key={provider} className="glass-pill" style={{ justifyContent: 'space-between', gap: 10 }}>
-          <span style={{ textTransform: 'capitalize' }}>{provider}</span>
-          <span style={{ color: healthColor(status?.health) }}>{status?.health ?? 'unknown'}</span>
-          <span className="metric-label" style={{ minWidth: 140, textAlign: 'right' }}>
-            {snapshot ? `${snapshot.source} @ ${new Date(snapshot.fetched_at).toLocaleTimeString()}` : 'no snapshot'}
+        <div key={provider} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
+          <span style={{ textTransform: 'capitalize', fontWeight: 600, width: 44 }}>{provider}</span>
+          <span style={{ color: healthColor(status?.health), fontWeight: 600 }}>{status?.health ?? '?'}</span>
+          <span className="metric-label" style={{ fontSize: 8, flex: 1, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {snapshot ? `${snapshot.source} @ ${new Date(snapshot.fetched_at).toLocaleTimeString()}` : 'no data'}
           </span>
-          <span className="metric-label" style={{ minWidth: 68, textAlign: 'right' }}>
-            {alerts[provider]?.length ? `${alerts[provider].length} alerts` : '0 alerts'}
+          <span className="metric-label" style={{ fontSize: 8 }}>
+            {alerts[provider]?.length || 0} alerts
           </span>
         </div>
       );

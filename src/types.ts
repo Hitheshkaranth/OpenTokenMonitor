@@ -1,5 +1,6 @@
 export type ProviderId = 'claude' | 'codex' | 'gemini';
 export type ProviderTab = ProviderId | 'overview';
+export type PageId = 'overview' | ProviderId | 'settings';
 
 export type DataSource = 'oauth' | 'cookie' | 'cli' | 'local_log';
 export type DataProvenance = 'official' | 'internal' | 'derived_local';

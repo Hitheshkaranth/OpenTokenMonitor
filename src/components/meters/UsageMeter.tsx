@@ -41,13 +41,13 @@ const UsageMeter = ({ utilization, label, detail, note, resetsAt, providerTint, 
           style={{ transition: 'stroke-dashoffset .45s cubic-bezier(.22,.9,.24,1)' }}
         />
       </svg>
-      <div style={{ marginTop: -80, textAlign: 'center' }}>
+      <div style={{ marginTop: -(size * 0.71), textAlign: 'center' }}>
         <div className="metric-value" style={{ fontSize: 22 }}>{pct.toFixed(0)}%</div>
         <div className="metric-label">{label}</div>
       </div>
       <div
         className="metric-label"
-        style={{ marginTop: 40, textAlign: 'center', minHeight: 30, lineHeight: 1.3, fontSize: 11 }}
+        style={{ marginTop: size * 0.36, textAlign: 'center', minHeight: size < 100 ? 20 : 30, lineHeight: 1.3, fontSize: size < 100 ? 9 : 11 }}
       >
         {detail ?? 'No window detail'}
       </div>

@@ -36,6 +36,13 @@ CLAUDE.md
 GEMINI.md
 SPEC_SWARM.md
 
+# Superpowers plugin state
+.superpowers/
+docs/superpowers/
+
+# Dev output captures
+tauri_dev_output.txt
+
 # Rust / Tauri build output
 src-tauri/target/
 src-tauri/gen/

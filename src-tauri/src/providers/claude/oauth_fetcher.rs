@@ -20,12 +20,41 @@ pub struct ExtraUsageInfo {
     pub utilization: f64,
 }
 
+/// Endpoints to try in order. The legacy `usage` endpoint has a known response
+/// format; the newer `client_data` endpoint (used by Claude Code v2.1+) is tried
+/// as a fallback when the primary is rate-limited or unavailable.
+const ENDPOINTS: &[&str] = &[
+    "https://api.anthropic.com/api/oauth/usage",
+    "https://api.anthropic.com/api/oauth/claude_cli/client_data",
+];
+
 pub async fn fetch_usage(token: &str) -> Result<ClaudeOauthWindow, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| e.to_string())?;
 
+    let mut last_err = String::new();
+
+    for endpoint in ENDPOINTS {
+        eprintln!("[claude] trying endpoint: {endpoint}");
+        match try_endpoint(&client, endpoint, token).await {
+            Ok(window) => return Ok(window),
+            Err(e) => {
+                eprintln!("[claude] endpoint {endpoint} failed: {e}");
+                last_err = e;
+            }
+        }
+    }
+
+    Err(format!("Claude OAuth failed on all endpoints: {last_err}"))
+}
+
+async fn try_endpoint(
+    client: &reqwest::Client,
+    endpoint: &str,
+    token: &str,
+) -> Result<ClaudeOauthWindow, String> {
     // Retry up to 3 times with exponential backoff for 429 errors
     let mut last_err = String::new();
     for attempt in 0..3 {
@@ -35,7 +64,7 @@ pub async fn fetch_usage(token: &str) -> Result<ClaudeOauthWindow, String> {
         }
 
         let res = match client
-            .get("https://api.anthropic.com/api/oauth/usage")
+            .get(endpoint)
             .header(AUTHORIZATION, format!("Bearer {token}"))
             .header("anthropic-beta", "oauth-2025-04-20")
             .header(USER_AGENT, "claude-code/latest")
@@ -60,7 +89,8 @@ pub async fn fetch_usage(token: &str) -> Result<ClaudeOauthWindow, String> {
 
         if !status.is_success() {
             let body = res.text().await.unwrap_or_default();
-            return Err(format!("Claude OAuth returned {status}: {body}"));
+            // Non-retryable error — bail out of this endpoint immediately
+            return Err(format!("{status}: {body}"));
         }
 
         // Success — parse response
@@ -68,15 +98,20 @@ pub async fn fetch_usage(token: &str) -> Result<ClaudeOauthWindow, String> {
         return parse_usage_response(payload);
     }
 
-    Err(format!("Claude OAuth failed after 3 attempts: {last_err}"))
+    Err(format!("rate limited after 3 attempts: {last_err}"))
 }
 
 fn parse_usage_response(payload: Value) -> Result<ClaudeOauthWindow, String> {
-    let f = payload.get("five_hour").cloned().unwrap_or(Value::Null);
-    let s = payload.get("seven_day").cloned().unwrap_or(Value::Null);
-    let o = payload.get("seven_day_opus").cloned().unwrap_or(Value::Null);
+    // Try to find the usage data — it could be at the top level (legacy endpoint),
+    // nested under "usage" or "rate_limits" (client_data endpoint), or elsewhere.
+    let root = find_usage_root(&payload);
 
-    let extra_usage = payload.get("extra_usage").and_then(|eu| {
+    let f = root.get("five_hour").cloned().unwrap_or(Value::Null);
+    let s = root.get("seven_day").cloned().unwrap_or(Value::Null);
+    let o = root.get("seven_day_opus").cloned().unwrap_or(Value::Null);
+
+    let extra_usage_val = root.get("extra_usage").or_else(|| payload.get("extra_usage"));
+    let extra_usage = extra_usage_val.and_then(|eu| {
         let enabled = eu.get("is_enabled").and_then(Value::as_bool).unwrap_or(false);
         if !enabled { return None; }
         Some(ExtraUsageInfo {
@@ -102,6 +137,38 @@ fn parse_usage_response(payload: Value) -> Result<ClaudeOauthWindow, String> {
         window.extra_usage.as_ref().map(|eu| format!(" extra={:.1}%", eu.utilization)).unwrap_or_default(),
     );
     Ok(window)
+}
+
+/// Walk the JSON payload to find the object containing `five_hour` / `seven_day` keys.
+/// Supports: top-level, nested under "usage", "rate_limits", or one level deep in any key.
+fn find_usage_root(payload: &Value) -> &Value {
+    // Direct top-level match
+    if payload.get("five_hour").is_some() || payload.get("seven_day").is_some() {
+        return payload;
+    }
+
+    // Known nesting keys
+    for key in &["usage", "rate_limits", "rateLimits", "data"] {
+        if let Some(inner) = payload.get(key) {
+            if inner.get("five_hour").is_some() || inner.get("seven_day").is_some() {
+                return inner;
+            }
+        }
+    }
+
+    // Scan one level deep for any object containing usage fields
+    if let Some(obj) = payload.as_object() {
+        for (_key, val) in obj {
+            if val.is_object()
+                && (val.get("five_hour").is_some() || val.get("seven_day").is_some())
+            {
+                return val;
+            }
+        }
+    }
+
+    // Fallback — return payload as-is and let the caller handle missing fields
+    payload
 }
 
 fn parse_dt(value: Option<&str>) -> Option<DateTime<Utc>> {

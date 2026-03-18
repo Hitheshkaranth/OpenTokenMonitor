@@ -32,6 +32,16 @@ If you use Claude, Codex, and Gemini through their CLIs or APIs, your usage is s
 - **Local-first architecture** — reads from local CLI logs with no cloud dependency required
 - **No text selection** — native desktop feel with non-selectable UI elements
 
+## Supported Applications
+
+| Provider | Application | Version |
+|----------|-------------|---------|
+| Claude | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 2.x+ |
+| Codex | [Codex CLI](https://github.com/openai/codex) | 0.1+ |
+| Gemini | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | 1.x+ |
+
+You only need to install and log in to the CLIs you want to track — providers without a detected installation are shown as "waiting".
+
 ## How It Works
 
 OpenTokenMonitor has two data paths:

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 type ResetCountdownProps = {
   resetsAt?: string;
+  className?: string;
 };
 
 const formatRemaining = (seconds: number): string => {
@@ -13,7 +14,7 @@ const formatRemaining = (seconds: number): string => {
   return `${h}h ${m}m`;
 };
 
-const ResetCountdown = ({ resetsAt }: ResetCountdownProps) => {
+const ResetCountdown = ({ resetsAt, className = 'countdown-text' }: ResetCountdownProps) => {
   const target = useMemo(() => (resetsAt ? new Date(resetsAt).getTime() : 0), [resetsAt]);
   const [now, setNow] = useState(() => Date.now());
 
@@ -22,9 +23,9 @@ const ResetCountdown = ({ resetsAt }: ResetCountdownProps) => {
     return () => window.clearInterval(id);
   }, []);
 
-  if (!target) return <span className="countdown-text">n/a</span>;
+  if (!target) return <span className={className}>n/a</span>;
   const sec = Math.max(0, Math.floor((target - now) / 1000));
-  return <span className="countdown-text">{formatRemaining(sec)}</span>;
+  return <span className={className}>{formatRemaining(sec)}</span>;
 };
 
 export default ResetCountdown;

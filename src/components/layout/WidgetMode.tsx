@@ -3,8 +3,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import GlassPanel from '@/components/glass/GlassPanel';
 import WidgetGauge, { arcColor } from '@/components/meters/WidgetGauge';
+import ResetCountdown from '@/components/meters/ResetCountdown';
 import { ProviderId, ProviderStatus, UsageSnapshot } from '@/types';
-import { windowLabel } from '@/utils/usageWindows';
 import { isTauriRuntime } from '@/utils/runtime';
 
 const meta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemini' }> = {
@@ -101,8 +101,6 @@ const WidgetMode = ({ snapshots, statuses, onExpand, onRefresh, refreshBusy }: W
           const sPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
           const m = meta[id];
 
-          const pLabel = windowLabel(primary)?.split(' ')[0] ?? '';
-          const sLabel = secondary ? windowLabel(secondary)?.split(' ')[0] ?? '' : '';
 
           return (
             <GlassPanel
@@ -143,11 +141,11 @@ const WidgetMode = ({ snapshots, statuses, onExpand, onRefresh, refreshBusy }: W
               {/* Usage stats below ring */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: arcColor(pPct) }}>
-                  {pLabel} {pPct.toFixed(0)}%
+                  <span style={{ opacity: 0.55 }}><ResetCountdown resetsAt={primary?.resets_at} className="" /></span> {pPct.toFixed(0)}%
                 </span>
                 {sPct != null && (
                   <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: arcColor(sPct) }}>
-                    {sLabel} {sPct.toFixed(0)}%
+                    <span style={{ opacity: 0.55 }}><ResetCountdown resetsAt={secondary?.resets_at} className="" /></span> {sPct.toFixed(0)}%
                   </span>
                 )}
               </div>

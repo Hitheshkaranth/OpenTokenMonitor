@@ -8,8 +8,8 @@ use serde_json::Value;
 
 use crate::providers::{FetchContext, ProviderDescriptor, UsageProvider};
 use crate::usage::models::{
-    CostEntry, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot, UsageUnit,
-    UsageWindow, WindowType,
+    CostEntry, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus,
+    UsageSnapshot, UsageUnit, UsageWindow, WindowType,
 };
 
 pub struct GeminiProvider {
@@ -18,7 +18,9 @@ pub struct GeminiProvider {
 
 impl GeminiProvider {
     pub fn new() -> Self {
-        Self { descriptor: descriptor::descriptor() }
+        Self {
+            descriptor: descriptor::descriptor(),
+        }
     }
 }
 
@@ -154,7 +156,11 @@ impl UsageProvider for GeminiProvider {
 
         ProviderStatus {
             provider: ProviderId::Gemini,
-            health: if active { ProviderHealth::Active } else { ProviderHealth::Waiting },
+            health: if active {
+                ProviderHealth::Active
+            } else {
+                ProviderHealth::Waiting
+            },
             message: if has_cli {
                 "Gemini CLI detected".to_string()
             } else if has_data {
@@ -168,7 +174,12 @@ impl UsageProvider for GeminiProvider {
 }
 
 fn local_daily_count() -> u64 {
-    local_session_points().iter().rev().next().map(|(_, c)| *c).unwrap_or(0)
+    local_session_points()
+        .iter()
+        .rev()
+        .next()
+        .map(|(_, c)| *c)
+        .unwrap_or(0)
 }
 
 fn local_session_points() -> Vec<(String, u64)> {
@@ -183,14 +194,18 @@ fn local_session_points() -> Vec<(String, u64)> {
     }
 
     for root in roots {
-        let Ok(rd) = std::fs::read_dir(root) else { continue };
+        let Ok(rd) = std::fs::read_dir(root) else {
+            continue;
+        };
         for entry in rd.flatten() {
             let path = entry.path();
             let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
             if ext != "json" && ext != "jsonl" {
                 continue;
             }
-            let Ok(file) = std::fs::File::open(&path) else { continue };
+            let Ok(file) = std::fs::File::open(&path) else {
+                continue;
+            };
 
             // For Gemini, we handle both single JSON objects and JSONL (one object per line)
             if ext == "jsonl" {
@@ -246,13 +261,28 @@ mod tests {
         // Create a JSON file in sessions/
         let json_path = sessions_dir.join("s1.json");
         let mut f = File::create(json_path).unwrap();
-        writeln!(f, "{}", r#"{"timestamp":"2026-03-12T10:00:00Z", "usage":{"total_tokens":2500}}"#).unwrap();
+        writeln!(
+            f,
+            "{}",
+            r#"{"timestamp":"2026-03-12T10:00:00Z", "usage":{"total_tokens":2500}}"#
+        )
+        .unwrap();
 
         // Create a JSONL file in root
         let jsonl_path = dir.path().join("history.jsonl");
         let mut f = File::create(jsonl_path).unwrap();
-        writeln!(f, "{}", r#"{"timestamp":"2026-03-12T11:00:00Z", "usage":{"total_tokens":1000}}"#).unwrap();
-        writeln!(f, "{}", r#"{"timestamp":"2026-03-11T09:00:00Z", "usage":{"total_tokens":500}}"#).unwrap();
+        writeln!(
+            f,
+            "{}",
+            r#"{"timestamp":"2026-03-12T11:00:00Z", "usage":{"total_tokens":1000}}"#
+        )
+        .unwrap();
+        writeln!(
+            f,
+            "{}",
+            r#"{"timestamp":"2026-03-11T09:00:00Z", "usage":{"total_tokens":500}}"#
+        )
+        .unwrap();
 
         let mut out = std::collections::BTreeMap::new();
         let roots = vec![sessions_dir, dir.path().to_path_buf()];
@@ -262,7 +292,9 @@ mod tests {
             for entry in rd.flatten() {
                 let path = entry.path();
                 let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                if ext != "json" && ext != "jsonl" { continue; }
+                if ext != "json" && ext != "jsonl" {
+                    continue;
+                }
                 let file = File::open(&path).unwrap();
                 if ext == "jsonl" {
                     let reader = std::io::BufReader::new(file);

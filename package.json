@@ -1,12 +1,12 @@
 {
   "name": "open-token-monitor",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Local-first desktop monitor for Claude, Codex, and Gemini usage.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/side-quests/OpenTokenMonitor.git"
+    "url": "git+https://github.com/Hitheshkaranth/OpenTokenMonitor.git"
   },
   "type": "module",
   "scripts": {

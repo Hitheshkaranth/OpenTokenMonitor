@@ -42,7 +42,10 @@ pub async fn refresh_all(
         if errors.is_empty() {
             return Err("No providers produced usage data".to_string());
         }
-        return Err(format!("All providers failed to refresh. {}", errors.join(" | ")));
+        return Err(format!(
+            "All providers failed to refresh. {}",
+            errors.join(" | ")
+        ));
     }
 
     Ok(out)

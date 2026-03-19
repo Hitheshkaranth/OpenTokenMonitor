@@ -1,8 +1,12 @@
 <p align="center">
-  <img src="./docs/images/open_token_display.png" alt="OpenTokenMonitor" width="400" />
+  <img src="./public/open_token_monitor_icon.png" alt="OpenToken Monitor" width="92" />
 </p>
 
-<p align="center"><strong>Local-first desktop dashboard for tracking Claude, Codex, and Gemini AI usage in real time.</strong></p>
+<h1 align="center">OpenToken Monitor</h1>
+
+<p align="center"><strong>Local-first desktop monitor for Claude, Codex, and Gemini usage.</strong></p>
+
+<p align="center">Version 0.2.0</p>
 
 <p align="center">
   <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white" alt="Tauri" /></a>
@@ -12,70 +16,123 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
 </p>
 
-| Dashboard | Widget |
-|-----------|--------|
-| ![Dashboard](./docs/images/app-overview.png) | ![Widget](./docs/images/widget-view.png) |
+| Overview | Widget |
+|---|---|
+| ![Overview](./docs/images/overview-0.2.0.png) | ![Widget](./docs/images/widget-view-0.2.0.png) |
 
-## Why
+| Settings | About |
+|---|---|
+| ![Settings](./docs/images/settings-0.2.0.png) | ![About](./docs/images/about-0.2.0.png) |
 
-If you use Claude, Codex, and Gemini through their CLIs or APIs, your usage is scattered across multiple dashboards with different quota models. OpenTokenMonitor pulls it all into a single compact desktop widget that gives you an at-a-glance view of how much capacity you have left across all providers.
+## What It Is
 
-## Features
+OpenToken Monitor brings provider usage, model activity, recent CLI inputs, and provider health into one compact desktop app. It is built for people who actively switch between Claude Code, Codex CLI, and Gemini CLI and want one honest surface instead of three separate dashboards.
 
-- **Unified dashboard** for Claude, Codex, and Gemini usage in one compact 360x390 window
-- **Widget mode** — compact 360x182 view with Apple Activity Ring gauges and live health indicators
-- **Usage bars** with color-coded indicators (green / yellow / red) showing utilization at a glance
-- **Per-provider detail pages** with cost trends, model breakdowns, and threshold alerts
-- **Sparkline charts** showing 30-day cost trends inline on overview cards
-- **Glassmorphism UI** with provider-tinted cards, gradient accent bars, and animated health indicators
-- **Keyboard shortcuts** for fast navigation (1/2/3 for providers, Ctrl+R refresh, Esc for home)
-- **Local-first architecture** — reads from local CLI logs with no cloud dependency required
-- **No text selection** — native desktop feel with non-selectable UI elements
+The app is local-first. It reads local CLI history and usage artifacts where possible, then combines that with live provider fetchers when credentials are available.
 
-## Supported Applications
+## What Is New In 0.2.0
 
-| Provider | Application | Version |
-|----------|-------------|---------|
-| Claude | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 2.x+ |
-| Codex | [Codex CLI](https://github.com/openai/codex) | 0.1+ |
-| Gemini | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | 1.x+ |
+- Refreshed non-widget settings surface with a cleaner control board for appearance and refresh behavior
+- Reworked About screen that now matches the rest of the glass desktop UI
+- Recent local CLI inputs surfaced in both provider detail pages and widget mode
+- Higher-resolution provider logos throughout the interface
+- Polished widget controls for usage, recent history, refresh, and expand actions
 
-You only need to install and log in to the CLIs you want to track — providers without a detected installation are shown as "waiting".
+## Core Features
 
-## How It Works
+- Unified monitoring for Claude, Codex, and Gemini in one desktop window
+- Compact widget mode with live usage rings and a recent-inputs view
+- Provider detail pages with usage windows, cost trend, model breakdowns, alerts, and recent prompts
+- Settings panel for theme, refresh cadence, provider enablement, and credential entry
+- About screen with project info, versioning, and repository access
+- Local-first data collection with transparent provenance and mixed precision support
 
-OpenTokenMonitor has two data paths:
+## Supported Providers
 
-1. **Local file scanning** — The Rust backend watches and parses CLI history files from `~/.claude/`, `~/.codex/`, and `~/.gemini/`
-2. **Live API polling** — Fetches real-time usage data from provider APIs when credentials are configured
+| Provider | CLI | Typical sources |
+|---|---|---|
+| Claude | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Local logs, OAuth-backed usage fetchers |
+| Codex | [Codex CLI](https://github.com/openai/codex) | Local logs, CLI auth, bearer/cookie-backed usage fetchers |
+| Gemini | [Gemini CLI](https://github.com/google-gemini/gemini-cli) | Local session files, CLI stats, OAuth-backed usage fetchers |
 
-Each provider exposes different quota models, and the app respects that honestly:
+Providers without a detected installation or usable credential source stay visible and report their state as waiting instead of failing silently.
 
-| Provider | Windows | Sources |
-|----------|---------|---------|
-| Claude | 5-hour rolling, 7-day rolling | Local logs, OAuth usage surface |
-| Codex | Session, Weekly | Local logs, CLI auth, bearer API |
-| Gemini | Daily, Session | CLI stats, local session files |
+## Screens And Workflow
 
-Usage accuracy is labeled transparently: `exact` for real counters, `approximate` for log-derived estimates, and `percent-only` when that's all the provider gives.
+### Overview
+
+The overview shows all enabled providers in one pass with:
+
+- health status
+- current usage windows
+- inline trend sparkline
+- current and 30-day cost
+- top model summary
+- alert visibility
+
+### Widget
+
+Widget mode is for quick-glance monitoring. It includes:
+
+- provider usage rings with reset countdowns
+- usage and recent-inputs screens in the same compact widget
+- mini refresh and expand controls
+- fast provider switching inside the recent-inputs view
+
+### Provider Detail
+
+Each provider page includes:
+
+- detailed usage window bars
+- 30-day cost trend chart
+- per-model token and cost breakdown
+- recent local CLI prompts with terminal/session context
+- alert list for threshold breaches
+
+### Settings And About
+
+The non-widget settings area includes:
+
+- theme selection
+- refresh cadence control
+- provider enablement toggles
+- API key entry where relevant
+- About screen with version `0.2.0`, maintainer info, and GitHub repo access
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `1` / `2` / `3` | Jump to Claude / Codex / Gemini |
+| `Escape` | Return to overview |
+| `Ctrl+R` | Refresh all providers |
+| `Ctrl+,` | Open settings |
+
+## Data Model And Accuracy
+
+OpenToken Monitor combines two kinds of data:
+
+1. Local file scanning from CLI state in user directories such as `~/.claude`, `~/.codex`, and Gemini session/cache locations.
+2. Live provider usage fetchers when the provider exposes a usable authenticated surface.
+
+Because provider APIs are inconsistent, the app preserves source honesty in the UI. Some counters are exact, some are approximate from local logs, and some providers only expose percent-oriented usage windows.
 
 ## Installation
 
-### Download (Windows)
+### Windows Release
 
-1. Go to the [Releases](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases) page
-2. Download the latest `.exe` installer (NSIS)
-3. Run the installer — no admin rights required
-4. Launch **OpenTokenMonitor** from the Start Menu
+1. Open the [latest releases](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases).
+2. Download `OpenTokenMonitor_0.2.0_x64-setup.exe` or the newest release asset.
+3. Run the installer.
+4. Launch `OpenTokenMonitor`.
 
-### Build from Source
+### Build From Source
 
-**Prerequisites:**
-- [Node.js](https://nodejs.org/) 18+ (20+ recommended)
-- [Rust](https://rustup.rs/) stable toolchain
-- [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS
+Prerequisites:
 
-**Development:**
+- Node.js 18+ (20+ recommended)
+- Rust stable
+- Tauri 2 prerequisites for your OS
 
 ```bash
 git clone https://github.com/Hitheshkaranth/OpenTokenMonitor.git
@@ -84,104 +141,51 @@ npm install
 npm run tauri dev
 ```
 
-**Release build (optimized, ~9MB binary, ~4MB installer):**
+Release build:
 
 ```bash
 npm run tauri build
 ```
 
-The NSIS installer is output to `src-tauri/target/release/bundle/nsis/`.
-
-## Usage Guide
-
-### Overview (Home)
-
-The home screen shows all three providers as cards with:
-- Provider logo and health status indicator (green = active, amber = waiting, red = error)
-- Usage bars for each quota window (color transitions green -> yellow -> red)
-- Inline sparkline for 30-day cost trend
-- Today's cost and 30-day total
-- Top model by token usage and active alert badges
-
-Click any card to drill into detailed breakdowns.
-
-### Widget Mode
-
-Toggle widget mode from the header to get a compact view with:
-- **Apple Activity Ring gauges** — concentric circular progress indicators for primary and secondary usage windows
-- **Provider logos** centered inside each ring
-- **Live health dots** — same green/amber/red indicators as the full dashboard
-- **Refresh button** — refresh all providers without expanding
-- **Expand button** — switch back to full dashboard
-
-### Provider Detail
-
-Each provider page shows:
-- Usage bars with window labels, countdown timers, and detailed value breakdowns
-- Cost trend area chart (30-day view with interactive tooltip)
-- Per-model token usage (input, output, cache) and estimated costs
-- Active threshold alerts (75%, 90%, 95%)
-
-### Settings (Ctrl+,)
-
-- **Theme**: System, Dark, or Light
-- **Widget mode**: Toggle compact always-on-top view
-- **Provider toggles**: Enable/disable individual providers
-- **API keys**: Set or override auto-detected credentials
-- **Refresh cadence**: Manual, 30s, 1m, 2m, 5m, or 15m
-
-### Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `1` / `2` / `3` | Jump to Claude / Codex / Gemini |
-| `Escape` | Return to overview |
-| `Ctrl+R` | Refresh all providers |
-| `Ctrl+,` | Open settings |
+The Windows installer is generated in `src-tauri/target/release/bundle/nsis/`.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, TypeScript, Zustand 5, Recharts 3 |
-| Desktop | Tauri 2 (native webview, ~9MB binary, ~4MB installer) |
+| Layer | Stack |
+|---|---|
+| Frontend | React 19, TypeScript, Zustand, Recharts |
+| Desktop shell | Tauri 2 |
 | Backend | Rust, Tokio, Reqwest, Rusqlite, Notify |
 | Build | Vite 7 |
 
 ## Project Structure
 
-```
-src/                        # React frontend
+```text
+src/
   components/
-    charts/                 # Sparkline, CostTrendChart
-    glass/                  # GlassPanel, GlassButton, GlassToggle, GlassInput, GlassPill
-    layout/                 # NavBar (Sidebar), WidgetMode
-    meters/                 # UsageBar, UsageMeter, WindowMeter, WidgetGauge
-    providers/              # OverviewCard, ProviderCard, ProviderLogo, ProviderOverview
-    settings/               # SettingsPage
-    states/                 # EmptyState, ErrorState, LoadingState, DiagnosticsPanel
-  hooks/                    # useUsageData, useProviderStatus, useGlassTheme
-  stores/                   # Zustand stores (settings, usage)
-  styles/                   # sidebar.css, settings.css
-  utils/                    # usageWindows, runtime detection
-src-tauri/                  # Rust backend
-  src/providers/            # Claude, Codex, Gemini parsers
-  src/usage/                # Storage, snapshots, reports
-  src/watchers/             # Filesystem watchers for live updates
-public/providers/           # Provider logo assets
-docs/                       # Architecture, screenshots
+    layout/       # Sidebar, widget mode, widget recent activity
+    providers/    # Overview cards, provider detail, logos
+    settings/     # Settings and About surfaces
+    charts/       # Cost chart components
+    meters/       # Usage bars, widget gauges, countdowns
+    states/       # Empty, loading, diagnostics, error boundaries
+  hooks/          # Data loading and theme hooks
+  stores/         # Zustand settings and usage state
+  styles/         # Glass, sidebar, settings styling
+
+src-tauri/
+  src/providers/  # Provider-specific scanners and fetchers
+  src/usage/      # Aggregation, reports, persistence
+  src/usage_scanners.rs
 ```
 
-## Docs
+## Documentation
 
-- [Architecture](./ARCHITECTURE.md) - Technical architecture and data flow
+- [Architecture](./ARCHITECTURE.md)
 
-## Limitations
+## Repository
 
-- Provider precision is intentionally uneven because the providers expose different surfaces
-- Gemini weekly usage is derived analytics unless Google publishes a first-class weekly quota API
-- Claude and Codex subscriber windows may be percent-only even when local token accounting is exact
-- Internal provider endpoints can change; the app labels provenance so the UI reflects this honestly
+- GitHub: [Hitheshkaranth/OpenTokenMonitor](https://github.com/Hitheshkaranth/OpenTokenMonitor)
 
 ## License
 

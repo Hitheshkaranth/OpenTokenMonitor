@@ -76,7 +76,11 @@ fn walk_num(value: &Value, path: &str, out: &mut Vec<(String, Option<u64>)>) {
     match value {
         Value::Object(map) => {
             for (k, v) in map {
-                let next = if path.is_empty() { k.to_ascii_lowercase() } else { format!("{path}.{}", k.to_ascii_lowercase()) };
+                let next = if path.is_empty() {
+                    k.to_ascii_lowercase()
+                } else {
+                    format!("{path}.{}", k.to_ascii_lowercase())
+                };
                 walk_num(v, &next, out);
             }
         }
@@ -94,7 +98,11 @@ fn walk_text(value: &Value, path: &str, out: &mut Vec<(String, String)>) {
     match value {
         Value::Object(map) => {
             for (k, v) in map {
-                let next = if path.is_empty() { k.to_ascii_lowercase() } else { format!("{path}.{}", k.to_ascii_lowercase()) };
+                let next = if path.is_empty() {
+                    k.to_ascii_lowercase()
+                } else {
+                    format!("{path}.{}", k.to_ascii_lowercase())
+                };
                 walk_text(v, &next, out);
             }
         }

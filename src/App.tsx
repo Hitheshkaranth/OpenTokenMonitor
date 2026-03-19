@@ -31,6 +31,7 @@ const App = () => {
   const snapshots = useUsageStore((s) => s.snapshots);
   const trends = useUsageStore((s) => s.trends);
   const modelBreakdowns = useUsageStore((s) => s.modelBreakdowns);
+  const recentActivity = useUsageStore((s) => s.recentActivity);
   const statuses = useUsageStore((s) => s.statuses);
   const alerts = useUsageStore((s) => s.alerts);
   const loading = useUsageStore((s) => s.loading);
@@ -39,6 +40,7 @@ const App = () => {
   const refreshAll = useUsageStore((s) => s.refreshAll);
   const fetchTrend = useUsageStore((s) => s.fetchTrend);
   const fetchModelBreakdown = useUsageStore((s) => s.fetchModelBreakdown);
+  const fetchRecentActivity = useUsageStore((s) => s.fetchRecentActivity);
   const fetchUsageReport = useUsageStore((s) => s.fetchUsageReport);
 
   useUsageData();
@@ -87,16 +89,18 @@ const App = () => {
     (['claude', 'codex', 'gemini'] as ProviderId[]).forEach((p) => {
       fetchTrend(p);
       fetchModelBreakdown(p);
+      fetchRecentActivity(p);
     });
-  }, [fetchTrend, fetchModelBreakdown]);
+  }, [fetchModelBreakdown, fetchRecentActivity, fetchTrend]);
 
   // Also re-fetch when navigating to a specific provider page
   useEffect(() => {
     if (page !== 'overview' && page !== 'settings') {
       fetchTrend(page);
       fetchModelBreakdown(page);
+      fetchRecentActivity(page);
     }
-  }, [page, fetchTrend, fetchModelBreakdown]);
+  }, [page, fetchModelBreakdown, fetchRecentActivity, fetchTrend]);
 
   // Auto-fetch usage report when snapshots update
   useEffect(() => {
@@ -154,7 +158,12 @@ const App = () => {
     setRefreshBusy(true);
     try {
       await refreshAll();
-      await Promise.all((['claude', 'codex', 'gemini'] as ProviderId[]).map((p) => fetchTrend(p)));
+      await Promise.all(
+        (['claude', 'codex', 'gemini'] as ProviderId[]).flatMap((p) => [
+          fetchTrend(p),
+          fetchRecentActivity(p),
+        ])
+      );
       await fetchUsageReport();
     } catch (err) {
       console.error('refresh all failed', err);
@@ -211,11 +220,13 @@ const App = () => {
           snapshot={snapshots[currentProvider]}
           trend={trends[currentProvider]}
           breakdown={modelBreakdowns[currentProvider]}
+          recentActivity={recentActivity[currentProvider]}
           alerts={alerts[currentProvider]}
           onRefresh={() => {
             refreshProvider(currentProvider);
             fetchTrend(currentProvider);
             fetchModelBreakdown(currentProvider);
+            fetchRecentActivity(currentProvider);
             fetchUsageReport();
           }}
         />
@@ -224,7 +235,17 @@ const App = () => {
   };
 
   if (widgetMode) {
-    return <WidgetMode snapshots={snapshots} statuses={statuses} onExpand={() => setWidgetMode(false)} onRefresh={refreshEverything} refreshBusy={refreshBusy} />;
+    return (
+      <WidgetMode
+        snapshots={snapshots}
+        statuses={statuses}
+        modelBreakdowns={modelBreakdowns}
+        recentActivity={recentActivity}
+        onExpand={() => setWidgetMode(false)}
+        onRefresh={refreshEverything}
+        refreshBusy={refreshBusy}
+      />
+    );
   }
 
   return (

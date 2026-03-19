@@ -73,6 +73,16 @@ export interface ModelBreakdownEntry {
   estimated_cost_usd: number;
 }
 
+export interface RecentActivityEntry {
+  provider: ProviderId;
+  prompt: string;
+  timestamp: string;
+  session_id?: string;
+  terminal_label?: string;
+  cwd?: string;
+  model?: string;
+}
+
 export interface UsageAlert {
   provider: ProviderId;
   window_type: WindowType;

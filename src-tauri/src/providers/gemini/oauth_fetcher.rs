@@ -32,7 +32,8 @@ pub async fn fetch_quota(access_token: &str) -> Result<GeminiQuota, String> {
     let daily_used = find_num(&payload, &["requests_per_day.used", "day.used"]).unwrap_or(0);
     let daily_limit = find_num(&payload, &["requests_per_day.limit", "day.limit"]).unwrap_or(1_000);
     let rpm_used = find_num(&payload, &["requests_per_minute.used", "minute.used"]).unwrap_or(0);
-    let rpm_limit = find_num(&payload, &["requests_per_minute.limit", "minute.limit"]).unwrap_or(60);
+    let rpm_limit =
+        find_num(&payload, &["requests_per_minute.limit", "minute.limit"]).unwrap_or(60);
 
     Ok(GeminiQuota {
         daily_used,

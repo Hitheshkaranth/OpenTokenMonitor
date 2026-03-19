@@ -45,7 +45,10 @@ pub async fn fetch_usage(access_token: &str) -> Result<CodexBearerWindow, String
         let res = match client
             .get("https://chatgpt.com/backend-api/codex/usage")
             .header(AUTHORIZATION, format!("Bearer {access_token}"))
-            .header(USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            .header(
+                USER_AGENT,
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            )
             .header(ACCEPT, "application/json")
             .header(ORIGIN, "https://chatgpt.com")
             .send()
@@ -78,12 +81,20 @@ pub async fn fetch_usage(access_token: &str) -> Result<CodexBearerWindow, String
 }
 
 async fn parse_response(res: reqwest::Response) -> Result<CodexBearerWindow, String> {
-
-    let resp: UsageResponse = res.json().await.map_err(|e| format!("response parse error: {e}"))?;
+    let resp: UsageResponse = res
+        .json()
+        .await
+        .map_err(|e| format!("response parse error: {e}"))?;
     let rl = resp.rate_limit.ok_or("No rate_limit in response")?;
 
-    let primary = rl.primary_window.unwrap_or(Window { used_percent: Some(0), reset_at: None });
-    let secondary = rl.secondary_window.unwrap_or(Window { used_percent: Some(0), reset_at: None });
+    let primary = rl.primary_window.unwrap_or(Window {
+        used_percent: Some(0),
+        reset_at: None,
+    });
+    let secondary = rl.secondary_window.unwrap_or(Window {
+        used_percent: Some(0),
+        reset_at: None,
+    });
 
     let session_pct = primary.used_percent.unwrap_or(0);
     let weekly_pct = secondary.used_percent.unwrap_or(0);
@@ -94,9 +105,11 @@ async fn parse_response(res: reqwest::Response) -> Result<CodexBearerWindow, Str
     let session_used = session_pct;
     let weekly_used = weekly_pct;
 
-    let resets_at = primary.reset_at
+    let resets_at = primary
+        .reset_at
         .and_then(|ts| Utc.timestamp_opt(ts, 0).single());
-    let weekly_resets_at = secondary.reset_at
+    let weekly_resets_at = secondary
+        .reset_at
         .and_then(|ts| Utc.timestamp_opt(ts, 0).single());
 
     Ok(CodexBearerWindow {

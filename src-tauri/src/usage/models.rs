@@ -96,7 +96,15 @@ impl UsageWindow {
         resets_at: Option<DateTime<Utc>>,
         unit: UsageUnit,
     ) -> Self {
-        Self::build(window_type, used, limit, resets_at, unit, WindowAccuracy::Exact, None)
+        Self::build(
+            window_type,
+            used,
+            limit,
+            resets_at,
+            unit,
+            WindowAccuracy::Exact,
+            None,
+        )
     }
 
     pub fn approximate(
@@ -147,7 +155,11 @@ impl UsageWindow {
         accuracy: WindowAccuracy,
         note: Option<String>,
     ) -> Self {
-        let utilization = if limit == 0 { 0.0 } else { (used as f64 * 100.0) / limit as f64 };
+        let utilization = if limit == 0 {
+            0.0
+        } else {
+            (used as f64 * 100.0) / limit as f64
+        };
         let remaining = Some(limit.saturating_sub(used));
         let reset_countdown_secs = resets_at.map(|r| (r - Utc::now()).num_seconds());
         Self {
@@ -229,6 +241,17 @@ pub struct ModelBreakdownEntry {
     pub cache_write_tokens: u64,
     pub total_tokens: u64,
     pub estimated_cost_usd: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentActivityEntry {
+    pub provider: ProviderId,
+    pub prompt: String,
+    pub timestamp: DateTime<Utc>,
+    pub session_id: Option<String>,
+    pub terminal_label: Option<String>,
+    pub cwd: Option<String>,
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

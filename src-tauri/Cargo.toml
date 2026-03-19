@@ -1,10 +1,10 @@
 [package]
 name = "open-token-monitor"
-version = "0.1.1"
+version = "0.2.0"
 description = "Local-first desktop monitor for Claude, Codex, and Gemini usage."
 authors = ["Side Quests"]
 license = "MIT"
-repository = "https://github.com/side-quests/OpenTokenMonitor"
+repository = "https://github.com/Hitheshkaranth/OpenTokenMonitor"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
 use crate::usage::models::{CostEntry, ProviderId};
-use crate::usage_scanners::{scan_claude_cost_snapshot, scan_claude_daily_usage, scan_claude_model_daily_usage};
+use crate::usage_scanners::{
+    scan_claude_cost_snapshot, scan_claude_daily_usage, scan_claude_model_daily_usage,
+};
 
 pub fn cost_history(days: u32) -> Vec<CostEntry> {
     let mut points = scan_claude_model_daily_usage();

@@ -5,6 +5,7 @@ import {
   ModelBreakdownEntry,
   ProviderId,
   ProviderStatus,
+  RecentActivityEntry,
   RefreshCadence,
   TrendData,
   UsageAlert,
@@ -18,6 +19,7 @@ type UsageState = {
   costHistory: Record<ProviderId, CostEntry[]>;
   trends: Record<ProviderId, TrendData | undefined>;
   modelBreakdowns: Record<ProviderId, ModelBreakdownEntry[]>;
+  recentActivity: Record<ProviderId, RecentActivityEntry[]>;
   statuses: Record<ProviderId, ProviderStatus | undefined>;
   alerts: Record<ProviderId, UsageAlert[]>;
   latestReport?: UsageReport;
@@ -30,6 +32,7 @@ type UsageState = {
   fetchCostHistory: (provider: ProviderId, days?: number) => Promise<void>;
   fetchTrend: (provider: ProviderId) => Promise<void>;
   fetchModelBreakdown: (provider: ProviderId, days?: number) => Promise<void>;
+  fetchRecentActivity: (provider: ProviderId, limit?: number) => Promise<void>;
   fetchUsageReport: (days?: number) => Promise<void>;
   fetchStatus: (provider: ProviderId) => Promise<void>;
   setApiKey: (provider: ProviderId, key: string) => Promise<void>;
@@ -48,6 +51,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   costHistory: { claude: [], codex: [], gemini: [] },
   trends: { claude: undefined, codex: undefined, gemini: undefined },
   modelBreakdowns: { claude: [], codex: [], gemini: [] },
+  recentActivity: { claude: [], codex: [], gemini: [] },
   statuses: { claude: undefined, codex: undefined, gemini: undefined },
   alerts: { claude: [], codex: [], gemini: [] },
   latestReport: undefined,
@@ -112,6 +116,12 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     if (!isTauriRuntime()) return;
     const breakdown = await invoke<ModelBreakdownEntry[]>('get_model_breakdown', { provider, days });
     set((state) => ({ modelBreakdowns: { ...state.modelBreakdowns, [provider]: breakdown } }));
+  },
+
+  fetchRecentActivity: async (provider, limit = 3) => {
+    if (!isTauriRuntime()) return;
+    const recent = await invoke<RecentActivityEntry[]>('get_recent_activity', { provider, limit });
+    set((state) => ({ recentActivity: { ...state.recentActivity, [provider]: recent } }));
   },
 
   fetchUsageReport: async (days = 30) => {

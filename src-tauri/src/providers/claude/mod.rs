@@ -11,8 +11,8 @@ use chrono::{Duration, Utc};
 
 use crate::providers::{FetchContext, ProviderDescriptor, UsageProvider};
 use crate::usage::models::{
-    CostEntry, CreditsInfo, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot,
-    UsageUnit, UsageWindow, WindowType,
+    CostEntry, CreditsInfo, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus,
+    UsageSnapshot, UsageUnit, UsageWindow, WindowType,
 };
 
 /// Minimum seconds between OAuth API calls to avoid 429s.
@@ -184,7 +184,11 @@ impl UsageProvider for ClaudeProvider {
             .unwrap_or(false);
         ProviderStatus {
             provider: ProviderId::Claude,
-            health: if has_dir { ProviderHealth::Active } else { ProviderHealth::Waiting },
+            health: if has_dir {
+                ProviderHealth::Active
+            } else {
+                ProviderHealth::Waiting
+            },
             message: if has_dir {
                 "Claude logs detected".to_string()
             } else {

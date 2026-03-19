@@ -1,3 +1,4 @@
+use crate::usage::models::{ProviderId, RecentActivityEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -96,6 +97,17 @@ pub struct ClaudeModelDailyUsagePoint {
     pub output_tokens: u64,
     pub total_tokens: u64,
     pub cost_usd: f64,
+}
+
+#[derive(Clone, Debug, Default)]
+struct CodexSessionMeta {
+    cwd: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct GeminiLogFile {
+    terminal_label: String,
+    path: PathBuf,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -227,12 +239,15 @@ pub fn read_claude_oauth_credentials() -> ClaudeOauthCredentials {
         return ClaudeOauthCredentials::default();
     };
 
-    let scopes = pick_first_array_strings(&json, &[
-        &["claudeAiOauth", "scopes"],
-        &["scopes"],
-        &["scope"],
-        &["oauth", "scopes"],
-    ]);
+    let scopes = pick_first_array_strings(
+        &json,
+        &[
+            &["claudeAiOauth", "scopes"],
+            &["scopes"],
+            &["scope"],
+            &["oauth", "scopes"],
+        ],
+    );
     ClaudeOauthCredentials {
         access_token: pick_first_str(
             &json,
@@ -256,13 +271,16 @@ pub fn read_claude_oauth_credentials() -> ClaudeOauthCredentials {
             ],
         ),
         scopes,
-        expires_at: pick_first_u64(&json, &[
-            &["claudeAiOauth", "expiresAt"],
-            &["claudeAiOauth", "expires_at"],
-            &["expires_at"],
-            &["expiresAt"],
-            &["exp"],
-        ]),
+        expires_at: pick_first_u64(
+            &json,
+            &[
+                &["claudeAiOauth", "expiresAt"],
+                &["claudeAiOauth", "expires_at"],
+                &["expires_at"],
+                &["expiresAt"],
+                &["exp"],
+            ],
+        ),
         source_path: path.display().to_string(),
     }
 }
@@ -308,6 +326,291 @@ pub fn scan_claude_model_daily_usage() -> Vec<ClaudeModelDailyUsagePoint> {
     guard.refresh_claude();
     guard.claude_model_daily()
 }
+
+pub fn scan_recent_activity(provider: ProviderId, limit: usize) -> Vec<RecentActivityEntry> {
+    match provider {
+        ProviderId::Codex => scan_codex_recent_activity(limit),
+        ProviderId::Claude => scan_claude_recent_activity(limit),
+        ProviderId::Gemini => scan_gemini_recent_activity(limit),
+    }
+}
+
+fn scan_codex_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+    let path = home.join(".codex").join("history.jsonl");
+    let Ok(file) = File::open(path) else {
+        return Vec::new();
+    };
+    let session_meta = read_codex_session_meta();
+    let reader = BufReader::new(file);
+    let mut out = Vec::<RecentActivityEntry>::new();
+
+    for line in reader.lines().map_while(Result::ok) {
+        let Ok(json) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let Some(prompt) = pick_first_str(&json, &[&["text"], &["message"], &["prompt"]]) else {
+            continue;
+        };
+        let prompt = normalize_recent_prompt(&prompt);
+        if prompt.is_empty() {
+            continue;
+        }
+
+        let session_id = pick_first_str(&json, &[&["session_id"], &["sessionId"]]);
+        let cwd = session_id
+            .as_ref()
+            .and_then(|sid| session_meta.get(sid))
+            .and_then(|meta| meta.cwd.clone());
+
+        let timestamp = pick_first_u64(&json, &[&["ts"], &["timestamp"]])
+            .and_then(timestamp_from_unix_secs)
+            .unwrap_or_else(chrono::Utc::now);
+
+        out.push(RecentActivityEntry {
+            provider: ProviderId::Codex,
+            prompt,
+            timestamp,
+            session_id,
+            terminal_label: cwd.as_deref().and_then(terminal_label_from_cwd),
+            cwd,
+            model: None,
+        });
+    }
+
+    sort_and_limit_recent(out, limit)
+}
+
+fn scan_claude_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
+    let mut files = Vec::<PathBuf>::new();
+    for root in resolve_claude_project_roots() {
+        collect_jsonl_recursive(&root, &mut files);
+    }
+
+    let mut out = Vec::<RecentActivityEntry>::new();
+    for path in files {
+        let Ok(file) = File::open(path) else {
+            continue;
+        };
+        let reader = BufReader::new(file);
+        for line in reader.lines().map_while(Result::ok) {
+            let Ok(json) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
+            if json.get("type").and_then(|v| v.as_str()) != Some("user") {
+                continue;
+            }
+
+            let Some(prompt) = prompt_text_from_claude_message(&json) else {
+                continue;
+            };
+            let prompt = normalize_recent_prompt(&prompt);
+            if prompt.is_empty() {
+                continue;
+            }
+
+            let timestamp = pick_first_str(&json, &[&["timestamp"], &["message", "created_at"]])
+                .and_then(|value| timestamp_from_iso(&value))
+                .unwrap_or_else(chrono::Utc::now);
+            let cwd = pick_first_str(&json, &[&["cwd"]]);
+
+            out.push(RecentActivityEntry {
+                provider: ProviderId::Claude,
+                prompt,
+                timestamp,
+                session_id: pick_first_str(&json, &[&["sessionId"], &["session_id"]]),
+                terminal_label: cwd.as_deref().and_then(terminal_label_from_cwd),
+                cwd,
+                model: None,
+            });
+        }
+    }
+
+    sort_and_limit_recent(out, limit)
+}
+
+fn scan_gemini_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
+    let mut out = Vec::<RecentActivityEntry>::new();
+
+    for file in discover_gemini_log_files() {
+        let Ok(handle) = File::open(&file.path) else {
+            continue;
+        };
+        let Ok(json) = serde_json::from_reader::<_, Value>(BufReader::new(handle)) else {
+            continue;
+        };
+        let Some(items) = json.as_array() else {
+            continue;
+        };
+
+        for item in items {
+            if item.get("type").and_then(|v| v.as_str()) != Some("user") {
+                continue;
+            }
+
+            let Some(prompt) = pick_first_str(item, &[&["message"], &["prompt"]]) else {
+                continue;
+            };
+            let prompt = normalize_recent_prompt(&prompt);
+            if prompt.is_empty() {
+                continue;
+            }
+
+            let timestamp = pick_first_str(item, &[&["timestamp"]])
+                .and_then(|value| timestamp_from_iso(&value))
+                .unwrap_or_else(chrono::Utc::now);
+
+            out.push(RecentActivityEntry {
+                provider: ProviderId::Gemini,
+                prompt,
+                timestamp,
+                session_id: pick_first_str(item, &[&["sessionId"], &["session_id"]]),
+                terminal_label: Some(file.terminal_label.clone()),
+                cwd: None,
+                model: None,
+            });
+        }
+    }
+
+    sort_and_limit_recent(out, limit)
+}
+
+fn read_codex_session_meta() -> HashMap<String, CodexSessionMeta> {
+    let mut out = HashMap::<String, CodexSessionMeta>::new();
+    for path in discover_codex_jsonl_files() {
+        let Ok(file) = File::open(path) else {
+            continue;
+        };
+        let reader = BufReader::new(file);
+        for line in reader.lines().map_while(Result::ok) {
+            let Ok(json) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
+            if json.get("type").and_then(|v| v.as_str()) != Some("session_meta") {
+                continue;
+            }
+
+            let session_id = pick_first_str(
+                &json,
+                &[&["session_id"], &["payload", "id"], &["session", "id"]],
+            );
+            let cwd = pick_first_str(&json, &[&["cwd"], &["payload", "cwd"]]);
+            if let Some(session_id) = session_id {
+                out.entry(session_id).or_insert(CodexSessionMeta { cwd });
+            }
+            break;
+        }
+    }
+    out
+}
+
+fn discover_gemini_log_files() -> Vec<GeminiLogFile> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+    let root = home.join(".gemini").join("tmp");
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::<GeminiLogFile>::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        if !ft.is_dir() {
+            continue;
+        }
+        let log_path = path.join("logs.json");
+        if !log_path.exists() {
+            continue;
+        }
+
+        let Some(terminal_label) = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(ToOwned::to_owned)
+        else {
+            continue;
+        };
+        out.push(GeminiLogFile {
+            terminal_label,
+            path: log_path,
+        });
+    }
+    out
+}
+
+fn prompt_text_from_claude_message(json: &Value) -> Option<String> {
+    let content = json
+        .get("message")
+        .and_then(|message| message.get("content"))?;
+    if let Some(text) = content.as_str() {
+        return Some(text.to_string());
+    }
+
+    let items = content.as_array()?;
+    let mut segments = Vec::<String>::new();
+    for item in items {
+        if item.get("type").and_then(|value| value.as_str()) != Some("text") {
+            continue;
+        }
+        if let Some(text) = item.get("text").and_then(|value| value.as_str()) {
+            let normalized = normalize_recent_prompt(text);
+            if !normalized.is_empty() {
+                segments.push(normalized);
+            }
+        }
+    }
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments.join(" "))
+    }
+}
+
+fn timestamp_from_unix_secs(seconds: u64) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::<chrono::Utc>::from_timestamp(seconds as i64, 0)
+}
+
+fn timestamp_from_iso(value: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|timestamp| timestamp.with_timezone(&chrono::Utc))
+}
+
+fn terminal_label_from_cwd(value: &str) -> Option<String> {
+    Path::new(value)
+        .file_name()
+        .and_then(|item| item.to_str())
+        .map(ToOwned::to_owned)
+        .filter(|item| !item.trim().is_empty())
+}
+
+fn normalize_recent_prompt(value: &str) -> String {
+    let collapsed = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut trimmed = collapsed.trim().to_string();
+    if trimmed.chars().count() <= 220 {
+        return trimmed;
+    }
+    trimmed = trimmed.chars().take(217).collect::<String>();
+    trimmed.push_str("...");
+    trimmed
+}
+
+fn sort_and_limit_recent(
+    mut entries: Vec<RecentActivityEntry>,
+    limit: usize,
+) -> Vec<RecentActivityEntry> {
+    entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    entries.truncate(limit.max(1));
+    entries
+}
+
 impl CodexScannerCache {
     fn refresh_codex(&mut self) {
         let discovered = discover_codex_jsonl_files();
@@ -350,7 +653,12 @@ impl CodexScannerCache {
             last_scan_at: epoch_ms_now(),
             ..CodexCostSnapshot::default()
         };
-        let deduped = dedupe_codex_contributions(self.files.values().map(|f| f.contribution.clone()).collect());
+        let deduped = dedupe_codex_contributions(
+            self.files
+                .values()
+                .map(|f| f.contribution.clone())
+                .collect(),
+        );
         for item in deduped {
             snap.input_tokens = snap.input_tokens.saturating_add(item.input);
             snap.cached_input_tokens = snap.cached_input_tokens.saturating_add(item.cached_input);
@@ -365,14 +673,23 @@ impl CodexScannerCache {
 
     fn codex_daily(&self) -> Vec<CodexDailyUsagePoint> {
         let mut merged = HashMap::<String, CodexDailyUsagePoint>::new();
-        for item in dedupe_codex_contributions(self.files.values().map(|f| f.contribution.clone()).collect()) {
+        for item in dedupe_codex_contributions(
+            self.files
+                .values()
+                .map(|f| f.contribution.clone())
+                .collect(),
+        ) {
             for (day, point) in item.daily {
-                let slot = merged.entry(day.clone()).or_insert_with(|| CodexDailyUsagePoint {
-                    day,
-                    ..CodexDailyUsagePoint::default()
-                });
+                let slot = merged
+                    .entry(day.clone())
+                    .or_insert_with(|| CodexDailyUsagePoint {
+                        day,
+                        ..CodexDailyUsagePoint::default()
+                    });
                 slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
-                slot.cached_input_tokens = slot.cached_input_tokens.saturating_add(point.cached_input_tokens);
+                slot.cached_input_tokens = slot
+                    .cached_input_tokens
+                    .saturating_add(point.cached_input_tokens);
                 slot.output_tokens = slot.output_tokens.saturating_add(point.output_tokens);
                 slot.total_tokens = slot.total_tokens.saturating_add(point.total_tokens);
                 slot.cost_usd += point.cost_usd;
@@ -385,15 +702,24 @@ impl CodexScannerCache {
 
     fn codex_model_daily(&self) -> Vec<CodexModelDailyUsagePoint> {
         let mut merged = HashMap::<String, CodexModelDailyUsagePoint>::new();
-        for item in dedupe_codex_contributions(self.files.values().map(|f| f.contribution.clone()).collect()) {
+        for item in dedupe_codex_contributions(
+            self.files
+                .values()
+                .map(|f| f.contribution.clone())
+                .collect(),
+        ) {
             for (key, point) in item.daily_by_model {
-                let slot = merged.entry(key).or_insert_with(|| CodexModelDailyUsagePoint {
-                    day: point.day.clone(),
-                    model: point.model.clone(),
-                    ..CodexModelDailyUsagePoint::default()
-                });
+                let slot = merged
+                    .entry(key)
+                    .or_insert_with(|| CodexModelDailyUsagePoint {
+                        day: point.day.clone(),
+                        model: point.model.clone(),
+                        ..CodexModelDailyUsagePoint::default()
+                    });
                 slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
-                slot.cached_input_tokens = slot.cached_input_tokens.saturating_add(point.cached_input_tokens);
+                slot.cached_input_tokens = slot
+                    .cached_input_tokens
+                    .saturating_add(point.cached_input_tokens);
                 slot.output_tokens = slot.output_tokens.saturating_add(point.output_tokens);
                 slot.total_tokens = slot.total_tokens.saturating_add(point.total_tokens);
                 slot.cost_usd += point.cost_usd;
@@ -451,8 +777,12 @@ impl ClaudeScannerCache {
         for file in self.files.values() {
             let c = &file.contribution;
             snap.input_tokens = snap.input_tokens.saturating_add(c.input);
-            snap.cache_read_input_tokens = snap.cache_read_input_tokens.saturating_add(c.cache_read_input);
-            snap.cache_creation_input_tokens = snap.cache_creation_input_tokens.saturating_add(c.cache_creation_input);
+            snap.cache_read_input_tokens = snap
+                .cache_read_input_tokens
+                .saturating_add(c.cache_read_input);
+            snap.cache_creation_input_tokens = snap
+                .cache_creation_input_tokens
+                .saturating_add(c.cache_creation_input);
             snap.output_tokens = snap.output_tokens.saturating_add(c.output);
             snap.total_tokens = snap.total_tokens.saturating_add(c.total);
             snap.total_cost_usd += c.cost;
@@ -466,13 +796,19 @@ impl ClaudeScannerCache {
         let mut merged = HashMap::<String, ClaudeDailyUsagePoint>::new();
         for file in self.files.values() {
             for (day, point) in &file.contribution.daily {
-                let slot = merged.entry(day.clone()).or_insert_with(|| ClaudeDailyUsagePoint {
-                    day: day.clone(),
-                    ..ClaudeDailyUsagePoint::default()
-                });
+                let slot = merged
+                    .entry(day.clone())
+                    .or_insert_with(|| ClaudeDailyUsagePoint {
+                        day: day.clone(),
+                        ..ClaudeDailyUsagePoint::default()
+                    });
                 slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
-                slot.cache_read_input_tokens = slot.cache_read_input_tokens.saturating_add(point.cache_read_input_tokens);
-                slot.cache_creation_input_tokens = slot.cache_creation_input_tokens.saturating_add(point.cache_creation_input_tokens);
+                slot.cache_read_input_tokens = slot
+                    .cache_read_input_tokens
+                    .saturating_add(point.cache_read_input_tokens);
+                slot.cache_creation_input_tokens = slot
+                    .cache_creation_input_tokens
+                    .saturating_add(point.cache_creation_input_tokens);
                 slot.output_tokens = slot.output_tokens.saturating_add(point.output_tokens);
                 slot.total_tokens = slot.total_tokens.saturating_add(point.total_tokens);
                 slot.cost_usd += point.cost_usd;
@@ -487,14 +823,21 @@ impl ClaudeScannerCache {
         let mut merged = HashMap::<String, ClaudeModelDailyUsagePoint>::new();
         for file in self.files.values() {
             for (key, point) in &file.contribution.daily_by_model {
-                let slot = merged.entry(key.clone()).or_insert_with(|| ClaudeModelDailyUsagePoint {
-                    day: point.day.clone(),
-                    model: point.model.clone(),
-                    ..ClaudeModelDailyUsagePoint::default()
-                });
+                let slot =
+                    merged
+                        .entry(key.clone())
+                        .or_insert_with(|| ClaudeModelDailyUsagePoint {
+                            day: point.day.clone(),
+                            model: point.model.clone(),
+                            ..ClaudeModelDailyUsagePoint::default()
+                        });
                 slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
-                slot.cache_read_input_tokens = slot.cache_read_input_tokens.saturating_add(point.cache_read_input_tokens);
-                slot.cache_creation_input_tokens = slot.cache_creation_input_tokens.saturating_add(point.cache_creation_input_tokens);
+                slot.cache_read_input_tokens = slot
+                    .cache_read_input_tokens
+                    .saturating_add(point.cache_read_input_tokens);
+                slot.cache_creation_input_tokens = slot
+                    .cache_creation_input_tokens
+                    .saturating_add(point.cache_creation_input_tokens);
                 slot.output_tokens = slot.output_tokens.saturating_add(point.output_tokens);
                 slot.total_tokens = slot.total_tokens.saturating_add(point.total_tokens);
                 slot.cost_usd += point.cost_usd;
@@ -506,7 +849,9 @@ impl ClaudeScannerCache {
     }
 }
 fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
-    let Ok(mut file) = File::open(path) else { return; };
+    let Ok(mut file) = File::open(path) else {
+        return;
+    };
     if file.seek(SeekFrom::Start(cache.parsed_bytes)).is_err() {
         return;
     }
@@ -514,12 +859,16 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
     if file.read_to_end(&mut buf).is_err() {
         return;
     }
-    let Ok(new_offset) = file.stream_position() else { return; };
+    let Ok(new_offset) = file.stream_position() else {
+        return;
+    };
     cache.parsed_bytes = new_offset;
 
     let reader = BufReader::new(buf.as_slice());
     for line in reader.lines().map_while(Result::ok) {
-        let Ok(json) = serde_json::from_str::<Value>(&line) else { continue; };
+        let Ok(json) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
         let entry_type = json.get("type").and_then(|v| v.as_str()).unwrap_or("");
         match entry_type {
             "session_meta" => {
@@ -529,20 +878,33 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
                 }
             }
             "turn_context" => {
-                if let Some(model) = pick_first_str(&json, &[&["model"], &["payload", "model"], &["turn", "model"]]) {
+                if let Some(model) = pick_first_str(
+                    &json,
+                    &[&["model"], &["payload", "model"], &["turn", "model"]],
+                ) {
                     cache.last_model = Some(normalize_codex_model(&model));
                     cache.contribution.model_hint = cache.last_model.clone();
                 }
             }
             "event_msg" => {
-                let payload_type = pick_first_str(&json, &[&["payload", "type"], &["payload_type"]]).unwrap_or_default();
-                if payload_type != "token_count" { continue; }
-                let info = json.get("payload").and_then(|p| p.get("info")).or_else(|| json.get("info"));
-                let Some(info) = info else { continue; };
+                let payload_type =
+                    pick_first_str(&json, &[&["payload", "type"], &["payload_type"]])
+                        .unwrap_or_default();
+                if payload_type != "token_count" {
+                    continue;
+                }
+                let info = json
+                    .get("payload")
+                    .and_then(|p| p.get("info"))
+                    .or_else(|| json.get("info"));
+                let Some(info) = info else {
+                    continue;
+                };
 
-                let model = pick_first_str(info, &[&["model"], &["model_name"], &["metadata", "model"]])
-                    .or_else(|| cache.last_model.clone())
-                    .unwrap_or_default();
+                let model =
+                    pick_first_str(info, &[&["model"], &["model_name"], &["metadata", "model"]])
+                        .or_else(|| cache.last_model.clone())
+                        .unwrap_or_default();
                 let model_norm = normalize_codex_model(&model);
 
                 let mut delta_input = 0u64;
@@ -550,9 +912,20 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
                 let mut delta_output = 0u64;
 
                 if let Some(total) = info.get("total_token_usage") {
-                    let total_input = pick_first_u64(total, &[&["input_tokens"], &["prompt_tokens"], &["input"]]).unwrap_or(0);
-                    let total_cached = pick_first_u64(total, &[&["cached_input_tokens"], &["cache_read_input_tokens"]]).unwrap_or(0).min(total_input);
-                    let total_output = pick_first_u64(total, &[&["output_tokens"], &["completion_tokens"], &["output"]]).unwrap_or(0);
+                    let total_input =
+                        pick_first_u64(total, &[&["input_tokens"], &["prompt_tokens"], &["input"]])
+                            .unwrap_or(0);
+                    let total_cached = pick_first_u64(
+                        total,
+                        &[&["cached_input_tokens"], &["cache_read_input_tokens"]],
+                    )
+                    .unwrap_or(0)
+                    .min(total_input);
+                    let total_output = pick_first_u64(
+                        total,
+                        &[&["output_tokens"], &["completion_tokens"], &["output"]],
+                    )
+                    .unwrap_or(0);
 
                     delta_input = total_input.saturating_sub(cache.last_totals.input);
                     delta_cached = total_cached.saturating_sub(cache.last_totals.cached_input);
@@ -562,17 +935,29 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
                     cache.last_totals.cached_input = total_cached;
                     cache.last_totals.output = total_output;
                 } else if let Some(last) = info.get("last_token_usage") {
-                    delta_input = pick_first_u64(last, &[&["input_tokens"], &["prompt_tokens"]]).unwrap_or(0);
-                    delta_cached = pick_first_u64(last, &[&["cached_input_tokens"], &["cache_read_input_tokens"]]).unwrap_or(0).min(delta_input);
-                    delta_output = pick_first_u64(last, &[&["output_tokens"], &["completion_tokens"]]).unwrap_or(0);
+                    delta_input =
+                        pick_first_u64(last, &[&["input_tokens"], &["prompt_tokens"]]).unwrap_or(0);
+                    delta_cached = pick_first_u64(
+                        last,
+                        &[&["cached_input_tokens"], &["cache_read_input_tokens"]],
+                    )
+                    .unwrap_or(0)
+                    .min(delta_input);
+                    delta_output =
+                        pick_first_u64(last, &[&["output_tokens"], &["completion_tokens"]])
+                            .unwrap_or(0);
                 }
 
-                if delta_input == 0 && delta_output == 0 { continue; }
+                if delta_input == 0 && delta_output == 0 {
+                    continue;
+                }
 
                 let delta_total = delta_input.saturating_add(delta_output);
-                let delta_cost = codex_cost_usd(&model_norm, delta_input, delta_cached, delta_output);
+                let delta_cost =
+                    codex_cost_usd(&model_norm, delta_input, delta_cached, delta_output);
                 cache.contribution.input = cache.contribution.input.saturating_add(delta_input);
-                cache.contribution.cached_input = cache.contribution.cached_input.saturating_add(delta_cached);
+                cache.contribution.cached_input =
+                    cache.contribution.cached_input.saturating_add(delta_cached);
                 cache.contribution.output = cache.contribution.output.saturating_add(delta_output);
                 cache.contribution.total = cache.contribution.total.saturating_add(delta_total);
                 cache.contribution.cost += delta_cost;
@@ -582,10 +967,14 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
                 }
 
                 let day = day_from_json_or_now(&json);
-                let daily = cache.contribution.daily.entry(day.clone()).or_insert_with(|| CodexDailyUsagePoint {
-                    day: day.clone(),
-                    ..CodexDailyUsagePoint::default()
-                });
+                let daily = cache
+                    .contribution
+                    .daily
+                    .entry(day.clone())
+                    .or_insert_with(|| CodexDailyUsagePoint {
+                        day: day.clone(),
+                        ..CodexDailyUsagePoint::default()
+                    });
                 daily.input_tokens = daily.input_tokens.saturating_add(delta_input);
                 daily.cached_input_tokens = daily.cached_input_tokens.saturating_add(delta_cached);
                 daily.output_tokens = daily.output_tokens.saturating_add(delta_output);
@@ -603,7 +992,8 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
                         ..CodexModelDailyUsagePoint::default()
                     });
                 model_daily.input_tokens = model_daily.input_tokens.saturating_add(delta_input);
-                model_daily.cached_input_tokens = model_daily.cached_input_tokens.saturating_add(delta_cached);
+                model_daily.cached_input_tokens =
+                    model_daily.cached_input_tokens.saturating_add(delta_cached);
                 model_daily.output_tokens = model_daily.output_tokens.saturating_add(delta_output);
                 model_daily.total_tokens = model_daily.total_tokens.saturating_add(delta_total);
                 model_daily.cost_usd += delta_cost;
@@ -614,7 +1004,9 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
 }
 
 fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
-    let Ok(mut file) = File::open(path) else { return; };
+    let Ok(mut file) = File::open(path) else {
+        return;
+    };
     if file.seek(SeekFrom::Start(cache.parsed_bytes)).is_err() {
         return;
     }
@@ -622,22 +1014,40 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
     if file.read_to_end(&mut buf).is_err() {
         return;
     }
-    let Ok(new_offset) = file.stream_position() else { return; };
+    let Ok(new_offset) = file.stream_position() else {
+        return;
+    };
     cache.parsed_bytes = new_offset;
 
     let reader = BufReader::new(buf.as_slice());
     for line in reader.lines().map_while(Result::ok) {
-        let Ok(json) = serde_json::from_str::<Value>(&line) else { continue; };
-        if json.get("type").and_then(|v| v.as_str()) != Some("assistant") { continue; }
-        let Some(usage) = json.get("message").and_then(|m| m.get("usage")) else { continue; };
+        let Ok(json) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if json.get("type").and_then(|v| v.as_str()) != Some("assistant") {
+            continue;
+        }
+        let Some(usage) = json.get("message").and_then(|m| m.get("usage")) else {
+            continue;
+        };
 
         let input = pick_first_u64(usage, &[&["input_tokens"]]).unwrap_or(0);
         let cache_read = pick_first_u64(usage, &[&["cache_read_input_tokens"]]).unwrap_or(0);
         let cache_create = pick_first_u64(usage, &[&["cache_creation_input_tokens"]]).unwrap_or(0);
         let output = pick_first_u64(usage, &[&["output_tokens"]]).unwrap_or(0);
-        if input == 0 && cache_read == 0 && cache_create == 0 && output == 0 { continue; }
+        if input == 0 && cache_read == 0 && cache_create == 0 && output == 0 {
+            continue;
+        }
 
-        let model = pick_first_str(&json, &[&["message", "model"], &["model"], &["message", "model_name"]]).unwrap_or_default();
+        let model = pick_first_str(
+            &json,
+            &[
+                &["message", "model"],
+                &["model"],
+                &["message", "model_name"],
+            ],
+        )
+        .unwrap_or_default();
         let model_norm = normalize_claude_model(&model);
         let cost = claude_cost_usd(&model_norm, input, cache_read, cache_create, output);
         let total = input.saturating_add(cache_create).saturating_add(output);
@@ -647,25 +1057,44 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
         // message_id:request_id. Later chunks carry the final (larger) output_tokens.
         // When we see a duplicate key, subtract the old values and add the new ones
         // so we always reflect the latest (most complete) token counts.
-        let message_id = pick_first_str(&json, &[&["message", "id"], &["message_id"]]).unwrap_or_default();
-        let request_id = pick_first_str(&json, &[&["requestId"], &["request_id"], &["request", "id"]]).unwrap_or_default();
+        let message_id =
+            pick_first_str(&json, &[&["message", "id"], &["message_id"]]).unwrap_or_default();
+        let request_id = pick_first_str(
+            &json,
+            &[&["requestId"], &["request_id"], &["request", "id"]],
+        )
+        .unwrap_or_default();
         if !message_id.is_empty() && !request_id.is_empty() {
             let dedupe_key = format!("{message_id}:{request_id}");
             if let Some(prev) = cache.seen_stream_ids.get(&dedupe_key) {
                 // Subtract previous chunk's contribution before adding the new one
-                cache.contribution.deduped_chunks = cache.contribution.deduped_chunks.saturating_add(1);
-                let prev_total = prev.input.saturating_add(prev.cache_create).saturating_add(prev.output);
+                cache.contribution.deduped_chunks =
+                    cache.contribution.deduped_chunks.saturating_add(1);
+                let prev_total = prev
+                    .input
+                    .saturating_add(prev.cache_create)
+                    .saturating_add(prev.output);
                 cache.contribution.input = cache.contribution.input.saturating_sub(prev.input);
-                cache.contribution.cache_read_input = cache.contribution.cache_read_input.saturating_sub(prev.cache_read);
-                cache.contribution.cache_creation_input = cache.contribution.cache_creation_input.saturating_sub(prev.cache_create);
+                cache.contribution.cache_read_input = cache
+                    .contribution
+                    .cache_read_input
+                    .saturating_sub(prev.cache_read);
+                cache.contribution.cache_creation_input = cache
+                    .contribution
+                    .cache_creation_input
+                    .saturating_sub(prev.cache_create);
                 cache.contribution.output = cache.contribution.output.saturating_sub(prev.output);
                 cache.contribution.total = cache.contribution.total.saturating_sub(prev_total);
                 cache.contribution.cost -= prev.cost;
 
                 if let Some(daily) = cache.contribution.daily.get_mut(&prev.day) {
                     daily.input_tokens = daily.input_tokens.saturating_sub(prev.input);
-                    daily.cache_read_input_tokens = daily.cache_read_input_tokens.saturating_sub(prev.cache_read);
-                    daily.cache_creation_input_tokens = daily.cache_creation_input_tokens.saturating_sub(prev.cache_create);
+                    daily.cache_read_input_tokens = daily
+                        .cache_read_input_tokens
+                        .saturating_sub(prev.cache_read);
+                    daily.cache_creation_input_tokens = daily
+                        .cache_creation_input_tokens
+                        .saturating_sub(prev.cache_create);
                     daily.output_tokens = daily.output_tokens.saturating_sub(prev.output);
                     daily.total_tokens = daily.total_tokens.saturating_sub(prev_total);
                     daily.cost_usd -= prev.cost;
@@ -674,33 +1103,56 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
                 let prev_model_key = format!("{}|{}", prev.day, prev.model);
                 if let Some(md) = cache.contribution.daily_by_model.get_mut(&prev_model_key) {
                     md.input_tokens = md.input_tokens.saturating_sub(prev.input);
-                    md.cache_read_input_tokens = md.cache_read_input_tokens.saturating_sub(prev.cache_read);
-                    md.cache_creation_input_tokens = md.cache_creation_input_tokens.saturating_sub(prev.cache_create);
+                    md.cache_read_input_tokens =
+                        md.cache_read_input_tokens.saturating_sub(prev.cache_read);
+                    md.cache_creation_input_tokens = md
+                        .cache_creation_input_tokens
+                        .saturating_sub(prev.cache_create);
                     md.output_tokens = md.output_tokens.saturating_sub(prev.output);
                     md.total_tokens = md.total_tokens.saturating_sub(prev_total);
                     md.cost_usd -= prev.cost;
                 }
             }
-            cache.seen_stream_ids.insert(dedupe_key, ClaudeStreamEntry {
-                input, cache_read, cache_create, output, cost,
-                day: day.clone(), model: model_norm.clone(),
-            });
+            cache.seen_stream_ids.insert(
+                dedupe_key,
+                ClaudeStreamEntry {
+                    input,
+                    cache_read,
+                    cache_create,
+                    output,
+                    cost,
+                    day: day.clone(),
+                    model: model_norm.clone(),
+                },
+            );
         }
 
         cache.contribution.input = cache.contribution.input.saturating_add(input);
-        cache.contribution.cache_read_input = cache.contribution.cache_read_input.saturating_add(cache_read);
-        cache.contribution.cache_creation_input = cache.contribution.cache_creation_input.saturating_add(cache_create);
+        cache.contribution.cache_read_input = cache
+            .contribution
+            .cache_read_input
+            .saturating_add(cache_read);
+        cache.contribution.cache_creation_input = cache
+            .contribution
+            .cache_creation_input
+            .saturating_add(cache_create);
         cache.contribution.output = cache.contribution.output.saturating_add(output);
         cache.contribution.total = cache.contribution.total.saturating_add(total);
         cache.contribution.cost += cost;
 
-        let daily = cache.contribution.daily.entry(day.clone()).or_insert_with(|| ClaudeDailyUsagePoint {
-            day: day.clone(),
-            ..ClaudeDailyUsagePoint::default()
-        });
+        let daily = cache
+            .contribution
+            .daily
+            .entry(day.clone())
+            .or_insert_with(|| ClaudeDailyUsagePoint {
+                day: day.clone(),
+                ..ClaudeDailyUsagePoint::default()
+            });
         daily.input_tokens = daily.input_tokens.saturating_add(input);
         daily.cache_read_input_tokens = daily.cache_read_input_tokens.saturating_add(cache_read);
-        daily.cache_creation_input_tokens = daily.cache_creation_input_tokens.saturating_add(cache_create);
+        daily.cache_creation_input_tokens = daily
+            .cache_creation_input_tokens
+            .saturating_add(cache_create);
         daily.output_tokens = daily.output_tokens.saturating_add(output);
         daily.total_tokens = daily.total_tokens.saturating_add(total);
         daily.cost_usd += cost;
@@ -716,8 +1168,12 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
                 ..ClaudeModelDailyUsagePoint::default()
             });
         model_daily.input_tokens = model_daily.input_tokens.saturating_add(input);
-        model_daily.cache_read_input_tokens = model_daily.cache_read_input_tokens.saturating_add(cache_read);
-        model_daily.cache_creation_input_tokens = model_daily.cache_creation_input_tokens.saturating_add(cache_create);
+        model_daily.cache_read_input_tokens = model_daily
+            .cache_read_input_tokens
+            .saturating_add(cache_read);
+        model_daily.cache_creation_input_tokens = model_daily
+            .cache_creation_input_tokens
+            .saturating_add(cache_create);
         model_daily.output_tokens = model_daily.output_tokens.saturating_add(output);
         model_daily.total_tokens = model_daily.total_tokens.saturating_add(total);
         model_daily.cost_usd += cost;
@@ -791,15 +1247,23 @@ fn resolve_claude_project_roots() -> Vec<PathBuf> {
 }
 
 fn collect_jsonl_recursive(root: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(root) else { return; };
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
-        let Ok(ft) = entry.file_type() else { continue; };
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
         if ft.is_dir() {
             collect_jsonl_recursive(&path, out);
             continue;
         }
-        let is_jsonl = path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("jsonl")).unwrap_or(false);
+        let is_jsonl = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("jsonl"))
+            .unwrap_or(false);
         if is_jsonl {
             out.push(path);
         }
@@ -807,15 +1271,25 @@ fn collect_jsonl_recursive(root: &Path, out: &mut Vec<PathBuf>) {
 }
 
 fn codex_cost_usd(model: &str, input: u64, cached_input: u64, output: u64) -> f64 {
-    let Some((in_per_m, cached_per_m, out_per_m)) = codex_price_table(model) else { return 0.0; };
+    let Some((in_per_m, cached_per_m, out_per_m)) = codex_price_table(model) else {
+        return 0.0;
+    };
     let non_cached = input.saturating_sub(cached_input);
     (non_cached as f64 / 1_000_000.0) * in_per_m
         + (cached_input as f64 / 1_000_000.0) * cached_per_m
         + (output as f64 / 1_000_000.0) * out_per_m
 }
 
-fn claude_cost_usd(model: &str, input: u64, cache_read: u64, cache_create: u64, output: u64) -> f64 {
-    let Some((in_per_m, read_per_m, create_per_m, out_per_m)) = claude_price_table(model) else { return 0.0; };
+fn claude_cost_usd(
+    model: &str,
+    input: u64,
+    cache_read: u64,
+    cache_create: u64,
+    output: u64,
+) -> f64 {
+    let Some((in_per_m, read_per_m, create_per_m, out_per_m)) = claude_price_table(model) else {
+        return 0.0;
+    };
     (input as f64 / 1_000_000.0) * in_per_m
         + (cache_read as f64 / 1_000_000.0) * read_per_m
         + (cache_create as f64 / 1_000_000.0) * create_per_m
@@ -824,37 +1298,69 @@ fn claude_cost_usd(model: &str, input: u64, cache_read: u64, cache_create: u64, 
 
 fn codex_price_table(model: &str) -> Option<(f64, f64, f64)> {
     let m = model.to_ascii_lowercase();
-    if m.contains("gpt-5") && m.contains("nano") { return Some((0.05, 0.005, 0.40)); }
-    if m.contains("gpt-5") && m.contains("mini") { return Some((0.25, 0.025, 2.00)); }
-    if m.contains("gpt-5") { return Some((1.25, 0.125, 10.00)); }
-    if m.contains("gpt-4.1-mini") { return Some((0.40, 0.04, 1.60)); }
-    if m.contains("gpt-4.1") { return Some((2.00, 0.20, 8.00)); }
+    if m.contains("gpt-5") && m.contains("nano") {
+        return Some((0.05, 0.005, 0.40));
+    }
+    if m.contains("gpt-5") && m.contains("mini") {
+        return Some((0.25, 0.025, 2.00));
+    }
+    if m.contains("gpt-5") {
+        return Some((1.25, 0.125, 10.00));
+    }
+    if m.contains("gpt-4.1-mini") {
+        return Some((0.40, 0.04, 1.60));
+    }
+    if m.contains("gpt-4.1") {
+        return Some((2.00, 0.20, 8.00));
+    }
     None
 }
 
 fn claude_price_table(model: &str) -> Option<(f64, f64, f64, f64)> {
     let m = model.to_ascii_lowercase();
-    if m.contains("opus") { return Some((15.0, 1.5, 18.75, 75.0)); }
-    if m.contains("sonnet") { return Some((3.0, 0.3, 3.75, 15.0)); }
-    if m.contains("haiku") { return Some((0.25, 0.03, 0.30, 1.25)); }
+    if m.contains("opus") {
+        return Some((15.0, 1.5, 18.75, 75.0));
+    }
+    if m.contains("sonnet") {
+        return Some((3.0, 0.3, 3.75, 15.0));
+    }
+    if m.contains("haiku") {
+        return Some((0.25, 0.03, 0.30, 1.25));
+    }
     None
 }
 
 fn normalize_codex_model(model: &str) -> String {
     let raw = model.trim().to_ascii_lowercase();
-    if raw.contains("gpt-5-codex") || raw.contains("openai/gpt-5") || raw == "gpt-5" { return "gpt-5".to_string(); }
-    if raw.contains("gpt-5-mini") { return "gpt-5-mini".to_string(); }
-    if raw.contains("gpt-5-nano") { return "gpt-5-nano".to_string(); }
-    if raw.contains("gpt-4.1-mini") { return "gpt-4.1-mini".to_string(); }
-    if raw.contains("gpt-4.1") { return "gpt-4.1".to_string(); }
+    if raw.contains("gpt-5-codex") || raw.contains("openai/gpt-5") || raw == "gpt-5" {
+        return "gpt-5".to_string();
+    }
+    if raw.contains("gpt-5-mini") {
+        return "gpt-5-mini".to_string();
+    }
+    if raw.contains("gpt-5-nano") {
+        return "gpt-5-nano".to_string();
+    }
+    if raw.contains("gpt-4.1-mini") {
+        return "gpt-4.1-mini".to_string();
+    }
+    if raw.contains("gpt-4.1") {
+        return "gpt-4.1".to_string();
+    }
     raw
 }
 
 fn normalize_claude_model(model: &str) -> String {
     let raw = model.trim().to_ascii_lowercase();
-    if raw.contains("opus") { return "claude-opus".to_string(); }
-    if raw.contains("sonnet") { return "claude-sonnet".to_string(); }
-    if raw.contains("haiku") { return "claude-haiku".to_string(); }
+    if raw.contains("opus") {
+        return "claude-opus".to_string();
+    }
+    if raw.contains("sonnet") {
+        return "claude-sonnet".to_string();
+    }
+    if raw.contains("haiku") {
+        return "claude-haiku".to_string();
+    }
     raw
 }
 
@@ -908,7 +1414,15 @@ fn get_at_path<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
 
 fn day_from_json_or_now(json: &Value) -> String {
     // First try numeric timestamps
-    if let Some(ts) = pick_first_u64(json, &[&["timestamp"], &["ts"], &["created_at"], &["message", "created_at"]]) {
+    if let Some(ts) = pick_first_u64(
+        json,
+        &[
+            &["timestamp"],
+            &["ts"],
+            &["created_at"],
+            &["message", "created_at"],
+        ],
+    ) {
         return if ts > 10_000_000_000 {
             day_from_ms(ts)
         } else {
@@ -917,7 +1431,12 @@ fn day_from_json_or_now(json: &Value) -> String {
     }
 
     // Then try ISO 8601 / RFC 3339 string timestamps (e.g. "2026-01-16T18:10:57.334Z")
-    for path in &[&["timestamp"][..], &["ts"], &["created_at"], &["message", "created_at"]] {
+    for path in &[
+        &["timestamp"][..],
+        &["ts"],
+        &["created_at"],
+        &["message", "created_at"],
+    ] {
         if let Some(s) = get_at_path(json, path).and_then(|v| v.as_str()) {
             if let Some(day) = try_iso_to_day(s) {
                 return day;
@@ -936,7 +1455,11 @@ fn try_iso_to_day(s: &str) -> Option<String> {
         let date_part = &s[..10];
         // Basic validation: all other chars should be digits
         let valid = date_part.bytes().enumerate().all(|(i, b)| {
-            if i == 4 || i == 7 { b == b'-' } else { b.is_ascii_digit() }
+            if i == 4 || i == 7 {
+                b == b'-'
+            } else {
+                b.is_ascii_digit()
+            }
         });
         if valid {
             return Some(date_part.to_string());
@@ -954,14 +1477,31 @@ fn ymd_from_days(mut days: u64) -> String {
     let mut year = 1970u64;
     loop {
         let dy = if is_leap(year) { 366 } else { 365 };
-        if days < dy { break; }
+        if days < dy {
+            break;
+        }
         days -= dy;
         year += 1;
     }
-    let months = [31u64, if is_leap(year) { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let months = [
+        31u64,
+        if is_leap(year) { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut month = 1u64;
     for dm in months {
-        if days < dm { break; }
+        if days < dm {
+            break;
+        }
         days -= dm;
         month += 1;
     }
@@ -978,11 +1518,18 @@ fn file_key(path: &Path) -> String {
 }
 
 fn file_mtime_ms(meta: &std::fs::Metadata) -> u64 {
-    meta.modified().ok().and_then(|m| m.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64).unwrap_or(0)
+    meta.modified()
+        .ok()
+        .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 fn epoch_ms_now() -> u64 {
-    std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
+    std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 #[cfg(test)]
 mod tests {
@@ -1007,7 +1554,11 @@ mod tests {
     fn codex_incremental_delta_works() {
         let dir = temp_dir("codex-incremental");
         let file = dir.join("session.jsonl");
-        let mut f = OpenOptions::new().create(true).append(true).open(&file).unwrap();
+        let mut f = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&file)
+            .unwrap();
         writeln!(f, "{{\"type\":\"session_meta\",\"session_id\":\"s1\"}}").unwrap();
         writeln!(
             f,
@@ -1055,7 +1606,11 @@ mod tests {
     fn claude_chunk_dedupe_by_message_and_request() {
         let dir = temp_dir("claude-dedupe");
         let file = dir.join("session.jsonl");
-        let mut f = OpenOptions::new().create(true).append(true).open(&file).unwrap();
+        let mut f = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&file)
+            .unwrap();
         // Two identical streaming chunks for the same message — should count once
         writeln!(
             f,
@@ -1085,7 +1640,11 @@ mod tests {
         // The parser must reflect the LAST chunk's values, not the first.
         let dir = temp_dir("claude-streaming");
         let file = dir.join("session.jsonl");
-        let mut f = OpenOptions::new().create(true).append(true).open(&file).unwrap();
+        let mut f = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&file)
+            .unwrap();
         // First streaming chunk — small output
         writeln!(
             f,

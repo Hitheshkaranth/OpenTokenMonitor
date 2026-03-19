@@ -9,8 +9,8 @@ use chrono::{Duration, Utc};
 
 use crate::providers::{FetchContext, ProviderDescriptor, UsageProvider};
 use crate::usage::models::{
-    CostEntry, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus, UsageSnapshot, UsageUnit,
-    UsageWindow, WindowType,
+    CostEntry, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus,
+    UsageSnapshot, UsageUnit, UsageWindow, WindowType,
 };
 use crate::usage_scanners::read_codex_auth_bridge;
 
@@ -20,7 +20,9 @@ pub struct CodexProvider {
 
 impl CodexProvider {
     pub fn new() -> Self {
-        Self { descriptor: descriptor::descriptor() }
+        Self {
+            descriptor: descriptor::descriptor(),
+        }
     }
 }
 
@@ -36,7 +38,10 @@ impl UsageProvider for CodexProvider {
 
     async fn fetch_usage(&self, ctx: &FetchContext) -> Result<UsageSnapshot, String> {
         if ctx.allow_cookie_strategy {
-            if let Some(cookie) = ctx.api_key_for(ProviderId::Codex).filter(|v| v.contains("session")) {
+            if let Some(cookie) = ctx
+                .api_key_for(ProviderId::Codex)
+                .filter(|v| v.contains("session"))
+            {
                 if let Ok(cookie_snapshot) = cookie_fetcher::fetch_usage(cookie).await {
                     return Ok(UsageSnapshot {
                         provider: ProviderId::Codex,
@@ -69,11 +74,21 @@ impl UsageProvider for CodexProvider {
 
         // Try Bearer token from ~/.codex/auth.json
         let auth = read_codex_auth_bridge();
-        eprintln!("[codex] auth token len={}, source={}", auth.access_token.len(), auth.source_path);
+        eprintln!(
+            "[codex] auth token len={}, source={}",
+            auth.access_token.len(),
+            auth.source_path
+        );
         if !auth.access_token.is_empty() {
             match bearer_fetcher::fetch_usage(&auth.access_token).await {
                 Ok(bearer) => {
-                    eprintln!("[codex] bearer OK: session={}/{} weekly={}/{}", bearer.session_used, bearer.session_limit, bearer.weekly_used, bearer.weekly_limit);
+                    eprintln!(
+                        "[codex] bearer OK: session={}/{} weekly={}/{}",
+                        bearer.session_used,
+                        bearer.session_limit,
+                        bearer.weekly_used,
+                        bearer.weekly_limit
+                    );
                     return Ok(UsageSnapshot {
                         provider: ProviderId::Codex,
                         windows: vec![
@@ -172,7 +187,9 @@ impl UsageProvider for CodexProvider {
 
     async fn check_status(&self) -> ProviderStatus {
         let auth = read_codex_auth_bridge();
-        let has_home = dirs::home_dir().map(|h| h.join(".codex").exists()).unwrap_or(false);
+        let has_home = dirs::home_dir()
+            .map(|h| h.join(".codex").exists())
+            .unwrap_or(false);
         let message = if !auth.access_token.is_empty() {
             format!("Codex auth loaded from {}", auth.source_path)
         } else if has_home {
@@ -182,7 +199,11 @@ impl UsageProvider for CodexProvider {
         };
         ProviderStatus {
             provider: ProviderId::Codex,
-            health: if has_home { ProviderHealth::Active } else { ProviderHealth::Waiting },
+            health: if has_home {
+                ProviderHealth::Active
+            } else {
+                ProviderHealth::Waiting
+            },
             message,
             checked_at: Utc::now(),
         }

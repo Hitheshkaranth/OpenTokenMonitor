@@ -15,8 +15,8 @@ use providers::registry::ProviderRegistry;
 use providers::FetchContext;
 use usage::aggregator;
 use usage::models::{
-    AlertSeverity, CostEntry, ModelBreakdownEntry, ProviderId, ProviderStatus, RefreshCadence, TrendData, UsageAlert,
-    UsageReport, UsageSnapshot,
+    AlertSeverity, CostEntry, ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry,
+    RefreshCadence, TrendData, UsageAlert, UsageReport, UsageSnapshot,
 };
 use usage::store::UsageStore;
 use watchers::poll_scheduler::PollScheduler;
@@ -35,10 +35,7 @@ pub struct AppState {
 
 impl AppState {
     fn new(app: &AppHandle) -> Result<Self, String> {
-        let data_dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| e.to_string())?;
+        let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
         let db_path = data_dir.join("usage.db");
         let store = UsageStore::open(&db_path)?;
         let registry = ProviderRegistry::new();
@@ -60,11 +57,7 @@ impl AppState {
     }
 
     fn fetch_context(&self) -> FetchContext {
-        let api_keys = self
-            .api_keys
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default();
+        let api_keys = self.api_keys.lock().map(|g| g.clone()).unwrap_or_default();
         FetchContext {
             api_keys,
             allow_cookie_strategy: true,
@@ -73,29 +66,46 @@ impl AppState {
 }
 
 #[tauri::command]
-async fn get_usage_snapshot(provider: ProviderId, state: State<'_, AppState>) -> Result<UsageSnapshot, String> {
+async fn get_usage_snapshot(
+    provider: ProviderId,
+    state: State<'_, AppState>,
+) -> Result<UsageSnapshot, String> {
     if let Some(snapshot) = state.store.get_snapshot(provider)? {
         return Ok(snapshot);
     }
-    aggregator::refresh_provider(&state.registry, &state.store, provider, &state.fetch_context()).await
+    aggregator::refresh_provider(
+        &state.registry,
+        &state.store,
+        provider,
+        &state.fetch_context(),
+    )
+    .await
 }
 
 #[tauri::command]
 async fn get_all_snapshots(state: State<'_, AppState>) -> Result<Vec<UsageSnapshot>, String> {
     let snapshots = state.store.get_all_snapshots()?;
     if snapshots.is_empty() {
-        return aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context()).await;
+        return aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context())
+            .await;
     }
     Ok(snapshots)
 }
 
 #[tauri::command]
-async fn get_cost_history(provider: ProviderId, days: u32, state: State<'_, AppState>) -> Result<Vec<CostEntry>, String> {
+async fn get_cost_history(
+    provider: ProviderId,
+    days: u32,
+    state: State<'_, AppState>,
+) -> Result<Vec<CostEntry>, String> {
     state.store.get_cost_history(provider, days)
 }
 
 #[tauri::command]
-async fn get_usage_trends(provider: ProviderId, state: State<'_, AppState>) -> Result<TrendData, String> {
+async fn get_usage_trends(
+    provider: ProviderId,
+    state: State<'_, AppState>,
+) -> Result<TrendData, String> {
     state.store.get_usage_trends(provider, 30)
 }
 
@@ -106,6 +116,17 @@ async fn get_model_breakdown(
     state: State<'_, AppState>,
 ) -> Result<Vec<ModelBreakdownEntry>, String> {
     state.store.get_model_breakdown(provider, days)
+}
+
+#[tauri::command]
+async fn get_recent_activity(
+    provider: ProviderId,
+    limit: u32,
+) -> Result<Vec<RecentActivityEntry>, String> {
+    Ok(usage_scanners::scan_recent_activity(
+        provider,
+        limit.max(1) as usize,
+    ))
 }
 
 #[tauri::command]
@@ -130,7 +151,13 @@ async fn refresh_provider(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<UsageSnapshot, String> {
-    let snapshot = aggregator::refresh_provider(&state.registry, &state.store, provider, &state.fetch_context()).await?;
+    let snapshot = aggregator::refresh_provider(
+        &state.registry,
+        &state.store,
+        provider,
+        &state.fetch_context(),
+    )
+    .await?;
     let _ = app.emit("usage-updated", snapshot.clone());
     if let Ok(all) = state.store.get_all_snapshots() {
         update_tray_tooltip(&app, &all);
@@ -139,22 +166,36 @@ async fn refresh_provider(
 }
 
 #[tauri::command]
-async fn refresh_all(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<UsageSnapshot>, String> {
-    let snapshots = aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context()).await?;
+async fn refresh_all(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<UsageSnapshot>, String> {
+    let snapshots =
+        aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context()).await?;
     update_tray_tooltip(&app, &snapshots);
     let _ = app.emit("usage-updated", snapshots.clone());
     Ok(snapshots)
 }
 
 #[tauri::command]
-async fn set_api_key(provider: ProviderId, key: String, state: State<'_, AppState>) -> Result<(), String> {
-    let mut keys = state.api_keys.lock().map_err(|_| "api key lock poisoned".to_string())?;
+async fn set_api_key(
+    provider: ProviderId,
+    key: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut keys = state
+        .api_keys
+        .lock()
+        .map_err(|_| "api key lock poisoned".to_string())?;
     keys.insert(provider, key);
     Ok(())
 }
 
 #[tauri::command]
-async fn get_provider_status(provider: ProviderId, state: State<'_, AppState>) -> Result<ProviderStatus, String> {
+async fn get_provider_status(
+    provider: ProviderId,
+    state: State<'_, AppState>,
+) -> Result<ProviderStatus, String> {
     let p = state
         .registry
         .get(provider)
@@ -163,9 +204,16 @@ async fn get_provider_status(provider: ProviderId, state: State<'_, AppState>) -
 }
 
 #[tauri::command]
-async fn set_refresh_cadence(cadence: RefreshCadence, app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+async fn set_refresh_cadence(
+    cadence: RefreshCadence,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     {
-        let mut cadence_slot = state.cadence.lock().map_err(|_| "cadence lock poisoned".to_string())?;
+        let mut cadence_slot = state
+            .cadence
+            .lock()
+            .map_err(|_| "cadence lock poisoned".to_string())?;
         *cadence_slot = cadence;
     }
     restart_scheduler(&app, &state, cadence);
@@ -222,7 +270,11 @@ fn start_file_watchers(app: &AppHandle) {
 }
 
 fn snapshot_percent(snapshot: &UsageSnapshot) -> f64 {
-    snapshot.windows.first().map(|w| w.utilization).unwrap_or(0.0)
+    snapshot
+        .windows
+        .first()
+        .map(|w| w.utilization)
+        .unwrap_or(0.0)
 }
 
 fn build_alerts(snapshots: &[UsageSnapshot]) -> Vec<UsageAlert> {
@@ -310,8 +362,12 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     let (width, height) = image::GenericImageView::dimensions(&img);
     let tray_icon = Image::new_owned(img.into_raw(), width, height);
 
-    let show_hide = MenuItemBuilder::new("Show / Hide").id("show-hide").build(app)?;
-    let refresh = MenuItemBuilder::new("Refresh All").id("refresh-all").build(app)?;
+    let show_hide = MenuItemBuilder::new("Show / Hide")
+        .id("show-hide")
+        .build(app)?;
+    let refresh = MenuItemBuilder::new("Refresh All")
+        .id("refresh-all")
+        .build(app)?;
     let quit = MenuItemBuilder::new("Quit").id("quit").build(app)?;
     let tray_menu = Menu::with_items(app, &[&show_hide, &refresh, &quit])?;
 
@@ -379,7 +435,9 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use usage::models::{DataProvenance, DataSource, UsageUnit, UsageWindow, WindowAccuracy, WindowType};
+    use usage::models::{
+        DataProvenance, DataSource, UsageUnit, UsageWindow, WindowAccuracy, WindowType,
+    };
 
     fn snapshot_with_utilization(provider: ProviderId, utilization: f64) -> UsageSnapshot {
         UsageSnapshot {
@@ -445,12 +503,9 @@ pub fn run() {
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let state = app_handle.state::<AppState>();
-                if let Ok(snapshots) = aggregator::refresh_all(
-                    &state.registry,
-                    &state.store,
-                    &state.fetch_context(),
-                )
-                .await
+                if let Ok(snapshots) =
+                    aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context())
+                        .await
                 {
                     update_tray_tooltip(&app_handle, &snapshots);
                     let _ = app_handle.emit("usage-updated", snapshots);
@@ -476,6 +531,7 @@ pub fn run() {
             get_cost_history,
             get_usage_trends,
             get_model_breakdown,
+            get_recent_activity,
             export_usage_report,
             refresh_provider,
             refresh_all,

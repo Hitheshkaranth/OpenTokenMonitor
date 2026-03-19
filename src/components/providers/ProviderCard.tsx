@@ -1,10 +1,11 @@
-import { RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { History, RefreshCw } from 'lucide-react';
 import CostTrendChart from '@/components/charts/CostTrendChart';
 import GlassPanel from '@/components/glass/GlassPanel';
 import GlassPill from '@/components/glass/GlassPill';
 import ProviderLogo from '@/components/providers/ProviderLogo';
 import UsageBar from '@/components/meters/UsageBar';
-import { ModelBreakdownEntry, ProviderId, TrendData, UsageAlert, UsageSnapshot } from '@/types';
+import { ModelBreakdownEntry, ProviderId, RecentActivityEntry, TrendData, UsageAlert, UsageSnapshot } from '@/types';
 import { windowLabel, countdownLabel, windowValueLabel } from '@/utils/usageWindows';
 
 const providerMeta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemini'; color: string }> = {
@@ -25,15 +26,40 @@ const formatTokens = (value: number) => {
   return String(value);
 };
 
+const formatAge = (timestamp: string) => {
+  const deltaMs = Date.now() - new Date(timestamp).getTime();
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'now';
+  const minutes = Math.floor(deltaMs / 60_000);
+  if (minutes < 1) return 'now';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+};
+
+const fallbackTerminalLabel = (entry?: RecentActivityEntry) => {
+  if (!entry) return 'local session';
+  if (entry.terminal_label) return entry.terminal_label;
+  if (entry.cwd) {
+    const parts = entry.cwd.split(/[\\/]/).filter(Boolean);
+    return parts[parts.length - 1] ?? entry.cwd;
+  }
+  return entry.session_id ? `session ${entry.session_id.slice(0, 6)}` : 'local session';
+};
+
 type ProviderCardProps = {
   snapshot?: UsageSnapshot;
   trend?: TrendData;
   breakdown?: ModelBreakdownEntry[];
+  recentActivity?: RecentActivityEntry[];
   alerts?: UsageAlert[];
   onRefresh: () => void;
 };
 
-const ProviderCard = ({ snapshot, trend, breakdown = [], alerts = [], onRefresh }: ProviderCardProps) => {
+const ProviderCard = ({ snapshot, trend, breakdown = [], recentActivity = [], alerts = [], onRefresh }: ProviderCardProps) => {
+  const [showRecentInputs, setShowRecentInputs] = useState(false);
+
   if (!snapshot) {
     return (
       <GlassPanel style={{ padding: 14, textAlign: 'center' }}>
@@ -57,9 +83,19 @@ const ProviderCard = ({ snapshot, trend, breakdown = [], alerts = [], onRefresh 
           <span style={{ fontWeight: 700, fontSize: 13 }}>{meta.name}</span>
           <span className="metric-label" style={{ fontSize: 9 }}>{snapshot.source}</span>
         </div>
-        <GlassPill onClick={onRefresh} title="Refresh provider" style={{ fontSize: 9, padding: '2px 6px', gap: 3 }}>
-          <RefreshCw size={10} /> Refresh
-        </GlassPill>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <GlassPill
+            active={showRecentInputs}
+            onClick={() => setShowRecentInputs((value) => !value)}
+            title="Toggle recent inputs"
+            style={{ fontSize: 9, padding: '2px 6px', gap: 3 }}
+          >
+            <History size={10} /> Recent
+          </GlassPill>
+          <GlassPill onClick={onRefresh} title="Refresh provider" style={{ fontSize: 9, padding: '2px 6px', gap: 3 }}>
+            <RefreshCw size={10} /> Refresh
+          </GlassPill>
+        </div>
       </div>
 
       {/* Usage Windows — bars with labels */}
@@ -117,6 +153,55 @@ const ProviderCard = ({ snapshot, trend, breakdown = [], alerts = [], onRefresh 
           </div>
         )}
       </GlassPanel>
+
+      {showRecentInputs && (
+        <GlassPanel style={{ padding: '6px 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <span style={{ fontSize: 11, fontWeight: 700 }}>Recent Inputs</span>
+              <span className="metric-label" style={{ fontSize: 8 }}>Local CLI history for this provider</span>
+            </div>
+            {breakdown[0] && (
+              <span
+                className="glass-pill"
+                style={{ fontSize: 8, padding: '1px 5px', maxWidth: 138, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                title={`${breakdown[0].model} · ${formatTokens(breakdown[0].total_tokens)} tokens`}
+              >
+                {breakdown[0].model} · {formatTokens(breakdown[0].total_tokens)}
+              </span>
+            )}
+          </div>
+
+          {recentActivity.length === 0 ? (
+            <div className="metric-label" style={{ fontSize: 9, marginTop: 6 }}>No recent prompts were detected for this provider yet.</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 5, marginTop: 6 }}>
+              {recentActivity.map((entry, index) => (
+                <div
+                  key={`${entry.timestamp}-${entry.session_id ?? index}`}
+                  style={{
+                    display: 'grid',
+                    gap: 3,
+                    padding: '7px 8px',
+                    borderRadius: 10,
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'rgba(10, 14, 22, 0.22)',
+                  }}
+                  title={entry.cwd ?? entry.prompt}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 8 }}>
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{fallbackTerminalLabel(entry)}</span>
+                    <span className="metric-label" style={{ marginLeft: 'auto' }}>{formatAge(entry.timestamp)}</span>
+                  </div>
+                  <div style={{ fontSize: 10, lineHeight: 1.35, color: 'var(--text-primary)' }}>
+                    {entry.prompt}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </GlassPanel>
+      )}
 
       {/* Alerts */}
       {alerts.length > 0 && (

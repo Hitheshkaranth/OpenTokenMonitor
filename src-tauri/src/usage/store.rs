@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use rusqlite::{params, Connection};
 
-use crate::usage::models::{CostEntry, ModelBreakdownEntry, ProviderId, TrendData, TrendPoint, UsageSnapshot};
+use crate::usage::models::{
+    CostEntry, ModelBreakdownEntry, ProviderId, TrendData, TrendPoint, UsageSnapshot,
+};
 
 #[derive(Clone)]
 pub struct UsageStore {
@@ -24,7 +26,10 @@ impl UsageStore {
     }
 
     fn init_schema(&self) -> Result<(), String> {
-        let conn = self.conn.lock().map_err(|_| "store lock poisoned".to_string())?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
         conn.execute_batch(
             "
             CREATE TABLE IF NOT EXISTS snapshots (
@@ -53,7 +58,10 @@ impl UsageStore {
     pub fn save_snapshot(&self, snapshot: &UsageSnapshot) -> Result<(), String> {
         let payload = serde_json::to_string(snapshot).map_err(|e| e.to_string())?;
         let fetched = snapshot.fetched_at.timestamp_millis();
-        let conn = self.conn.lock().map_err(|_| "store lock poisoned".to_string())?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
         conn.execute(
             "INSERT INTO snapshots(provider, payload, fetched_at) VALUES (?1, ?2, ?3)
             ON CONFLICT(provider) DO UPDATE SET payload=excluded.payload, fetched_at=excluded.fetched_at",
@@ -64,21 +72,30 @@ impl UsageStore {
     }
 
     pub fn get_snapshot(&self, provider: ProviderId) -> Result<Option<UsageSnapshot>, String> {
-        let conn = self.conn.lock().map_err(|_| "store lock poisoned".to_string())?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
         let mut stmt = conn
             .prepare("SELECT payload FROM snapshots WHERE provider = ?1")
             .map_err(|e| e.to_string())?;
-        let mut rows = stmt.query(params![provider.as_str()]).map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query(params![provider.as_str()])
+            .map_err(|e| e.to_string())?;
         if let Some(row) = rows.next().map_err(|e| e.to_string())? {
             let payload: String = row.get(0).map_err(|e| e.to_string())?;
-            let snapshot: UsageSnapshot = serde_json::from_str(&payload).map_err(|e| e.to_string())?;
+            let snapshot: UsageSnapshot =
+                serde_json::from_str(&payload).map_err(|e| e.to_string())?;
             return Ok(Some(snapshot));
         }
         Ok(None)
     }
 
     pub fn get_all_snapshots(&self) -> Result<Vec<UsageSnapshot>, String> {
-        let conn = self.conn.lock().map_err(|_| "store lock poisoned".to_string())?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
         let mut stmt = conn
             .prepare("SELECT payload FROM snapshots")
             .map_err(|e| e.to_string())?;
@@ -94,7 +111,10 @@ impl UsageStore {
     }
 
     pub fn save_cost_entries(&self, entries: &[CostEntry]) -> Result<(), String> {
-        let mut conn = self.conn.lock().map_err(|_| "store lock poisoned".to_string())?;
+        let mut conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
         let tx = conn.transaction().map_err(|e| e.to_string())?;
         for entry in entries {
             tx.execute(
@@ -123,8 +143,15 @@ impl UsageStore {
         Ok(())
     }
 
-    pub fn get_cost_history(&self, provider: ProviderId, days: u32) -> Result<Vec<CostEntry>, String> {
-        let conn = self.conn.lock().map_err(|_| "store lock poisoned".to_string())?;
+    pub fn get_cost_history(
+        &self,
+        provider: ProviderId,
+        days: u32,
+    ) -> Result<Vec<CostEntry>, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
         let mut stmt = conn
             .prepare(
                 "SELECT day, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_usd
@@ -179,11 +206,13 @@ impl UsageStore {
                 .saturating_add(entry.cache_write_tokens);
             total_cost += entry.estimated_cost_usd;
             total_tokens = total_tokens.saturating_add(tokens);
-            let point = by_day.entry(entry.date.clone()).or_insert_with(|| TrendPoint {
-                date: entry.date,
-                cost_usd: 0.0,
-                total_tokens: 0,
-            });
+            let point = by_day
+                .entry(entry.date.clone())
+                .or_insert_with(|| TrendPoint {
+                    date: entry.date,
+                    cost_usd: 0.0,
+                    total_tokens: 0,
+                });
             point.cost_usd += entry.estimated_cost_usd;
             point.total_tokens = point.total_tokens.saturating_add(tokens);
         }
@@ -199,7 +228,11 @@ impl UsageStore {
         })
     }
 
-    pub fn get_model_breakdown(&self, provider: ProviderId, days: u32) -> Result<Vec<ModelBreakdownEntry>, String> {
+    pub fn get_model_breakdown(
+        &self,
+        provider: ProviderId,
+        days: u32,
+    ) -> Result<Vec<ModelBreakdownEntry>, String> {
         let effective_days = days.max(1);
         let entries = self.get_cost_history(provider, effective_days)?;
         let mut by_model = std::collections::BTreeMap::<String, ModelBreakdownEntry>::new();
@@ -225,8 +258,12 @@ impl UsageStore {
                 });
             slot.input_tokens = slot.input_tokens.saturating_add(entry.input_tokens);
             slot.output_tokens = slot.output_tokens.saturating_add(entry.output_tokens);
-            slot.cache_read_tokens = slot.cache_read_tokens.saturating_add(entry.cache_read_tokens);
-            slot.cache_write_tokens = slot.cache_write_tokens.saturating_add(entry.cache_write_tokens);
+            slot.cache_read_tokens = slot
+                .cache_read_tokens
+                .saturating_add(entry.cache_read_tokens);
+            slot.cache_write_tokens = slot
+                .cache_write_tokens
+                .saturating_add(entry.cache_write_tokens);
             slot.total_tokens = slot.total_tokens.saturating_add(total_tokens);
             slot.estimated_cost_usd += entry.estimated_cost_usd;
         }
@@ -258,7 +295,13 @@ mod tests {
         UsageStore::open(&path).expect("open temp store")
     }
 
-    fn sample_entry(day: &str, model: &str, input_tokens: u64, output_tokens: u64, cost: f64) -> CostEntry {
+    fn sample_entry(
+        day: &str,
+        model: &str,
+        input_tokens: u64,
+        output_tokens: u64,
+        cost: f64,
+    ) -> CostEntry {
         CostEntry {
             date: day.to_string(),
             provider: ProviderId::Codex,
@@ -279,7 +322,9 @@ mod tests {
             sample_entry("2026-03-01", "gpt-5-mini", 4, 2, 0.2),
             sample_entry("2026-03-02", "gpt-5", 8, 4, 0.8),
         ];
-        store.save_cost_entries(&entries).expect("save cost entries");
+        store
+            .save_cost_entries(&entries)
+            .expect("save cost entries");
 
         let history = store
             .get_cost_history(ProviderId::Codex, 2)
@@ -295,7 +340,9 @@ mod tests {
             sample_entry("2026-03-02", "gpt-5", 12, 6, 1.2),
             sample_entry("2026-03-02", "gpt-5-mini", 4, 2, 0.2),
         ];
-        store.save_cost_entries(&entries).expect("save cost entries");
+        store
+            .save_cost_entries(&entries)
+            .expect("save cost entries");
 
         let breakdown = store
             .get_model_breakdown(ProviderId::Codex, 30)
@@ -313,7 +360,9 @@ mod tests {
             sample_entry("2026-03-01", "gpt-5", 10, 5, 1.0),
             sample_entry("2026-03-01", "gpt-5-mini", 4, 2, 0.2),
         ];
-        store.save_cost_entries(&entries).expect("save cost entries");
+        store
+            .save_cost_entries(&entries)
+            .expect("save cost entries");
 
         let trend = store
             .get_usage_trends(ProviderId::Codex, 30)

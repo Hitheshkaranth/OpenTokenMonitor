@@ -33,6 +33,9 @@ impl ProviderRegistry {
     }
 
     pub fn descriptors(&self) -> Vec<ProviderDescriptor> {
-        self.providers.values().map(|p| p.descriptor().clone()).collect()
+        self.providers
+            .values()
+            .map(|p| p.descriptor().clone())
+            .collect()
     }
 }

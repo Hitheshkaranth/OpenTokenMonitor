@@ -110,13 +110,26 @@ fn parse_usage_response(payload: Value) -> Result<ClaudeOauthWindow, String> {
     let s = root.get("seven_day").cloned().unwrap_or(Value::Null);
     let o = root.get("seven_day_opus").cloned().unwrap_or(Value::Null);
 
-    let extra_usage_val = root.get("extra_usage").or_else(|| payload.get("extra_usage"));
+    let extra_usage_val = root
+        .get("extra_usage")
+        .or_else(|| payload.get("extra_usage"));
     let extra_usage = extra_usage_val.and_then(|eu| {
-        let enabled = eu.get("is_enabled").and_then(Value::as_bool).unwrap_or(false);
-        if !enabled { return None; }
+        let enabled = eu
+            .get("is_enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if !enabled {
+            return None;
+        }
         Some(ExtraUsageInfo {
-            monthly_limit_usd: eu.get("monthly_limit").and_then(Value::as_f64).unwrap_or(0.0),
-            used_credits_usd: eu.get("used_credits").and_then(Value::as_f64).unwrap_or(0.0),
+            monthly_limit_usd: eu
+                .get("monthly_limit")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0),
+            used_credits_usd: eu
+                .get("used_credits")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0),
             utilization: eu.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
         })
     });
@@ -134,7 +147,11 @@ fn parse_usage_response(payload: Value) -> Result<ClaudeOauthWindow, String> {
         window.five_hour_utilization,
         window.seven_day_utilization,
         window.seven_day_opus_utilization,
-        window.extra_usage.as_ref().map(|eu| format!(" extra={:.1}%", eu.utilization)).unwrap_or_default(),
+        window
+            .extra_usage
+            .as_ref()
+            .map(|eu| format!(" extra={:.1}%", eu.utilization))
+            .unwrap_or_default(),
     );
     Ok(window)
 }
@@ -159,8 +176,7 @@ fn find_usage_root(payload: &Value) -> &Value {
     // Scan one level deep for any object containing usage fields
     if let Some(obj) = payload.as_object() {
         for (_key, val) in obj {
-            if val.is_object()
-                && (val.get("five_hour").is_some() || val.get("seven_day").is_some())
+            if val.is_object() && (val.get("five_hour").is_some() || val.get("seven_day").is_some())
             {
                 return val;
             }

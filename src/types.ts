@@ -76,6 +76,7 @@ export interface ModelBreakdownEntry {
 export interface RecentActivityEntry {
   provider: ProviderId;
   prompt: string;
+  response?: string;
   timestamp: string;
   session_id?: string;
   terminal_label?: string;

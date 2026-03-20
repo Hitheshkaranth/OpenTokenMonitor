@@ -1,0 +1,234 @@
+.recent-activity-slides {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.recent-activity-slides--widget {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  margin-top: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recent-activity-stage {
+  position: relative;
+  overflow: hidden;
+}
+
+.recent-activity-stage--widget {
+  flex: 1;
+  min-height: 0;
+}
+
+.recent-activity-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transition: transform 240ms cubic-bezier(0.22, 0.9, 0.24, 1);
+  will-change: transform;
+}
+
+.recent-activity-card {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  flex: 0 0 100%;
+  min-width: 100%;
+  padding: 7px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 14, 22, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.recent-activity-card--widget {
+  height: 100%;
+  padding: 7px 8px 7px 10px;
+  border-color: var(--widget-card-panel-border);
+  background: var(--widget-card-entry-bg);
+}
+
+.recent-activity-card--widget::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(var(--widget-accent), 0.75);
+  box-shadow: 0 0 10px rgba(var(--widget-accent), 0.32);
+}
+
+.recent-activity-card-head,
+.recent-activity-prompt {
+  position: relative;
+  z-index: 1;
+}
+
+.recent-activity-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 8px;
+}
+
+.recent-activity-terminal {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 8px;
+  font-weight: 800;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-activity-model {
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  font-size: 8px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.recent-activity-model--widget {
+  max-width: 108px;
+  background: var(--widget-card-chip-bg);
+}
+
+.recent-activity-age {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.recent-activity-age--widget {
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--widget-card-chip-bg);
+}
+
+.recent-activity-prompt {
+  display: -webkit-box;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-primary);
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.recent-activity-prompt--panel {
+  -webkit-line-clamp: 4;
+}
+
+.recent-activity-prompt--widget {
+  -webkit-line-clamp: 3;
+}
+
+.recent-activity-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recent-activity-footer--widget {
+  gap: 6px;
+}
+
+.recent-activity-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recent-activity-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.recent-activity-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.24);
+  transform: translateY(-1px);
+}
+
+.recent-activity-nav-btn--widget {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+}
+
+.recent-activity-counter {
+  min-width: 44px;
+  justify-content: center;
+  padding: 2px 7px;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.recent-activity-counter--widget {
+  min-width: 38px;
+  padding: 2px 6px;
+  font-size: 7px;
+}
+
+.recent-activity-dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.recent-activity-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.recent-activity-dot.is-active {
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.18);
+  transform: scale(1.08);
+}
+
+.recent-activity-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.recent-activity-empty--widget {
+  flex: 1;
+  min-height: 0;
+}

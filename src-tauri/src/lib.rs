@@ -21,10 +21,14 @@ use usage::models::{
 use usage::store::UsageStore;
 use watchers::poll_scheduler::PollScheduler;
 
+// The tray handle lives in state because the tooltip is updated from multiple
+// command and background-refresh paths after startup.
 struct TrayState {
     _icon: Mutex<Option<tauri::tray::TrayIcon>>,
 }
 
+// AppState is the backend composition root: registered providers, persisted
+// store, transient auth, and the active poll scheduler all live here.
 pub struct AppState {
     registry: ProviderRegistry,
     store: UsageStore,
@@ -56,6 +60,7 @@ impl AppState {
         })
     }
 
+    // Provider fetchers all need the same small set of auth/runtime inputs.
     fn fetch_context(&self) -> FetchContext {
         let api_keys = self.api_keys.lock().map(|g| g.clone()).unwrap_or_default();
         FetchContext {
@@ -70,6 +75,8 @@ async fn get_usage_snapshot(
     provider: ProviderId,
     state: State<'_, AppState>,
 ) -> Result<UsageSnapshot, String> {
+    // Cached snapshots keep the UI responsive; the explicit refresh commands are
+    // the paths that force a live backend fetch.
     if let Some(snapshot) = state.store.get_snapshot(provider)? {
         return Ok(snapshot);
     }
@@ -85,6 +92,7 @@ async fn get_usage_snapshot(
 #[tauri::command]
 async fn get_all_snapshots(state: State<'_, AppState>) -> Result<Vec<UsageSnapshot>, String> {
     let snapshots = state.store.get_all_snapshots()?;
+    // First boot has no cache yet, so bootstrap by refreshing providers once.
     if snapshots.is_empty() {
         return aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context())
             .await;
@@ -221,9 +229,59 @@ async fn set_refresh_cadence(
 }
 
 #[tauri::command]
+async fn get_launch_at_startup(app: AppHandle) -> Result<bool, String> {
+    launch_at_startup_enabled(&app)
+}
+
+#[tauri::command]
+async fn set_launch_at_startup(enabled: bool, app: AppHandle) -> Result<bool, String> {
+    set_launch_at_startup_enabled(&app, enabled)
+}
+
+#[tauri::command]
 async fn quit_app(app: AppHandle) -> Result<(), String> {
     app.exit(0);
     Ok(())
+}
+
+fn launch_at_startup_enabled(app: &AppHandle) -> Result<bool, String> {
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    {
+        use tauri_plugin_autostart::ManagerExt;
+
+        app.autolaunch().is_enabled().map_err(|e| e.to_string())
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        let _ = app;
+        Ok(false)
+    }
+}
+
+fn set_launch_at_startup_enabled(app: &AppHandle, enabled: bool) -> Result<bool, String> {
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    {
+        use tauri_plugin_autostart::ManagerExt;
+
+        let manager = app.autolaunch();
+        if enabled {
+            manager.enable().map_err(|e| e.to_string())?;
+        } else {
+            manager.disable().map_err(|e| e.to_string())?;
+        }
+        manager.is_enabled().map_err(|e| e.to_string())
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        let _ = (app, enabled);
+        Ok(false)
+    }
+}
+
+fn is_autostart_launch() -> bool {
+    std::env::args().any(|arg| arg == "--autostart")
 }
 
 fn restart_scheduler(app: &AppHandle, state: &AppState, cadence: RefreshCadence) {
@@ -248,6 +306,8 @@ fn restart_scheduler(app: &AppHandle, state: &AppState, cadence: RefreshCadence)
 
 fn start_file_watchers(app: &AppHandle) {
     let app_handle = app.clone();
+    // File-system changes are treated the same as manual refreshes: refresh the
+    // affected provider, update the tray, then emit the new snapshot to the UI.
     let _handles = watchers::file_watcher::start(move |provider| {
         let app_inner = app_handle.clone();
         tauri::async_runtime::spawn(async move {
@@ -488,9 +548,26 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
+            #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+            {
+                use tauri_plugin_autostart::MacosLauncher;
+
+                app.handle().plugin(tauri_plugin_autostart::init(
+                    MacosLauncher::LaunchAgent,
+                    Some(vec!["--autostart"]),
+                ))?;
+            }
+
             let state = AppState::new(app.handle())
                 .map_err(|e| tauri::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
             app.manage(state);
+
+            let launched_from_autostart = is_autostart_launch();
+            if launched_from_autostart {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
 
             setup_tray(app)?;
             start_file_watchers(app.handle());
@@ -512,16 +589,18 @@ pub fn run() {
                 }
             });
 
-            // Ensure the main window is visible/focused even if previous tray mode hid it.
-            let show_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(900)).await;
-                if let Some(window) = show_handle.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.unminimize();
-                    let _ = window.set_focus();
-                }
-            });
+            if !launched_from_autostart {
+                // Ensure the main window is visible/focused even if previous tray mode hid it.
+                let show_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(900)).await;
+                    if let Some(window) = show_handle.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                    }
+                });
+            }
 
             Ok(())
         })
@@ -538,6 +617,8 @@ pub fn run() {
             set_api_key,
             get_provider_status,
             set_refresh_cadence,
+            get_launch_at_startup,
+            set_launch_at_startup,
             quit_app,
         ])
         .run(tauri::generate_context!())

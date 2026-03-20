@@ -5,6 +5,7 @@ import ProviderLogo from '@/components/providers/ProviderLogo';
 import { PageId, ProviderId } from '@/types';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUsageStore } from '@/stores/usageStore';
+import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { isTauriRuntime } from '@/utils/runtime';
 
 type NavBarProps = {
@@ -24,6 +25,7 @@ const providers: { id: ProviderId; label: string; tint: string }[] = [
 const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy, onWidget }: NavBarProps) => {
   const enabledProviders = useSettingsStore((s) => s.enabledProviders);
   const statuses = useUsageStore((s) => s.statuses);
+  const snapshots = useUsageStore((s) => s.snapshots);
 
   return (
     <div className="nav-bar" data-tauri-drag-region>
@@ -77,14 +79,14 @@ const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy, onWidget }: Na
 
         {providers.map(({ id, label, tint }) => {
           if (!enabledProviders[id]) return null;
-          const health = statuses[id]?.health;
-          const healthClass = health ? `health-${health}` : 'health-unknown';
+          const access = getProviderAccessState(statuses[id], snapshots[id]);
+          const healthClass = providerAccessDotClass(access.health);
           return (
             <button
               key={id}
               className={`nav-tab ${activePage === id ? `active tint-${tint}` : ''}`}
               onClick={() => onNavigate(id)}
-              title={label}
+              title={`${label}: ${access.detail}`}
             >
               <ProviderLogo provider={id} size={12} />
               {label}

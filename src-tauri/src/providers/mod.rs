@@ -24,6 +24,8 @@ pub struct FetchContext {
 }
 
 impl FetchContext {
+    // Providers pull auth and feature switches from a shared context so command
+    // handlers do not need to know anything about provider-specific auth shapes.
     pub fn api_key_for(&self, provider: ProviderId) -> Option<&str> {
         self.api_keys
             .get(&provider)
@@ -33,6 +35,9 @@ impl FetchContext {
 }
 
 #[async_trait]
+// Every provider implementation exposes the same small contract: fetch current
+// usage, fetch cost history, and report health. The registry and aggregator rely
+// on this trait to keep provider-specific branching out of the command layer.
 pub trait UsageProvider: Send + Sync {
     fn id(&self) -> ProviderId;
     fn descriptor(&self) -> &ProviderDescriptor;

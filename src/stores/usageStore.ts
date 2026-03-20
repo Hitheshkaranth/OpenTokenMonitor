@@ -14,6 +14,9 @@ import {
 } from '@/types';
 import { isTauriRuntime } from '@/utils/runtime';
 
+// This store is the frontend's single bridge to backend usage data. Every action
+// here maps a Tauri command into a normalized per-provider state update so the
+// React tree can stay focused on rendering.
 type UsageState = {
   snapshots: Record<ProviderId, UsageSnapshot | undefined>;
   costHistory: Record<ProviderId, CostEntry[]>;
@@ -69,6 +72,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     set({ loading: true, error: undefined });
     try {
       const snapshots = await invoke<UsageSnapshot[]>('get_all_snapshots');
+      // The backend returns a list; the UI reads a stable provider-keyed map.
       const map = { ...EMPTY_SNAPSHOTS };
       snapshots.forEach((item) => {
         map[item.provider] = item;
@@ -90,6 +94,8 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     set({ loading: true, error: undefined });
     try {
       const snapshots = await invoke<UsageSnapshot[]>('refresh_all');
+      // Reset from the empty shape first so disabled/missing providers do not
+      // accidentally keep stale snapshots from a previous refresh.
       const map = { ...EMPTY_SNAPSHOTS };
       snapshots.forEach((item) => {
         map[item.provider] = item;
@@ -129,6 +135,8 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     const report = await invoke<UsageReport>('export_usage_report', { days });
     set({
       latestReport: report,
+      // The report comes back as flat arrays. Group it once here so view
+      // components can read provider-specific slices cheaply.
       alerts: {
         claude: report.alerts.filter((alert) => alert.provider === 'claude'),
         codex: report.alerts.filter((alert) => alert.provider === 'codex'),

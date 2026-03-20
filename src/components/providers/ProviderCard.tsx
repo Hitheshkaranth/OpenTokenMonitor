@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { History, RefreshCw } from 'lucide-react';
 import CostTrendChart from '@/components/charts/CostTrendChart';
+import RecentActivitySlides from '@/components/activity/RecentActivitySlides';
 import GlassPanel from '@/components/glass/GlassPanel';
 import GlassPill from '@/components/glass/GlassPill';
 import ProviderLogo from '@/components/providers/ProviderLogo';
 import UsageBar from '@/components/meters/UsageBar';
-import { ModelBreakdownEntry, ProviderId, RecentActivityEntry, TrendData, UsageAlert, UsageSnapshot } from '@/types';
+import { ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry, TrendData, UsageAlert, UsageSnapshot } from '@/types';
+import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { windowLabel, countdownLabel, windowValueLabel } from '@/utils/usageWindows';
 
 const providerMeta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemini'; color: string }> = {
@@ -26,44 +28,35 @@ const formatTokens = (value: number) => {
   return String(value);
 };
 
-const formatAge = (timestamp: string) => {
-  const deltaMs = Date.now() - new Date(timestamp).getTime();
-  if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'now';
-  const minutes = Math.floor(deltaMs / 60_000);
-  if (minutes < 1) return 'now';
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-};
-
-const fallbackTerminalLabel = (entry?: RecentActivityEntry) => {
-  if (!entry) return 'local session';
-  if (entry.terminal_label) return entry.terminal_label;
-  if (entry.cwd) {
-    const parts = entry.cwd.split(/[\\/]/).filter(Boolean);
-    return parts[parts.length - 1] ?? entry.cwd;
-  }
-  return entry.session_id ? `session ${entry.session_id.slice(0, 6)}` : 'local session';
-};
-
 type ProviderCardProps = {
   snapshot?: UsageSnapshot;
   trend?: TrendData;
   breakdown?: ModelBreakdownEntry[];
   recentActivity?: RecentActivityEntry[];
   alerts?: UsageAlert[];
+  status?: ProviderStatus;
   onRefresh: () => void;
 };
 
-const ProviderCard = ({ snapshot, trend, breakdown = [], recentActivity = [], alerts = [], onRefresh }: ProviderCardProps) => {
-  const [showRecentInputs, setShowRecentInputs] = useState(false);
+const ProviderCard = ({
+  snapshot,
+  trend,
+  breakdown = [],
+  recentActivity = [],
+  alerts = [],
+  status,
+  onRefresh,
+}: ProviderCardProps) => {
+  const [showRecentInputs, setShowRecentInputs] = useState(true);
+  const access = getProviderAccessState(status, snapshot);
 
   if (!snapshot) {
     return (
       <GlassPanel style={{ padding: 14, textAlign: 'center' }}>
-        <div className="metric-label">No provider snapshot yet.</div>
+        <div style={{ display: 'grid', gap: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: access.color }}>{access.label}</div>
+          <div className="metric-label">{access.detail}</div>
+        </div>
       </GlassPanel>
     );
   }
@@ -81,13 +74,28 @@ const ProviderCard = ({ snapshot, trend, breakdown = [], recentActivity = [], al
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <ProviderLogo provider={snapshot.provider} size={22} />
           <span style={{ fontWeight: 700, fontSize: 13 }}>{meta.name}</span>
+          <span className={`nav-tab-dot ${providerAccessDotClass(access.health)}`} />
           <span className="metric-label" style={{ fontSize: 9 }}>{snapshot.source}</span>
+          {access.health !== 'active' && (
+            <span
+              className="glass-pill"
+              style={{
+                fontSize: 8,
+                padding: '1px 6px',
+                color: access.color,
+                borderColor: access.color,
+              }}
+              title={access.detail}
+            >
+              {access.label}
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <GlassPill
             active={showRecentInputs}
             onClick={() => setShowRecentInputs((value) => !value)}
-            title="Toggle recent inputs"
+            title="Toggle recent conversations"
             style={{ fontSize: 9, padding: '2px 6px', gap: 3 }}
           >
             <History size={10} /> Recent
@@ -99,6 +107,27 @@ const ProviderCard = ({ snapshot, trend, breakdown = [], recentActivity = [], al
       </div>
 
       {/* Usage Windows — bars with labels */}
+      {access.health !== 'active' && (
+        <GlassPanel style={{ padding: '6px 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span
+              className="glass-pill"
+              style={{
+                fontSize: 8,
+                padding: '1px 6px',
+                color: access.color,
+                borderColor: access.color,
+              }}
+            >
+              {access.label}
+            </span>
+            <span style={{ fontSize: 9, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+              {access.detail}
+            </span>
+          </div>
+        </GlassPanel>
+      )}
+
       <GlassPanel tint={meta.tint} style={{ padding: '8px 10px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -158,48 +187,25 @@ const ProviderCard = ({ snapshot, trend, breakdown = [], recentActivity = [], al
         <GlassPanel style={{ padding: '6px 8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <span style={{ fontSize: 11, fontWeight: 700 }}>Recent Inputs</span>
-              <span className="metric-label" style={{ fontSize: 8 }}>Local CLI history for this provider</span>
+              <span style={{ fontSize: 11, fontWeight: 700 }}>Recent Conversations</span>
+              <span className="metric-label" style={{ fontSize: 8 }}>Recent conversations</span>
             </div>
             {breakdown[0] && (
               <span
                 className="glass-pill"
                 style={{ fontSize: 8, padding: '1px 5px', maxWidth: 138, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                title={`${breakdown[0].model} · ${formatTokens(breakdown[0].total_tokens)} tokens`}
+                title={`${breakdown[0].model} / ${formatTokens(breakdown[0].total_tokens)} tokens`}
               >
-                {breakdown[0].model} · {formatTokens(breakdown[0].total_tokens)}
+                {breakdown[0].model} / {formatTokens(breakdown[0].total_tokens)}
               </span>
             )}
           </div>
 
-          {recentActivity.length === 0 ? (
-            <div className="metric-label" style={{ fontSize: 9, marginTop: 6 }}>No recent prompts were detected for this provider yet.</div>
-          ) : (
-            <div style={{ display: 'grid', gap: 5, marginTop: 6 }}>
-              {recentActivity.map((entry, index) => (
-                <div
-                  key={`${entry.timestamp}-${entry.session_id ?? index}`}
-                  style={{
-                    display: 'grid',
-                    gap: 3,
-                    padding: '7px 8px',
-                    borderRadius: 10,
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    background: 'rgba(10, 14, 22, 0.22)',
-                  }}
-                  title={entry.cwd ?? entry.prompt}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 8 }}>
-                    <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{fallbackTerminalLabel(entry)}</span>
-                    <span className="metric-label" style={{ marginLeft: 'auto' }}>{formatAge(entry.timestamp)}</span>
-                  </div>
-                  <div style={{ fontSize: 10, lineHeight: 1.35, color: 'var(--text-primary)' }}>
-                    {entry.prompt}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <RecentActivitySlides
+            entries={recentActivity}
+            emptyMessage="No recent conversations were detected for this provider yet."
+            resetKey={snapshot.provider}
+          />
         </GlassPanel>
       )}
 

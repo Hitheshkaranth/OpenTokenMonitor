@@ -21,6 +21,8 @@ impl PollScheduler {
         F: Fn() + Send + Sync + 'static,
     {
         if let Ok(mut guard) = self.inner.lock() {
+            // Replacing the existing task keeps cadence changes simple: one timer,
+            // one callback, and no chance of overlapping poll loops.
             if let Some(handle) = guard.take() {
                 handle.abort();
             }

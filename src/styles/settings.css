@@ -518,6 +518,49 @@
   gap: 10px;
 }
 
+.settings-startup-shell {
+  gap: 10px;
+}
+
+.settings-startup-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: calc(var(--radius-md) + 3px);
+  border: 1px solid color-mix(in srgb, var(--glass-border) 84%, white 16%);
+  background:
+    radial-gradient(circle at top left, rgba(255, 205, 115, 0.12), transparent 54%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.settings-startup-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: rgba(255, 196, 96, 0.92);
+}
+
+.settings-startup-icon {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.settings-startup-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.settings-startup-note {
+  font-size: 9px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
 .settings-provider-list {
   display: grid;
   gap: 8px;
@@ -900,7 +943,8 @@
   .settings-provider-card-top,
   .settings-provider-footer,
   .settings-block-header,
-  .settings-design-header {
+  .settings-design-header,
+  .settings-startup-card {
     flex-direction: column;
     align-items: stretch;
   }

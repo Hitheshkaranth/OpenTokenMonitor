@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Local-first desktop monitor for Claude, Codex, and Gemini usage.</strong></p>
 
-<p align="center">Version 0.2.0</p>
+<p align="center">Version 0.2.1</p>
 
 <p align="center">
   <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white" alt="Tauri" /></a>
@@ -18,31 +18,33 @@
 
 | Overview | Widget |
 |---|---|
-| ![Overview](./docs/images/overview-0.2.0.png) | ![Widget](./docs/images/widget-view-0.2.0.png) |
+| ![Overview](./docs/images/overview-0.2.1.png) | ![Widget](./docs/images/widget-view-0.2.1.png) |
 
 | Settings | About |
 |---|---|
-| ![Settings](./docs/images/settings-0.2.0.png) | ![About](./docs/images/about-0.2.0.png) |
+| ![Settings](./docs/images/settings-0.2.1.png) | ![About](./docs/images/about-0.2.1.png) |
 
 ## What It Is
 
-OpenToken Monitor brings provider usage, model activity, recent CLI inputs, and provider health into one compact desktop app. It is built for people who actively switch between Claude Code, Codex CLI, and Gemini CLI and want one honest surface instead of three separate dashboards.
+OpenToken Monitor brings provider usage, model activity, recent conversations, and provider health into one compact desktop app. It is built for people who actively switch between Claude Code, Codex CLI, and Gemini CLI and want one honest surface instead of three separate dashboards.
 
 The app is local-first. It reads local CLI history and usage artifacts where possible, then combines that with live provider fetchers when credentials are available.
 
-## What Is New In 0.2.0
+## What Is New In 0.2.1
 
 - Refreshed non-widget settings surface with a cleaner control board for appearance and refresh behavior
 - Reworked About screen that now matches the rest of the glass desktop UI
-- Recent local CLI inputs surfaced in both provider detail pages and widget mode
+- Recent conversations surfaced in both provider detail pages and widget mode
+- Slide-based recent-history navigation in both the widget and provider detail screens
 - Higher-resolution provider logos throughout the interface
-- Polished widget controls for usage, recent history, refresh, and expand actions
+- Polished widget controls for usage, recent history, refresh, expand actions, and highlighted reset countdowns
+- Added clearer contributor-facing docs so the runtime and data flow are easier to follow
 
 ## Core Features
 
 - Unified monitoring for Claude, Codex, and Gemini in one desktop window
-- Compact widget mode with live usage rings and a recent-inputs view
-- Provider detail pages with usage windows, cost trend, model breakdowns, alerts, and recent prompts
+- Compact widget mode with live usage rings, highlighted reset countdowns, and a recent-conversations view
+- Provider detail pages with usage windows, cost trend, model breakdowns, alerts, and recent conversations
 - Settings panel for theme, refresh cadence, provider enablement, and credential entry
 - About screen with project info, versioning, and repository access
 - Local-first data collection with transparent provenance and mixed precision support
@@ -75,9 +77,9 @@ The overview shows all enabled providers in one pass with:
 Widget mode is for quick-glance monitoring. It includes:
 
 - provider usage rings with reset countdowns
-- usage and recent-inputs screens in the same compact widget
+- usage and recent-conversations screens in the same compact widget
 - mini refresh and expand controls
-- fast provider switching inside the recent-inputs view
+- fast provider switching inside the recent-conversations view
 
 ### Provider Detail
 
@@ -86,7 +88,7 @@ Each provider page includes:
 - detailed usage window bars
 - 30-day cost trend chart
 - per-model token and cost breakdown
-- recent local CLI prompts with terminal/session context
+- recent conversations with terminal/session context and slide navigation
 - alert list for threshold breaches
 
 ### Settings And About
@@ -97,7 +99,7 @@ The non-widget settings area includes:
 - refresh cadence control
 - provider enablement toggles
 - API key entry where relevant
-- About screen with version `0.2.0`, maintainer info, and GitHub repo access
+- About screen with version `0.2.1`, maintainer info, and GitHub repo access
 
 ### Keyboard Shortcuts
 
@@ -122,7 +124,7 @@ Because provider APIs are inconsistent, the app preserves source honesty in the 
 ### Windows Release
 
 1. Open the [latest releases](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases).
-2. Download `OpenTokenMonitor_0.2.0_x64-setup.exe` or the newest release asset.
+2. Download `OpenTokenMonitor_0.2.1_x64-setup.exe` or the newest release asset.
 3. Run the installer.
 4. Launch `OpenTokenMonitor`.
 
@@ -148,6 +150,13 @@ npm run tauri build
 ```
 
 The Windows installer is generated in `src-tauri/target/release/bundle/nsis/`.
+
+## Contributor Notes
+
+- Start with [ARCHITECTURE.md](./ARCHITECTURE.md) for the current frontend/backend data flow.
+- The UI boot path lives in [src/App.tsx](./src/App.tsx).
+- The frontend-to-backend bridge is concentrated in [src/stores/usageStore.ts](./src/stores/usageStore.ts).
+- The Rust app entrypoint and Tauri commands live in [src-tauri/src/lib.rs](./src-tauri/src/lib.rs).
 
 ## Tech Stack
 

@@ -8,6 +8,7 @@ type GlassPanelProps = PropsWithChildren<{
   tint?: Tint;
   style?: CSSProperties;
   onClick?: () => void;
+  title?: string;
 }>;
 
 const tintClass: Record<Tint, string> = {
@@ -17,11 +18,17 @@ const tintClass: Record<Tint, string> = {
   neutral: '',
 };
 
-const GlassPanel = ({ children, className = '', tint = 'neutral', style, onClick }: GlassPanelProps) => {
+const GlassPanel = ({ children, className = '', tint = 'neutral', style, onClick, title }: GlassPanelProps) => {
   const ref = useRef<HTMLDivElement>(null);
   useSpecularHighlight(ref);
   return (
-    <div ref={ref} className={`glass-panel ${tintClass[tint]} ${className}`.trim()} style={style} onClick={onClick}>
+    <div
+      ref={ref}
+      className={`glass-panel ${tintClass[tint]} ${className}`.trim()}
+      style={style}
+      onClick={onClick}
+      title={title}
+    >
       {children}
     </div>
   );

@@ -3,6 +3,8 @@ use crate::providers::FetchContext;
 use crate::usage::models::{ProviderId, UsageSnapshot};
 use crate::usage::store::UsageStore;
 
+// Refresh one provider end-to-end: fetch current usage, persist it, then persist
+// optional cost history if the provider exposes any.
 pub async fn refresh_provider(
     registry: &ProviderRegistry,
     store: &UsageStore,
@@ -24,6 +26,8 @@ pub async fn refresh_provider(
     Ok(snapshot)
 }
 
+// Refresh every provider but keep partial success useful. The UI can still render
+// when one provider fails, so only fail the whole call when every provider fails.
 pub async fn refresh_all(
     registry: &ProviderRegistry,
     store: &UsageStore,

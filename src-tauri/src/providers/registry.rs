@@ -17,6 +17,8 @@ impl ProviderRegistry {
     pub fn new() -> Self {
         let mut providers: HashMap<ProviderId, DynProvider> = HashMap::new();
 
+        // This is the single registration point for supported providers. Adding a
+        // provider means implementing the trait and inserting it here.
         let claude: DynProvider = Arc::new(ClaudeProvider::new());
         let codex: DynProvider = Arc::new(CodexProvider::new());
         let gemini: DynProvider = Arc::new(GeminiProvider::new());

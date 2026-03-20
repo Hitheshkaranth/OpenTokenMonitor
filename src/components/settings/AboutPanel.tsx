@@ -2,10 +2,8 @@ import { Activity, Cpu, Github, LayoutDashboard, Package } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import GlassButton from '@/components/glass/GlassButton';
 import GlassPanel from '@/components/glass/GlassPanel';
+import { APP_NAME, APP_REPO_URL, APP_VERSION } from '@/constants/appMeta';
 import { isTauriRuntime } from '@/utils/runtime';
-
-const repoUrl = 'https://github.com/Hitheshkaranth/OpenTokenMonitor';
-const appVersion = '0.2.0';
 
 const signalCards = [
   {
@@ -25,7 +23,7 @@ const signalCards = [
   },
   {
     label: 'Version',
-    value: `v${appVersion}`,
+    value: `v${APP_VERSION}`,
     icon: Package,
   },
 ] as const;
@@ -33,14 +31,14 @@ const signalCards = [
 const openRepo = async () => {
   try {
     if (isTauriRuntime()) {
-      await openUrl(repoUrl);
+      await openUrl(APP_REPO_URL);
       return;
     }
   } catch (error) {
     console.error('failed to open repo url', error);
   }
 
-  window.open(repoUrl, '_blank', 'noopener,noreferrer');
+  window.open(APP_REPO_URL, '_blank', 'noopener,noreferrer');
 };
 
 const AboutPanel = () => (
@@ -53,10 +51,10 @@ const AboutPanel = () => (
           </div>
           <div className="about-brand-copy">
             <div className="settings-section-title">About</div>
-            <div className="about-title">OpenToken Monitor</div>
-            <span className="glass-pill about-version-pill">Version {appVersion}</span>
+            <div className="about-title">{APP_NAME}</div>
+            <span className="glass-pill about-version-pill">Version {APP_VERSION}</span>
             <div className="about-description">
-              OpenToken Monitor is a local-first desktop monitor for Claude, Codex, and Gemini usage.
+              {APP_NAME} is a local-first desktop monitor for Claude, Codex, and Gemini usage.
               It brings quota windows, model activity, recent prompts, and provider health into one glass surface.
             </div>
             <div className="about-badge-row">
@@ -98,7 +96,7 @@ const AboutPanel = () => (
       <div className="about-version-strip">
         <div className="about-version-card">
           <span className="about-version-label">Current version</span>
-          <span className="about-version-value">{appVersion}</span>
+          <span className="about-version-value">{APP_VERSION}</span>
         </div>
         <div className="about-version-card">
           <span className="about-version-label">Release track</span>

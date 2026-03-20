@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Monitor, Palette, RefreshCw, Server } from 'lucide-react';
+import { Monitor, Palette, Power, RefreshCw, Server } from 'lucide-react';
 import GlassPanel from '@/components/glass/GlassPanel';
 import GlassToggle from '@/components/glass/GlassToggle';
 import GlassInput from '@/components/glass/GlassInput';
@@ -77,6 +77,8 @@ const SettingsPage = () => {
   const setApiKeyLocal = useSettingsStore((s) => s.setApiKey);
   const refreshCadence = useSettingsStore((s) => s.refreshCadence);
   const setRefreshCadence = useSettingsStore((s) => s.setRefreshCadence);
+  const launchAtStartup = useSettingsStore((s) => s.launchAtStartup);
+  const setLaunchAtStartup = useSettingsStore((s) => s.setLaunchAtStartup);
 
   const snapshots = useUsageStore((s) => s.snapshots);
   const statuses = useUsageStore((s) => s.statuses);
@@ -280,6 +282,33 @@ const SettingsPage = () => {
                   })}
                 </div>
               </div>
+            </div>
+          </GlassPanel>
+
+          <GlassPanel className="settings-section settings-startup-shell">
+            <div className="settings-block-header">
+              <div className="settings-section-title">Desktop Behavior</div>
+              <span className="glass-pill settings-inline-badge">
+                {launchAtStartup ? 'Auto-start on' : 'Auto-start off'}
+              </span>
+            </div>
+            <div className="settings-startup-card">
+              <span className="settings-control-icon settings-startup-icon">
+                <Power size={15} strokeWidth={2.2} />
+              </span>
+              <div className="settings-startup-copy">
+                <span className="settings-control-title">Launch at startup</span>
+                <span className="settings-startup-note">
+                  {launchAtStartup
+                    ? 'OpenTokenMonitor will start automatically after sign-in and stay in the tray on auto-launch.'
+                    : 'OpenTokenMonitor will only run when you start it manually.'}
+                </span>
+              </div>
+              <GlassToggle
+                checked={launchAtStartup}
+                onChange={setLaunchAtStartup}
+                label={launchAtStartup ? 'On' : 'Off'}
+              />
             </div>
           </GlassPanel>
 

@@ -247,6 +247,7 @@ pub struct ModelBreakdownEntry {
 pub struct RecentActivityEntry {
     pub provider: ProviderId,
     pub prompt: String,
+    pub response: Option<String>,
     pub timestamp: DateTime<Utc>,
     pub session_id: Option<String>,
     pub terminal_label: Option<String>,

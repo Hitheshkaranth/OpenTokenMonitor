@@ -7,7 +7,8 @@ import GlassPanel from '@/components/glass/GlassPanel';
 import WidgetActivityView from '@/components/layout/WidgetActivityView';
 import WidgetGauge, { arcColor } from '@/components/meters/WidgetGauge';
 import ResetCountdown from '@/components/meters/ResetCountdown';
-import { ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry, UsageSnapshot } from '@/types';
+import { ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry, UsageSnapshot, WindowType } from '@/types';
+import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { isTauriRuntime } from '@/utils/runtime';
 
 const meta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemini' }> = {
@@ -17,6 +18,25 @@ const meta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemin
 };
 
 const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
+
+const widgetWindowLabel = (windowType?: WindowType) => {
+  switch (windowType) {
+    case 'five_hour':
+      return '5H';
+    case 'seven_day':
+      return '7D';
+    case 'daily':
+      return 'DAY';
+    case 'monthly':
+      return 'MO';
+    case 'weekly':
+      return 'WK';
+    case 'session':
+      return 'SES';
+    default:
+      return 'WIN';
+  }
+};
 
 type WidgetModeProps = {
   snapshots: Record<ProviderId, UsageSnapshot | undefined>;
@@ -86,7 +106,7 @@ const WidgetMode = ({
               <GlassPill
                 active={screen === 'activity'}
                 onClick={() => setScreen('activity')}
-                title="Recent inputs"
+                title="Recent conversations"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -171,67 +191,76 @@ const WidgetMode = ({
       </div>
 
       {screen === 'usage' ? (
-        <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, padding: '5px 8px 8px', gap: 6 }}>
+        <div className="widget-usage-grid">
           {providers.map((id) => {
             const snapshot = snapshots[id];
+            const access = getProviderAccessState(statuses[id], snapshot);
             const primary = snapshot?.windows[0];
             const secondary = snapshot?.windows[1];
             const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
             const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
+            const emptyStateLabel = access.health === 'error' ? 'Unavailable' : 'Awaiting';
 
             return (
               <GlassPanel
                 key={id}
+                className="widget-provider-card"
                 tint={meta[id].tint}
                 onClick={() => openActivity(id)}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '6px 4px',
-                  gap: 3,
-                  minWidth: 0,
-                  minHeight: 0,
-                  borderRadius: 12,
-                  overflow: 'hidden',
-                  position: 'relative',
-                  cursor: 'pointer',
-                }}
+                title={access.detail}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span
-                    style={{
-                      fontWeight: 700,
-                      fontSize: 13,
-                      color: 'var(--text-primary)',
-                      whiteSpace: 'nowrap',
-                      letterSpacing: '.03em',
-                    }}
-                  >
-                    {meta[id].name}
-                  </span>
-                  <span className={`nav-tab-dot ${statuses[id]?.health ? `health-${statuses[id]!.health}` : 'health-unknown'}`} />
+                <div className="widget-provider-header">
+                  <div className="widget-provider-title-row">
+                    <span className="widget-provider-title">{meta[id].name}</span>
+                    <span className={`nav-tab-dot ${providerAccessDotClass(access.health)}`} />
+                  </div>
                 </div>
 
-                <WidgetGauge provider={id} primaryPct={primaryPct} secondaryPct={secondaryPct} />
+                <div className="widget-provider-gauge-wrap">
+                  <WidgetGauge provider={id} primaryPct={primaryPct} secondaryPct={secondaryPct} />
+                </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: arcColor(primaryPct) }}>
-                    <span style={{ opacity: 0.55 }}>
-                      <ResetCountdown resetsAt={primary?.resets_at} className="" />
-                    </span>{' '}
-                    {primaryPct.toFixed(0)}%
-                  </span>
-                  {secondaryPct != null && (
-                    <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: arcColor(secondaryPct) }}>
-                      <span style={{ opacity: 0.55 }}>
-                        <ResetCountdown resetsAt={secondary?.resets_at} className="" />
-                      </span>{' '}
-                      {secondaryPct.toFixed(0)}%
+                <div className="widget-provider-metrics">
+                  {snapshot ? (
+                    <>
+                      <div className="widget-provider-complication">
+                        <div className="widget-provider-complication-head">
+                          <span className="widget-provider-window-label">
+                            {widgetWindowLabel(primary?.window_type)}
+                          </span>
+                          <span className="widget-provider-value" style={{ color: arcColor(primaryPct) }}>
+                            {primaryPct.toFixed(0)}%
+                          </span>
+                        </div>
+                        <ResetCountdown resetsAt={primary?.resets_at} className="widget-provider-reset" />
+                      </div>
+                      {secondaryPct != null && (
+                        <div className="widget-provider-complication">
+                          <div className="widget-provider-complication-head">
+                            <span className="widget-provider-window-label">
+                              {widgetWindowLabel(secondary?.window_type)}
+                            </span>
+                            <span className="widget-provider-value" style={{ color: arcColor(secondaryPct) }}>
+                              {secondaryPct.toFixed(0)}%
+                            </span>
+                          </div>
+                          <ResetCountdown resetsAt={secondary?.resets_at} className="widget-provider-reset" />
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span className="widget-provider-empty" title={access.detail}>
+                      {emptyStateLabel}
                     </span>
                   )}
+                  <div className="widget-provider-status-row">
+                    <span
+                      className="widget-provider-status-badge"
+                      style={{ color: access.color, borderColor: access.color }}
+                    >
+                      {access.label}
+                    </span>
+                  </div>
                 </div>
               </GlassPanel>
             );
@@ -241,6 +270,7 @@ const WidgetMode = ({
         <WidgetActivityView
           provider={activityProvider}
           statuses={statuses}
+          snapshots={snapshots}
           modelBreakdowns={modelBreakdowns}
           recentActivity={recentActivity}
           onSelectProvider={setActivityProvider}

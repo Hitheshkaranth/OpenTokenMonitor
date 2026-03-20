@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { LogicalSize } from '@tauri-apps/api/dpi';
 import NavBar from '@/components/layout/Sidebar';
@@ -18,7 +19,9 @@ import ErrorBoundary from '@/components/states/ErrorBoundary';
 import ErrorState from '@/components/states/ErrorState';
 import LoadingState from '@/components/states/LoadingState';
 
-
+// App is the frontend orchestration layer. It does not own provider-specific
+// parsing logic; instead it coordinates Zustand stores, startup hooks, window
+// behavior, and which major surface should be rendered.
 const App = () => {
   const [page, setPage] = useState<PageId>('overview');
   const [refreshBusy, setRefreshBusy] = useState(false);
@@ -27,6 +30,8 @@ const App = () => {
   const setWidgetMode = useSettingsStore((s) => s.setWidgetMode);
   const enabledProviders = useSettingsStore((s) => s.enabledProviders);
   const theme = useSettingsStore((s) => s.theme);
+  const launchAtStartup = useSettingsStore((s) => s.launchAtStartup);
+  const settingsHydrated = useSettingsStore((s) => s.hydrated);
 
   const snapshots = useUsageStore((s) => s.snapshots);
   const trends = useUsageStore((s) => s.trends);
@@ -43,31 +48,50 @@ const App = () => {
   const fetchRecentActivity = useUsageStore((s) => s.fetchRecentActivity);
   const fetchUsageReport = useUsageStore((s) => s.fetchUsageReport);
 
+  // These hooks establish the long-lived runtime behavior for the desktop app:
+  // hydrate usage data, poll provider status, and apply the current theme.
   useUsageData();
   useProviderStatus();
   useGlassTheme(theme);
 
+  useEffect(() => {
+    if (!settingsHydrated || !isTauriRuntime()) return;
+
+    // Keep the OS startup entry aligned with the persisted toggle once the
+    // settings store has finished hydrating from local storage.
+    const syncLaunchAtStartup = async () => {
+      try {
+        const current = await invoke<boolean>('get_launch_at_startup');
+        if (current !== launchAtStartup) {
+          await invoke<boolean>('set_launch_at_startup', { enabled: launchAtStartup });
+        }
+      } catch (err) {
+        console.error('launch at startup sync failed', err);
+      }
+    };
+
+    syncLaunchAtStartup().catch(() => undefined);
+  }, [launchAtStartup, settingsHydrated]);
+
   // Resize window when toggling widget mode
   useEffect(() => {
     if (!isTauriRuntime()) return;
-    const win = getCurrentWindow();
-    const h = widgetMode ? 182 : 390;
+    const currentWindow = getCurrentWindow();
+    const targetHeight = widgetMode ? 244 : 390;
     (async () => {
       try {
-        await win.setResizable(true);
-        // Clear all size constraints first
-        await win.setSizeConstraints({
+        await currentWindow.setResizable(true);
+        // Temporarily relax constraints so the window can animate to the new mode height.
+        await currentWindow.setSizeConstraints({
           minWidth: 360, maxWidth: 360,
           minHeight: 100, maxHeight: 600,
         });
-        // Now resize
-        await win.setSize(new LogicalSize(360, h));
-        // Lock to target
-        await win.setSizeConstraints({
+        await currentWindow.setSize(new LogicalSize(360, targetHeight));
+        await currentWindow.setSizeConstraints({
           minWidth: 360, maxWidth: 360,
-          minHeight: h, maxHeight: h,
+          minHeight: targetHeight, maxHeight: targetHeight,
         });
-        await win.setResizable(false);
+        await currentWindow.setResizable(false);
       } catch (err) {
         console.error('resize failed', err);
       }
@@ -79,6 +103,8 @@ const App = () => {
     [enabledProviders]
   );
 
+  // The dashboard only needs one successful snapshot to become useful; providers
+  // that are still retrying can keep rendering as partial/unavailable states.
   const hasAnySnapshot = useMemo(
     () => activeProviders.some((p) => Boolean(snapshots[p])),
     [activeProviders, snapshots]
@@ -157,6 +183,8 @@ const App = () => {
     if (refreshBusy) return;
     setRefreshBusy(true);
     try {
+      // Refresh snapshots first, then hydrate the derived surfaces that depend on
+      // the latest provider state.
       await refreshAll();
       await Promise.all(
         (['claude', 'codex', 'gemini'] as ProviderId[]).flatMap((p) => [
@@ -172,6 +200,8 @@ const App = () => {
     }
   };
 
+  // Keep the render branching in one place so widget mode, settings, overview,
+  // and provider detail screens all share the same loading/error rules.
   const renderContent = () => {
     if (page === 'settings') {
       return <SettingsPage />;
@@ -222,6 +252,7 @@ const App = () => {
           breakdown={modelBreakdowns[currentProvider]}
           recentActivity={recentActivity[currentProvider]}
           alerts={alerts[currentProvider]}
+          status={statuses[currentProvider]}
           onRefresh={() => {
             refreshProvider(currentProvider);
             fetchTrend(currentProvider);

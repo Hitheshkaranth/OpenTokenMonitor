@@ -10,6 +10,7 @@ import {
   UsageAlert,
   UsageSnapshot,
 } from '@/types';
+import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { countdownLabel } from '@/utils/usageWindows';
 
 const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'gemini'; color: string }> = {
@@ -47,7 +48,8 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
   const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
   const secondaryPct = Math.max(0, Math.min(100, secondary?.utilization ?? 0));
   const costToday = trend?.points[trend.points.length - 1]?.cost_usd ?? 0;
-  const healthClass = status?.health ? `health-${status.health}` : 'health-unknown';
+  const access = getProviderAccessState(status, snapshot);
+  const healthClass = providerAccessDotClass(access.health);
 
   return (
     <GlassPanel
@@ -63,6 +65,19 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>{meta.label}</span>
             <span className={`nav-tab-dot ${healthClass}`} />
+            {access.health !== 'active' && (
+              <span
+                className="glass-pill"
+                style={{
+                  fontSize: 7,
+                  padding: '0 5px',
+                  color: access.color,
+                  borderColor: access.color,
+                }}
+              >
+                {access.label}
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ fontSize: 9, fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
@@ -83,6 +98,22 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
         <UsageBar pct={primaryPct} label={countdownLabel(primary)} />
         {secondary && <UsageBar pct={secondaryPct} label={countdownLabel(secondary)} />}
       </div>
+
+      {access.health !== 'active' && (
+        <div
+          className="metric-label"
+          style={{
+            fontSize: 8,
+            color: access.color,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={access.detail}
+        >
+          {access.detail}
+        </div>
+      )}
 
       {/* Row 3: Model + alerts (compact) */}
       {(breakdown.length > 0 || alerts.length > 0) && (

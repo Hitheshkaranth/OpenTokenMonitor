@@ -99,11 +99,6 @@ pub struct ClaudeModelDailyUsagePoint {
     pub cost_usd: f64,
 }
 
-#[derive(Clone, Debug, Default)]
-struct CodexSessionMeta {
-    cwd: Option<String>,
-}
-
 #[derive(Clone, Debug)]
 struct GeminiLogFile {
     terminal_label: String,
@@ -336,48 +331,118 @@ pub fn scan_recent_activity(provider: ProviderId, limit: usize) -> Vec<RecentAct
 }
 
 fn scan_codex_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
-    let Some(home) = dirs::home_dir() else {
-        return Vec::new();
-    };
-    let path = home.join(".codex").join("history.jsonl");
-    let Ok(file) = File::open(path) else {
-        return Vec::new();
-    };
-    let session_meta = read_codex_session_meta();
-    let reader = BufReader::new(file);
     let mut out = Vec::<RecentActivityEntry>::new();
 
-    for line in reader.lines().map_while(Result::ok) {
-        let Ok(json) = serde_json::from_str::<Value>(&line) else {
+    for path in discover_codex_jsonl_files() {
+        let Ok(file) = File::open(path) else {
             continue;
         };
-        let Some(prompt) = pick_first_str(&json, &[&["text"], &["message"], &["prompt"]]) else {
-            continue;
-        };
-        let prompt = normalize_recent_prompt(&prompt);
-        if prompt.is_empty() {
-            continue;
+        let reader = BufReader::new(file);
+        let mut session_id: Option<String> = None;
+        let mut current_cwd: Option<String> = None;
+        let mut current_model: Option<String> = None;
+        let mut pending: Option<RecentActivityEntry> = None;
+
+        for line in reader.lines().map_while(Result::ok) {
+            let Ok(json) = serde_json::from_str::<Value>(&line) else {
+                continue;
+            };
+            let entry_type = json
+                .get("type")
+                .and_then(|value| value.as_str())
+                .unwrap_or("");
+
+            if entry_type == "session_meta" {
+                session_id = pick_first_str(
+                    &json,
+                    &[&["session_id"], &["payload", "id"], &["session", "id"]],
+                )
+                .or(session_id);
+                current_cwd =
+                    pick_first_str(&json, &[&["cwd"], &["payload", "cwd"]]).or(current_cwd);
+                continue;
+            }
+
+            if entry_type == "turn_context" {
+                current_cwd = pick_first_str(&json, &[&["payload", "cwd"]]).or(current_cwd);
+                current_model = extract_codex_recent_model(&json).or(current_model.clone());
+                continue;
+            }
+
+            if entry_type == "event_msg" {
+                match json
+                    .get("payload")
+                    .and_then(|payload| payload.get("type"))
+                    .and_then(|value| value.as_str())
+                {
+                    Some("user_message") => {
+                        push_recent_entry(&mut out, pending.take());
+                        let Some(prompt) = pick_first_str(&json, &[&["payload", "message"]])
+                            .map(|value| normalize_recent_prompt(&value))
+                        else {
+                            continue;
+                        };
+                        if prompt.is_empty() {
+                            continue;
+                        }
+
+                        let timestamp = pick_first_str(&json, &[&["timestamp"]])
+                            .and_then(|value| timestamp_from_iso(&value))
+                            .unwrap_or_else(chrono::Utc::now);
+                        let terminal_label =
+                            current_cwd.as_deref().and_then(terminal_label_from_cwd);
+
+                        pending = Some(RecentActivityEntry {
+                            provider: ProviderId::Codex,
+                            prompt,
+                            response: None,
+                            timestamp,
+                            session_id: session_id.clone(),
+                            terminal_label,
+                            cwd: current_cwd.clone(),
+                            model: current_model.clone(),
+                        });
+                    }
+                    Some("agent_message") => {
+                        if let Some(entry) = pending.as_mut() {
+                            let timestamp = pick_first_str(&json, &[&["timestamp"]])
+                                .and_then(|value| timestamp_from_iso(&value));
+                            let response = pick_first_str(&json, &[&["payload", "message"]])
+                                .map(|value| normalize_recent_prompt(&value));
+                            update_recent_response(entry, response, timestamp);
+                        }
+                    }
+                    _ => {}
+                }
+                continue;
+            }
+
+            if entry_type == "response_item"
+                && json
+                    .get("payload")
+                    .and_then(|payload| payload.get("type"))
+                    .and_then(|value| value.as_str())
+                    == Some("message")
+                && json
+                    .get("payload")
+                    .and_then(|payload| payload.get("role"))
+                    .and_then(|value| value.as_str())
+                    == Some("assistant")
+            {
+                let Some(entry) = pending.as_mut() else {
+                    continue;
+                };
+                let response = extract_codex_assistant_text(&json);
+                let timestamp = pick_first_str(&json, &[&["timestamp"]])
+                    .and_then(|value| timestamp_from_iso(&value));
+                update_recent_response(entry, response, timestamp);
+                if entry.model.is_none() {
+                    entry.model = current_model.clone();
+                }
+            }
         }
 
-        let session_id = pick_first_str(&json, &[&["session_id"], &["sessionId"]]);
-        let cwd = session_id
-            .as_ref()
-            .and_then(|sid| session_meta.get(sid))
-            .and_then(|meta| meta.cwd.clone());
-
-        let timestamp = pick_first_u64(&json, &[&["ts"], &["timestamp"]])
-            .and_then(timestamp_from_unix_secs)
-            .unwrap_or_else(chrono::Utc::now);
-
-        out.push(RecentActivityEntry {
-            provider: ProviderId::Codex,
-            prompt,
-            timestamp,
-            session_id,
-            terminal_label: cwd.as_deref().and_then(terminal_label_from_cwd),
-            cwd,
-            model: None,
-        });
+        push_recent_entry(&mut out, pending);
     }
 
     sort_and_limit_recent(out, limit)
@@ -395,37 +460,15 @@ fn scan_claude_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
             continue;
         };
         let reader = BufReader::new(file);
+        let mut messages = Vec::<Value>::new();
         for line in reader.lines().map_while(Result::ok) {
             let Ok(json) = serde_json::from_str::<Value>(&line) else {
                 continue;
             };
-            if json.get("type").and_then(|v| v.as_str()) != Some("user") {
-                continue;
-            }
-
-            let Some(prompt) = prompt_text_from_claude_message(&json) else {
-                continue;
-            };
-            let prompt = normalize_recent_prompt(&prompt);
-            if prompt.is_empty() {
-                continue;
-            }
-
-            let timestamp = pick_first_str(&json, &[&["timestamp"], &["message", "created_at"]])
-                .and_then(|value| timestamp_from_iso(&value))
-                .unwrap_or_else(chrono::Utc::now);
-            let cwd = pick_first_str(&json, &[&["cwd"]]);
-
-            out.push(RecentActivityEntry {
-                provider: ProviderId::Claude,
-                prompt,
-                timestamp,
-                session_id: pick_first_str(&json, &[&["sessionId"], &["session_id"]]),
-                terminal_label: cwd.as_deref().and_then(terminal_label_from_cwd),
-                cwd,
-                model: None,
-            });
+            messages.push(json);
         }
+
+        out.extend(collect_claude_recent_entries(&messages));
     }
 
     sort_and_limit_recent(out, limit)
@@ -435,75 +478,75 @@ fn scan_gemini_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
     let mut out = Vec::<RecentActivityEntry>::new();
 
     for file in discover_gemini_log_files() {
-        let Ok(handle) = File::open(&file.path) else {
+        let Some(root) = file.path.parent() else {
             continue;
         };
-        let Ok(json) = serde_json::from_reader::<_, Value>(BufReader::new(handle)) else {
-            continue;
-        };
-        let Some(items) = json.as_array() else {
-            continue;
-        };
+        let mut found_chat_history = false;
 
-        for item in items {
-            if item.get("type").and_then(|v| v.as_str()) != Some("user") {
-                continue;
-            }
-
-            let Some(prompt) = pick_first_str(item, &[&["message"], &["prompt"]]) else {
+        for path in discover_gemini_chat_files(root) {
+            found_chat_history = true;
+            let Ok(handle) = File::open(path) else {
                 continue;
             };
-            let prompt = normalize_recent_prompt(&prompt);
-            if prompt.is_empty() {
+            let Ok(json) = serde_json::from_reader::<_, Value>(BufReader::new(handle)) else {
                 continue;
+            };
+            out.extend(collect_gemini_recent_entries(
+                &json,
+                file.terminal_label.clone(),
+            ));
+        }
+
+        if !found_chat_history {
+            let chat_models = read_gemini_chat_model_lookup(root);
+            let Ok(handle) = File::open(&file.path) else {
+                continue;
+            };
+            let Ok(json) = serde_json::from_reader::<_, Value>(BufReader::new(handle)) else {
+                continue;
+            };
+            let Some(items) = json.as_array() else {
+                continue;
+            };
+
+            for item in items {
+                if item.get("type").and_then(|v| v.as_str()) != Some("user") {
+                    continue;
+                }
+
+                let Some(prompt) = pick_first_str(item, &[&["message"], &["prompt"]]) else {
+                    continue;
+                };
+                let prompt = normalize_recent_prompt(&prompt);
+                if prompt.is_empty() {
+                    continue;
+                }
+
+                let timestamp = pick_first_str(item, &[&["timestamp"]])
+                    .and_then(|value| timestamp_from_iso(&value))
+                    .unwrap_or_else(chrono::Utc::now);
+                let session_id = pick_first_str(item, &[&["sessionId"], &["session_id"]]);
+                let message_id = pick_first_u64(item, &[&["messageId"]]);
+                let model = session_id
+                    .as_ref()
+                    .zip(message_id)
+                    .and_then(|(sid, idx)| chat_models.get(&(sid.clone(), idx)).cloned());
+
+                out.push(RecentActivityEntry {
+                    provider: ProviderId::Gemini,
+                    prompt,
+                    response: None,
+                    timestamp,
+                    session_id,
+                    terminal_label: Some(file.terminal_label.clone()),
+                    cwd: None,
+                    model,
+                });
             }
-
-            let timestamp = pick_first_str(item, &[&["timestamp"]])
-                .and_then(|value| timestamp_from_iso(&value))
-                .unwrap_or_else(chrono::Utc::now);
-
-            out.push(RecentActivityEntry {
-                provider: ProviderId::Gemini,
-                prompt,
-                timestamp,
-                session_id: pick_first_str(item, &[&["sessionId"], &["session_id"]]),
-                terminal_label: Some(file.terminal_label.clone()),
-                cwd: None,
-                model: None,
-            });
         }
     }
 
     sort_and_limit_recent(out, limit)
-}
-
-fn read_codex_session_meta() -> HashMap<String, CodexSessionMeta> {
-    let mut out = HashMap::<String, CodexSessionMeta>::new();
-    for path in discover_codex_jsonl_files() {
-        let Ok(file) = File::open(path) else {
-            continue;
-        };
-        let reader = BufReader::new(file);
-        for line in reader.lines().map_while(Result::ok) {
-            let Ok(json) = serde_json::from_str::<Value>(&line) else {
-                continue;
-            };
-            if json.get("type").and_then(|v| v.as_str()) != Some("session_meta") {
-                continue;
-            }
-
-            let session_id = pick_first_str(
-                &json,
-                &[&["session_id"], &["payload", "id"], &["session", "id"]],
-            );
-            let cwd = pick_first_str(&json, &[&["cwd"], &["payload", "cwd"]]);
-            if let Some(session_id) = session_id {
-                out.entry(session_id).or_insert(CodexSessionMeta { cwd });
-            }
-            break;
-        }
-    }
-    out
 }
 
 fn discover_gemini_log_files() -> Vec<GeminiLogFile> {
@@ -544,6 +587,29 @@ fn discover_gemini_log_files() -> Vec<GeminiLogFile> {
     out
 }
 
+fn discover_gemini_chat_files(root: &Path) -> Vec<PathBuf> {
+    let chats_dir = root.join("chats");
+    let Ok(entries) = std::fs::read_dir(chats_dir) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::<PathBuf>::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        if !ft.is_file() {
+            continue;
+        }
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            continue;
+        }
+        out.push(path);
+    }
+    out
+}
+
 fn prompt_text_from_claude_message(json: &Value) -> Option<String> {
     let content = json
         .get("message")
@@ -573,8 +639,299 @@ fn prompt_text_from_claude_message(json: &Value) -> Option<String> {
     }
 }
 
-fn timestamp_from_unix_secs(seconds: u64) -> Option<chrono::DateTime<chrono::Utc>> {
-    chrono::DateTime::<chrono::Utc>::from_timestamp(seconds as i64, 0)
+fn collect_claude_recent_entries(messages: &[Value]) -> Vec<RecentActivityEntry> {
+    let mut out = Vec::<RecentActivityEntry>::new();
+    let mut pending: Option<RecentActivityEntry> = None;
+
+    // Claude sessions often emit several assistant records per turn
+    // (thinking, tool use, then a visible text reply). Keep the latest
+    // visible assistant text attached to the most recent user prompt.
+    for json in messages {
+        match json.get("type").and_then(|value| value.as_str()) {
+            Some("user") => {
+                let Some(prompt) = prompt_text_from_claude_message(json) else {
+                    continue;
+                };
+                let prompt = normalize_recent_prompt(&prompt);
+                if prompt.is_empty() {
+                    continue;
+                }
+
+                push_recent_entry(&mut out, pending.take());
+                let timestamp = pick_first_str(json, &[&["timestamp"], &["message", "created_at"]])
+                    .and_then(|value| timestamp_from_iso(&value))
+                    .unwrap_or_else(chrono::Utc::now);
+                let cwd = pick_first_str(json, &[&["cwd"]]);
+
+                pending = Some(RecentActivityEntry {
+                    provider: ProviderId::Claude,
+                    prompt,
+                    response: None,
+                    timestamp,
+                    session_id: pick_first_str(json, &[&["sessionId"], &["session_id"]]),
+                    terminal_label: cwd.as_deref().and_then(terminal_label_from_cwd),
+                    cwd,
+                    model: None,
+                });
+            }
+            Some("assistant") => {
+                let Some(entry) = pending.as_mut() else {
+                    continue;
+                };
+                if let Some(model) = extract_claude_message_model(json) {
+                    entry.model = Some(model);
+                }
+                let timestamp = pick_first_str(json, &[&["timestamp"], &["message", "created_at"]])
+                    .and_then(|value| timestamp_from_iso(&value));
+                let response = assistant_text_from_claude_message(json);
+                update_recent_response(entry, response, timestamp);
+            }
+            _ => {}
+        }
+    }
+
+    push_recent_entry(&mut out, pending);
+    out
+}
+
+fn collect_gemini_recent_entries(
+    session: &Value,
+    terminal_label: String,
+) -> Vec<RecentActivityEntry> {
+    let Some(messages) = session.get("messages").and_then(|value| value.as_array()) else {
+        return Vec::new();
+    };
+
+    let session_id = pick_first_str(session, &[&["sessionId"]]);
+    let mut out = Vec::<RecentActivityEntry>::new();
+    let mut pending: Option<RecentActivityEntry> = None;
+
+    for message in messages {
+        match message.get("type").and_then(|value| value.as_str()) {
+            Some("user") => {
+                let Some(prompt) = extract_gemini_user_prompt(message) else {
+                    continue;
+                };
+                let prompt = normalize_recent_prompt(&prompt);
+                if prompt.is_empty() {
+                    continue;
+                }
+
+                push_recent_entry(&mut out, pending.take());
+                let timestamp = pick_first_str(message, &[&["timestamp"]])
+                    .and_then(|value| timestamp_from_iso(&value))
+                    .unwrap_or_else(chrono::Utc::now);
+                pending = Some(RecentActivityEntry {
+                    provider: ProviderId::Gemini,
+                    prompt,
+                    response: None,
+                    timestamp,
+                    session_id: session_id.clone(),
+                    terminal_label: Some(terminal_label.clone()),
+                    cwd: None,
+                    model: None,
+                });
+            }
+            Some("gemini") => {
+                let Some(entry) = pending.as_mut() else {
+                    continue;
+                };
+                if let Some(model) = pick_first_str(message, &[&["model"]]) {
+                    entry.model = Some(normalize_gemini_model(&model));
+                }
+                let timestamp = pick_first_str(message, &[&["timestamp"]])
+                    .and_then(|value| timestamp_from_iso(&value));
+                let response = extract_gemini_assistant_text(message);
+                update_recent_response(entry, response, timestamp);
+            }
+            _ => {}
+        }
+    }
+
+    push_recent_entry(&mut out, pending);
+    out
+}
+
+fn read_gemini_chat_model_lookup(root: &Path) -> HashMap<(String, u64), String> {
+    let mut out = HashMap::<(String, u64), String>::new();
+
+    for path in discover_gemini_chat_files(root) {
+        let Ok(file) = File::open(path) else {
+            continue;
+        };
+        let Ok(json) = serde_json::from_reader::<_, Value>(BufReader::new(file)) else {
+            continue;
+        };
+        insert_gemini_chat_models_from_session(&json, &mut out);
+    }
+
+    out
+}
+
+fn insert_gemini_chat_models_from_session(
+    session: &Value,
+    out: &mut HashMap<(String, u64), String>,
+) {
+    let Some(session_id) = pick_first_str(session, &[&["sessionId"]]) else {
+        return;
+    };
+    let Some(messages) = session.get("messages").and_then(|value| value.as_array()) else {
+        return;
+    };
+
+    let mut user_index = messages
+        .iter()
+        .filter(|message| message.get("type").and_then(|value| value.as_str()) == Some("user"))
+        .count() as u64;
+    let mut next_model: Option<String> = None;
+
+    for message in messages.iter().rev() {
+        match message.get("type").and_then(|value| value.as_str()) {
+            Some("gemini") => {
+                if let Some(model) = pick_first_str(message, &[&["model"]]) {
+                    next_model = Some(normalize_gemini_model(&model));
+                }
+            }
+            Some("user") => {
+                user_index = user_index.saturating_sub(1);
+                if let Some(model) = next_model.clone() {
+                    out.insert((session_id.clone(), user_index), model);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn extract_codex_assistant_text(json: &Value) -> Option<String> {
+    let items = json
+        .get("payload")
+        .and_then(|payload| payload.get("content"))
+        .and_then(|value| value.as_array())?;
+
+    let mut segments = Vec::<String>::new();
+    for item in items {
+        if item.get("type").and_then(|value| value.as_str()) != Some("output_text") {
+            continue;
+        }
+        if let Some(text) = item.get("text").and_then(|value| value.as_str()) {
+            let normalized = normalize_recent_prompt(text);
+            if !normalized.is_empty() {
+                segments.push(normalized);
+            }
+        }
+    }
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments.join(" "))
+    }
+}
+
+fn extract_codex_recent_model(json: &Value) -> Option<String> {
+    pick_first_str(
+        json,
+        &[
+            &["model"],
+            &["payload", "model"],
+            &["turn", "model"],
+            &["payload", "info", "model"],
+            &["payload", "info", "model_name"],
+            &["info", "model"],
+            &["info", "model_name"],
+            &["message", "model"],
+        ],
+    )
+    .map(|model| normalize_codex_model(&model))
+}
+
+fn extract_claude_message_model(json: &Value) -> Option<String> {
+    pick_first_str(
+        json,
+        &[
+            &["message", "model"],
+            &["model"],
+            &["message", "model_name"],
+            &["payload", "model"],
+        ],
+    )
+    .map(|model| normalize_claude_model(&model))
+}
+
+fn assistant_text_from_claude_message(json: &Value) -> Option<String> {
+    let content = json
+        .get("message")
+        .and_then(|message| message.get("content"))?;
+    if let Some(text) = content.as_str() {
+        let normalized = normalize_recent_prompt(text);
+        return (!normalized.is_empty()).then_some(normalized);
+    }
+
+    let items = content.as_array()?;
+    let mut segments = Vec::<String>::new();
+    for item in items {
+        if item.get("type").and_then(|value| value.as_str()) != Some("text") {
+            continue;
+        }
+        if let Some(text) = item.get("text").and_then(|value| value.as_str()) {
+            let normalized = normalize_recent_prompt(text);
+            if !normalized.is_empty() {
+                segments.push(normalized);
+            }
+        }
+    }
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments.join(" "))
+    }
+}
+
+fn extract_gemini_user_prompt(message: &Value) -> Option<String> {
+    let content = message.get("content")?.as_array()?;
+    let mut segments = Vec::<String>::new();
+    for item in content {
+        if let Some(text) = item.get("text").and_then(|value| value.as_str()) {
+            let normalized = normalize_recent_prompt(text);
+            if !normalized.is_empty() {
+                segments.push(normalized);
+            }
+        }
+    }
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments.join(" "))
+    }
+}
+
+fn extract_gemini_assistant_text(message: &Value) -> Option<String> {
+    pick_first_str(message, &[&["content"]]).and_then(|value| {
+        let normalized = normalize_recent_prompt(&value);
+        (!normalized.is_empty()).then_some(normalized)
+    })
+}
+
+fn update_recent_response(
+    entry: &mut RecentActivityEntry,
+    response: Option<String>,
+    timestamp: Option<chrono::DateTime<chrono::Utc>>,
+) {
+    if let Some(response) = response {
+        entry.response = Some(response);
+    }
+    if let Some(timestamp) = timestamp {
+        entry.timestamp = timestamp;
+    }
+}
+
+fn push_recent_entry(out: &mut Vec<RecentActivityEntry>, entry: Option<RecentActivityEntry>) {
+    if let Some(entry) = entry {
+        out.push(entry);
+    }
 }
 
 fn timestamp_from_iso(value: &str) -> Option<chrono::DateTime<chrono::Utc>> {
@@ -606,9 +963,42 @@ fn sort_and_limit_recent(
     mut entries: Vec<RecentActivityEntry>,
     limit: usize,
 ) -> Vec<RecentActivityEntry> {
+    let mut deduped = HashMap::<String, RecentActivityEntry>::new();
+    for entry in entries.drain(..) {
+        let key = format!(
+            "{}|{}|{}|{}",
+            entry.provider.as_str(),
+            entry.session_id.as_deref().unwrap_or(""),
+            entry.timestamp.timestamp_millis(),
+            entry.prompt
+        );
+        let replace = deduped
+            .get(&key)
+            .map(|existing| score_recent_entry(&entry) >= score_recent_entry(existing))
+            .unwrap_or(true);
+        if replace {
+            deduped.insert(key, entry);
+        }
+    }
+
+    let mut entries: Vec<RecentActivityEntry> = deduped.into_values().collect();
     entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
     entries.truncate(limit.max(1));
     entries
+}
+
+fn score_recent_entry(entry: &RecentActivityEntry) -> usize {
+    let mut score = 0;
+    if entry.response.is_some() {
+        score += 4;
+    }
+    if entry.model.is_some() {
+        score += 2;
+    }
+    if entry.cwd.is_some() || entry.terminal_label.is_some() {
+        score += 1;
+    }
+    score
 }
 
 impl CodexScannerCache {
@@ -1364,6 +1754,10 @@ fn normalize_claude_model(model: &str) -> String {
     raw
 }
 
+fn normalize_gemini_model(model: &str) -> String {
+    model.trim().to_ascii_lowercase()
+}
+
 fn pick_first_str(value: &Value, candidates: &[&[&str]]) -> Option<String> {
     for path in candidates {
         if let Some(v) = get_at_path(value, path).and_then(|v| v.as_str()) {
@@ -1685,5 +2079,128 @@ mod tests {
     fn unknown_model_keeps_tokens_without_cost() {
         assert_eq!(codex_cost_usd("unknown-model", 1000, 0, 500), 0.0);
         assert_eq!(claude_cost_usd("unknown-model", 1000, 0, 0, 500), 0.0);
+    }
+
+    #[test]
+    fn claude_recent_activity_uses_next_assistant_model() {
+        let messages = vec![
+            serde_json::json!({
+                "type": "user",
+                "timestamp": "2026-03-14T02:47:35.799Z",
+                "sessionId": "claude-session",
+                "cwd": "C:\\Users\\hithe\\Documents\\SIDE_QUESTS\\OpenTokenMonitor",
+                "message": { "role": "user", "content": "install binwalk" }
+            }),
+            serde_json::json!({
+                "type": "assistant",
+                "timestamp": "2026-03-14T02:47:38.989Z",
+                "message": {
+                    "model": "claude-opus-4-6",
+                    "content": [{ "type": "text", "text": "I can help with that." }]
+                }
+            }),
+        ];
+
+        let entries = collect_claude_recent_entries(&messages);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].prompt, "install binwalk");
+        assert_eq!(entries[0].model.as_deref(), Some("claude-opus"));
+        assert_eq!(
+            entries[0].response.as_deref(),
+            Some("I can help with that.")
+        );
+    }
+
+    #[test]
+    fn gemini_chat_lookup_maps_user_index_to_following_model() {
+        let session = serde_json::json!({
+            "sessionId": "gemini-session",
+            "messages": [
+                {
+                    "type": "user",
+                    "content": [{ "text": "first prompt" }]
+                },
+                {
+                    "type": "gemini",
+                    "model": "gemini-3-flash-preview"
+                },
+                {
+                    "type": "user",
+                    "content": [{ "text": "second prompt" }]
+                },
+                {
+                    "type": "gemini",
+                    "model": "gemini-2.5-pro"
+                }
+            ]
+        });
+
+        let mut lookup = HashMap::<(String, u64), String>::new();
+        insert_gemini_chat_models_from_session(&session, &mut lookup);
+
+        assert_eq!(
+            lookup
+                .get(&(String::from("gemini-session"), 0))
+                .map(String::as_str),
+            Some("gemini-3-flash-preview")
+        );
+        assert_eq!(
+            lookup
+                .get(&(String::from("gemini-session"), 1))
+                .map(String::as_str),
+            Some("gemini-2.5-pro")
+        );
+    }
+
+    #[test]
+    fn gemini_recent_activity_captures_latest_reply_text() {
+        let session = serde_json::json!({
+            "sessionId": "gemini-session",
+            "messages": [
+                {
+                    "type": "user",
+                    "timestamp": "2026-03-14T23:56:31.608Z",
+                    "content": [{ "text": "first prompt" }]
+                },
+                {
+                    "type": "gemini",
+                    "timestamp": "2026-03-14T23:56:32.608Z",
+                    "content": "planning reply",
+                    "model": "gemini-3-flash-preview"
+                },
+                {
+                    "type": "gemini",
+                    "timestamp": "2026-03-14T23:56:33.608Z",
+                    "content": "final reply",
+                    "model": "gemini-3-flash-preview"
+                }
+            ]
+        });
+
+        let entries = collect_gemini_recent_entries(&session, "opentokenmonitor".to_string());
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].prompt, "first prompt");
+        assert_eq!(entries[0].response.as_deref(), Some("final reply"));
+        assert_eq!(entries[0].model.as_deref(), Some("gemini-3-flash-preview"));
+    }
+
+    #[test]
+    fn codex_recent_reply_prefers_output_text() {
+        let json = serde_json::json!({
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "content": [
+                    { "type": "output_text", "text": "first line" },
+                    { "type": "output_text", "text": "second line" }
+                ]
+            }
+        });
+
+        assert_eq!(
+            extract_codex_assistant_text(&json).as_deref(),
+            Some("first line second line")
+        );
     }
 }

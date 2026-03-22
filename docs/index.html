@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OpenTokenMonitor — Track AI Token Usage &amp; Costs</title>
-  <meta name="description" content="Free, open-source desktop app to monitor token consumption and costs across Claude Code, Copilot, Cursor, and other AI CLI tools. Private. Lightweight. Cross-platform.">
+  <meta name="description" content="Free, open-source desktop app to monitor token consumption and costs across Claude Code, Codex CLI, Gemini CLI, and other AI CLI tools. Private. Lightweight. Cross-platform.">
   <meta property="og:title" content="OpenTokenMonitor — Track AI Token Usage &amp; Costs">
-  <meta property="og:description" content="Free, open-source desktop app to monitor token consumption and costs across Claude Code, Copilot, Cursor, and other AI CLI tools. Private. Lightweight. Cross-platform.">
+  <meta property="og:description" content="Free, open-source desktop app to monitor token consumption and costs across Claude Code, Codex CLI, Gemini CLI, and other AI CLI tools. Private. Lightweight. Cross-platform.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://Hitheshkaranth.github.io/OpenTokenMonitor/">
   <meta property="og:image" content="https://Hitheshkaranth.github.io/OpenTokenMonitor/images/overview-0.3.1.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="OpenTokenMonitor — Track AI Token Usage &amp; Costs">
-  <meta name="twitter:description" content="Free, open-source desktop app to monitor token consumption and costs across Claude Code, Copilot, Cursor, and other AI CLI tools. Private. Lightweight. Cross-platform.">
+  <meta name="twitter:description" content="Free, open-source desktop app to monitor token consumption and costs across Claude Code, Codex CLI, Gemini CLI, and other AI CLI tools. Private. Lightweight. Cross-platform.">
   <meta name="twitter:image" content="https://Hitheshkaranth.github.io/OpenTokenMonitor/images/overview-0.3.1.png">
   <meta name="theme-color" content="#09090f">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23111118'/><circle cx='8' cy='8' r='2.8' fill='%23333'/><circle cx='16' cy='8' r='2.8' fill='%23e8e8ed'/><circle cx='24' cy='8' r='2.8' fill='%23e8e8ed'/><circle cx='8' cy='16' r='2.8' fill='%23e8e8ed'/><circle cx='16' cy='16' r='2.8' fill='%23e8e8ed'/><circle cx='24' cy='16' r='2.8' fill='%23e8e8ed'/><circle cx='8' cy='24' r='2.8' fill='%23e8e8ed'/><circle cx='16' cy='24' r='2.8' fill='%23e8e8ed'/><circle cx='24' cy='24' r='2.8' fill='%23e8e8ed'/></svg>">
@@ -20,691 +20,401 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
       --bg-deep: #09090f;
-      --bg-surface: #111118;
-      --bg-card: #16161f;
-      --border-subtle: rgba(255, 255, 255, 0.06);
-      --border-hover: rgba(255, 255, 255, 0.12);
+      --bg-surface: #0e0e16;
+      --bg-card: #141420;
+      --bg-card-hover: #1a1a2a;
+      --border: rgba(255,255,255,0.06);
+      --border-hover: rgba(255,255,255,0.12);
       --cyan: #00b4d8;
-      --cyan-glow: rgba(0, 180, 216, 0.15);
-      --cyan-glow-strong: rgba(0, 180, 216, 0.3);
+      --cyan-dim: rgba(0,180,216,0.12);
+      --cyan-glow: rgba(0,180,216,0.2);
       --green: #06d6a0;
-      --green-glow: rgba(6, 214, 160, 0.15);
-      --text-primary: #e8e8ed;
-      --text-secondary: #6b7280;
-      --text-muted: #4b5563;
-      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --green-dim: rgba(6,214,160,0.12);
+      --red: #ef4444;
+      --red-dim: rgba(239,68,68,0.12);
+      --amber: #f59e0b;
+      --text: #e8e8ed;
+      --text-2: #9ca3af;
+      --text-3: #4b5563;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: 'JetBrains Mono', 'Fira Code', monospace;
     }
 
-    html {
-      scroll-behavior: smooth;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
+    html { scroll-behavior: smooth; }
 
     body {
-      font-family: var(--font-sans);
+      font-family: var(--font);
       background: var(--bg-deep);
-      color: var(--text-primary);
+      color: var(--text);
       line-height: 1.6;
       overflow-x: hidden;
     }
 
-    /* ─── Utilities ─── */
-    .container {
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 0 24px;
+    /* ─── 3D Background Canvas ─── */
+    #bg-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
     }
 
-    a {
-      color: var(--cyan);
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-    a:hover { color: #33c9e8; }
-    a:focus-visible {
-      outline: 2px solid var(--cyan);
-      outline-offset: 2px;
-      border-radius: 2px;
-    }
+    /* ─── Layout ─── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+    .section { padding: 100px 0; position: relative; }
 
+    a { color: var(--cyan); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: #4dd9f0; }
+    a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px; }
+
+    /* ─── Buttons ─── */
     .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-family: var(--font-sans);
-      font-weight: 600;
-      font-size: 0.95rem;
-      cursor: pointer;
-      border: none;
-      transition: all 0.2s ease;
-      text-decoration: none;
-      line-height: 1.4;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: 12px;
+      font-family: var(--font); font-weight: 600; font-size: 0.9rem;
+      border: none; cursor: pointer; transition: all 0.25s ease;
+      text-decoration: none; line-height: 1.4;
     }
-
     .btn-primary {
-      background: var(--cyan);
-      color: #09090f;
+      background: var(--cyan); color: #09090f;
+      box-shadow: 0 0 20px var(--cyan-glow), 0 4px 12px rgba(0,0,0,0.3);
     }
     .btn-primary:hover {
-      background: #33c9e8;
-      color: #09090f;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 20px var(--cyan-glow-strong);
+      background: #33c9e8; color: #09090f;
+      transform: translateY(-2px);
+      box-shadow: 0 0 40px rgba(0,180,216,0.35), 0 8px 24px rgba(0,0,0,0.4);
     }
-
     .btn-secondary {
-      background: var(--bg-card);
-      color: var(--text-primary);
-      border: 1px solid var(--border-subtle);
+      background: var(--bg-card); color: var(--text);
+      border: 1px solid var(--border);
     }
     .btn-secondary:hover {
-      border-color: var(--border-hover);
-      background: #1c1c28;
+      border-color: var(--border-hover); background: var(--bg-card-hover);
       transform: translateY(-1px);
     }
-
     .btn-ghost {
-      background: transparent;
-      color: var(--text-secondary);
-      border: 1px solid var(--border-subtle);
-      padding: 8px 16px;
-      font-size: 0.85rem;
+      background: transparent; color: var(--text-2);
+      border: 1px solid var(--border); padding: 8px 16px; font-size: 0.82rem; border-radius: 10px;
     }
-    .btn-ghost:hover {
-      color: var(--text-primary);
-      border-color: var(--border-hover);
-    }
-
-    .badge {
-      display: inline-block;
-      vertical-align: middle;
-    }
-
-    .section {
-      padding: 96px 0;
-    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--border-hover); }
 
     .section-label {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 500;
-      color: var(--cyan);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
+      font-family: var(--mono); font-size: 0.72rem; font-weight: 600;
+      color: var(--cyan); text-transform: uppercase; letter-spacing: 0.12em;
       margin-bottom: 12px;
+      display: inline-flex; align-items: center; gap: 8px;
     }
-
+    .section-label::before {
+      content: ''; display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan-glow);
+    }
     .section-title {
-      font-size: clamp(1.5rem, 3vw, 2rem);
-      font-weight: 700;
-      line-height: 1.2;
-      margin-bottom: 16px;
+      font-size: clamp(1.6rem, 3.2vw, 2.2rem); font-weight: 700;
+      line-height: 1.15; margin-bottom: 14px; letter-spacing: -0.02em;
     }
-
-    .section-subtitle {
-      color: var(--text-secondary);
-      font-size: 1.05rem;
-      max-width: 540px;
-      line-height: 1.6;
+    .section-desc {
+      color: var(--text-2); font-size: 1rem; max-width: 520px; line-height: 1.6;
     }
 
     /* ─── Nav ─── */
     nav {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
-      background: rgba(9, 9, 15, 0.8);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border-subtle);
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(9,9,15,0.75);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
     }
-
-    .nav-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 56px;
-    }
-
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 56px; }
     .nav-logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-family: var(--font-mono);
-      font-weight: 700;
-      font-size: 0.95rem;
-      color: var(--text-primary);
-      text-decoration: none;
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--mono); font-weight: 700; font-size: 0.9rem;
+      color: var(--text); text-decoration: none;
     }
-    .nav-logo:hover { color: var(--text-primary); }
-
-    .nav-logo svg {
-      flex-shrink: 0;
-    }
-
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 32px;
-      list-style: none;
-    }
-
-    .nav-links a {
-      color: var(--text-secondary);
-      font-size: 0.875rem;
-      font-weight: 500;
-      transition: color 0.2s;
-    }
-    .nav-links a:hover { color: var(--text-primary); }
-
-    .nav-cta {
-      font-size: 0.8rem !important;
-      padding: 6px 14px !important;
-      border-radius: 6px;
-    }
+    .nav-logo:hover { color: var(--text); }
+    .nav-logo img { border-radius: 6px; }
+    .nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+    .nav-links a { color: var(--text-2); font-size: 0.85rem; font-weight: 500; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta { font-size: 0.78rem !important; padding: 7px 16px !important; border-radius: 8px; }
 
     /* ─── Hero ─── */
     .hero {
-      position: relative;
-      padding: 160px 0 80px;
-      text-align: center;
-      overflow: hidden;
+      position: relative; padding: 160px 0 60px; text-align: center;
     }
-
-    .hero-glow {
-      position: absolute;
-      top: 40%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 600px;
-      height: 400px;
-      background: radial-gradient(ellipse, var(--cyan-glow) 0%, transparent 70%);
-      filter: blur(80px);
-      pointer-events: none;
-      animation: glow-pulse 6s ease-in-out infinite;
-    }
-
-    @keyframes glow-pulse {
-      0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
-      50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.1); }
-    }
-
-    .hero-content {
-      position: relative;
-      z-index: 1;
-    }
-
+    .hero-content { position: relative; z-index: 1; }
     .hero h1 {
-      font-size: clamp(2.2rem, 5.5vw, 3.5rem);
-      font-weight: 800;
-      line-height: 1.1;
-      letter-spacing: -0.03em;
-      margin-bottom: 16px;
-      background: linear-gradient(135deg, var(--text-primary) 40%, var(--cyan) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      font-size: clamp(2.4rem, 5.5vw, 3.8rem); font-weight: 800;
+      line-height: 1.08; letter-spacing: -0.035em; margin-bottom: 18px;
+    }
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--cyan) 0%, var(--green) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
+    .hero-sub {
+      font-size: clamp(0.95rem, 1.8vw, 1.15rem);
+      color: var(--text-2); max-width: 500px; margin: 0 auto 36px; line-height: 1.55;
+    }
+    .hero-actions { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: 20px; }
+    .hero-primary { font-size: 1rem; padding: 14px 32px; border-radius: 14px; }
+    .hero-alt { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    .hero-badges { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 10px; }
+    .hero-badges img { height: 22px; }
 
-    .hero-subtitle {
-      font-size: clamp(1rem, 2vw, 1.2rem);
-      color: var(--text-secondary);
-      max-width: 540px;
-      margin: 0 auto 32px;
-      line-height: 1.5;
+    /* ─── Live Stats Strip ─── */
+    .stats-strip {
+      display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;
+      margin-top: 48px;
+    }
+    .stat-chip {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 12px 20px;
+      font-family: var(--mono); font-size: 0.82rem;
+    }
+    .stat-ring {
+      width: 36px; height: 36px; position: relative;
+    }
+    .stat-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .stat-ring-bg { fill: none; stroke: var(--border); stroke-width: 3; }
+    .stat-ring-fill { fill: none; stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset 1s ease; }
+    .stat-ring-value {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 0.55rem; font-weight: 700; color: var(--text-2);
+    }
+    .stat-info { display: flex; flex-direction: column; gap: 1px; }
+    .stat-label { font-size: 0.65rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font); }
+    .stat-value { color: var(--text); font-weight: 600; }
+    .stat-value.green { color: var(--green); }
+    .stat-value.cyan { color: var(--cyan); }
+    .stat-live {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.6rem; font-weight: 600; color: var(--green);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .stat-live-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green); animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(6,214,160,0.4); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(6,214,160,0); }
     }
 
-    .hero-actions {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .hero-primary-btn {
-      font-size: 1.05rem;
-      padding: 14px 32px;
-      border-radius: 10px;
-    }
-
-    .hero-secondary-links {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .hero-badges {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 12px;
-      margin-top: 8px;
-    }
-
-    .hero-badges img {
-      height: 22px;
-    }
-
-    /* ─── App Preview ─── */
-    .preview-section {
-      padding: 0 0 96px;
-    }
-
+    /* ─── Preview ─── */
+    .preview-section { padding: 24px 0 100px; }
     .preview-gallery {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      max-width: 960px;
-      margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+      max-width: 900px; margin: 0 auto; perspective: 800px;
     }
-
-    .preview-item {
-      position: relative;
+    .preview-card {
+      position: relative; border-radius: 20px; overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      transition: transform 0.4s ease, box-shadow 0.4s ease;
+      transform-style: preserve-3d;
     }
-
-    .preview-item img {
-      width: 100%;
-      height: auto;
-      border-radius: 12px;
-      border: 1px solid var(--border-subtle);
-      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.03);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    .preview-card:hover {
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px var(--cyan-dim);
     }
-
-    .preview-item img:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 32px 96px rgba(0, 0, 0, 0.6), 0 0 40px var(--cyan-glow);
+    .preview-card img {
+      width: 100%; height: auto; display: block;
+      border-radius: 19px;
     }
-
     .preview-label {
-      text-align: center;
-      margin-top: 12px;
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      color: var(--text-muted);
-    }
-
-    @media (max-width: 640px) {
-      .preview-gallery {
-        grid-template-columns: 1fr;
-        gap: 20px;
-      }
+      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+      background: rgba(14,14,22,0.85); backdrop-filter: blur(8px);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 6px 16px; font-family: var(--mono); font-size: 0.72rem;
+      color: var(--text-2); white-space: nowrap;
     }
 
     /* ─── Features ─── */
     .features-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-top: 48px;
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 14px; margin-top: 48px;
     }
-
     .feature-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 28px 24px;
-      transition: all 0.25s ease;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 18px; padding: 26px 22px;
+      transition: all 0.3s ease;
+      transform-style: preserve-3d; perspective: 600px;
+      position: relative; overflow: hidden;
+    }
+    .feature-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px; background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      opacity: 0; transition: opacity 0.3s;
     }
     .feature-card:hover {
-      border-color: rgba(0, 180, 216, 0.2);
-      box-shadow: 0 0 24px var(--cyan-glow);
-      transform: translateY(-2px);
+      border-color: rgba(0,180,216,0.15);
+      background: var(--bg-card-hover);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.3), 0 0 30px var(--cyan-dim);
     }
+    .feature-card:hover::before { opacity: 1; }
 
-    .feature-icon {
-      width: 40px;
-      height: 40px;
-      margin-bottom: 16px;
-      color: var(--cyan);
+    .feature-ring {
+      width: 48px; height: 48px; position: relative; margin-bottom: 16px;
     }
-
-    .feature-title {
-      font-size: 1rem;
-      font-weight: 600;
-      margin-bottom: 8px;
+    .feature-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .feature-ring-bg { fill: none; stroke: var(--border); stroke-width: 2.5; }
+    .feature-ring-fill { fill: none; stroke-width: 2.5; stroke-linecap: round; }
+    .feature-ring-icon {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     }
-
-    .feature-desc {
-      font-size: 0.875rem;
-      color: var(--text-secondary);
-      line-height: 1.5;
-    }
+    .feature-ring-icon svg { width: 20px; height: 20px; transform: none; }
+    .feature-title { font-size: 0.92rem; font-weight: 600; margin-bottom: 6px; }
+    .feature-desc { font-size: 0.8rem; color: var(--text-2); line-height: 1.5; }
 
     /* ─── How It Works ─── */
-    .steps {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 32px;
-      margin-top: 48px;
-      position: relative;
+    .how-section { background: var(--bg-surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 48px; }
+    .step-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 18px; padding: 28px 22px; text-align: center;
+      position: relative; transition: all 0.3s ease;
     }
-
-    .steps::before {
-      content: '';
-      position: absolute;
-      top: 32px;
-      left: calc(16.67% + 32px);
-      right: calc(16.67% + 32px);
-      height: 1px;
-      background: linear-gradient(to right, var(--cyan), var(--border-subtle), var(--cyan));
+    .step-card:hover {
+      transform: translateY(-3px); border-color: var(--border-hover);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
     }
-
-    .step {
-      text-align: center;
-      position: relative;
+    .step-num {
+      width: 44px; height: 44px; border-radius: 14px;
+      background: var(--cyan-dim); border: 1px solid rgba(0,180,216,0.15);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 1rem; font-weight: 700;
+      color: var(--cyan); margin-bottom: 16px;
     }
-
-    .step-number {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-family: var(--font-mono);
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--cyan);
-      margin-bottom: 20px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .step-title {
-      font-size: 1.05rem;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .step-desc {
-      font-size: 0.875rem;
-      color: var(--text-secondary);
-      line-height: 1.5;
+    .step-title { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+    .step-desc { font-size: 0.85rem; color: var(--text-2); line-height: 1.5; }
+    .step-connector {
+      position: absolute; top: 44px; right: -14px;
+      color: var(--text-3); font-size: 1.2rem; z-index: 2;
     }
 
     /* ─── Supported Tools ─── */
-    .tools-strip {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 12px;
-      margin-top: 40px;
+    .tools-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 40px; }
+    .tool-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 10px 20px;
+      font-family: var(--mono); font-size: 0.82rem; color: var(--text-2);
+      transition: all 0.25s;
     }
+    .tool-pill:hover {
+      border-color: var(--border-hover); color: var(--text);
+      transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+    .tool-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .tool-pill.more { border-style: dashed; color: var(--text-3); }
 
-    .tool-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 18px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 999px;
-      font-family: var(--font-mono);
-      font-size: 0.82rem;
-      color: var(--text-secondary);
-      transition: all 0.2s;
+    /* ─── Trust ─── */
+    .trust-section { background: var(--bg-surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .trust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 40px; align-items: start; }
+    .trust-list { list-style: none; display: flex; flex-direction: column; gap: 16px; }
+    .trust-item {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 0.9rem; color: var(--text-2);
+      padding: 12px 16px; background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: 14px;
+      transition: border-color 0.2s;
     }
-    .tool-chip:hover {
-      border-color: var(--border-hover);
-      color: var(--text-primary);
-    }
-    .tool-chip .chip-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--cyan);
-    }
-    .tool-chip.more {
-      border-style: dashed;
-      color: var(--text-muted);
-    }
-
-    /* ─── Open Source ─── */
-    .trust-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 48px;
-      margin-top: 40px;
-      align-items: start;
-    }
-
-    .trust-points {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .trust-point {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      font-size: 0.925rem;
-      color: var(--text-secondary);
-    }
-
-    .trust-check {
-      flex-shrink: 0;
-      width: 20px;
-      height: 20px;
-      color: var(--green);
-      margin-top: 2px;
-    }
-
+    .trust-item:hover { border-color: var(--border-hover); }
+    .trust-check { flex-shrink: 0; width: 22px; height: 22px; color: var(--green); }
     .code-block {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 8px;
-      overflow: hidden;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
     }
-
     .code-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      background: rgba(0, 0, 0, 0.2);
-      border-bottom: 1px solid var(--border-subtle);
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: var(--text-muted);
+      display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+      background: rgba(0,0,0,0.25); border-bottom: 1px solid var(--border);
+      font-family: var(--mono); font-size: 0.7rem; color: var(--text-3);
     }
-
     .code-body {
-      padding: 16px;
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      line-height: 1.7;
-      color: var(--text-secondary);
-      overflow-x: auto;
+      padding: 16px; font-family: var(--mono); font-size: 0.78rem;
+      line-height: 1.7; color: var(--text-2); overflow-x: auto;
     }
-
     .code-body .kw { color: #c792ea; }
     .code-body .ty { color: var(--cyan); }
     .code-body .st { color: var(--green); }
-    .code-body .cm { color: var(--text-muted); font-style: italic; }
+    .code-body .cm { color: var(--text-3); font-style: italic; }
     .code-body .attr { color: #f78c6c; }
 
     /* ─── Download ─── */
-    .download-section {
-      background: var(--bg-surface);
-      border-top: 1px solid var(--border-subtle);
-      border-bottom: 1px solid var(--border-subtle);
-    }
-
+    .download-section { background: var(--bg-surface); border-top: 1px solid var(--border); }
     .download-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin-top: 40px;
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      gap: 12px; margin-top: 40px;
     }
-
-    .download-card {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 24px 16px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      text-decoration: none;
-      transition: all 0.2s ease;
+    .dl-card {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 24px 12px; background: var(--bg-card);
+      border: 1px solid var(--border); border-radius: 18px;
+      text-decoration: none; transition: all 0.3s ease;
     }
-    .download-card:hover {
-      border-color: rgba(0, 180, 216, 0.25);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    .dl-card:hover {
+      border-color: rgba(0,180,216,0.25); transform: translateY(-3px);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.3), 0 0 24px var(--cyan-dim);
     }
-
-    .download-card svg {
-      color: var(--text-secondary);
-      margin-bottom: 4px;
-    }
-    .download-card:hover svg { color: var(--cyan); }
-
-    .download-os {
-      font-weight: 600;
-      font-size: 0.95rem;
-      color: var(--text-primary);
-    }
-
-    .download-format {
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-
-    .download-source {
-      text-align: center;
-      margin-top: 24px;
-      color: var(--text-muted);
-      font-size: 0.875rem;
-    }
-
-    .download-badge {
-      display: flex;
-      justify-content: center;
-      margin-top: 16px;
-    }
+    .dl-card svg { color: var(--text-3); transition: color 0.2s; }
+    .dl-card:hover svg { color: var(--cyan); }
+    .dl-os { font-weight: 600; font-size: 0.88rem; color: var(--text); }
+    .dl-fmt { font-family: var(--mono); font-size: 0.7rem; color: var(--text-3); }
+    .dl-source { text-align: center; margin-top: 20px; color: var(--text-3); font-size: 0.85rem; }
+    .dl-badge { display: flex; justify-content: center; margin-top: 14px; }
 
     /* ─── Footer ─── */
-    footer {
-      padding: 40px 0;
-      border-top: 1px solid var(--border-subtle);
-    }
-
-    .footer-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-
-    .footer-left {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-    }
-    .footer-left a {
-      color: var(--text-secondary);
-    }
-    .footer-left a:hover { color: var(--text-primary); }
-
-    .footer-right {
-      display: flex;
-      align-items: center;
-      gap: 24px;
-    }
-
-    .footer-right a {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-    }
-    .footer-right a:hover { color: var(--text-secondary); }
-
+    footer { padding: 36px 0; border-top: 1px solid var(--border); }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+    .footer-left { font-size: 0.82rem; color: var(--text-3); }
+    .footer-left a { color: var(--text-2); }
+    .footer-left a:hover { color: var(--text); }
+    .footer-right { display: flex; align-items: center; gap: 24px; }
+    .footer-right a { font-size: 0.82rem; color: var(--text-3); }
+    .footer-right a:hover { color: var(--text-2); }
     .footer-disclaimer {
-      width: 100%;
-      text-align: center;
-      margin-top: 16px;
-      font-size: 0.72rem;
-      color: var(--text-muted);
+      width: 100%; text-align: center; margin-top: 14px;
+      font-size: 0.68rem; color: var(--text-3);
     }
 
     /* ─── Responsive ─── */
+    @media (max-width: 900px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .download-grid { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 768px) {
       .section { padding: 64px 0; }
-      .hero { padding: 120px 0 48px; }
-
+      .hero { padding: 120px 0 40px; }
       .nav-links .nav-link-item { display: none; }
-
-      .features-grid {
-        grid-template-columns: 1fr;
-        gap: 12px;
-      }
-
-      .steps {
-        grid-template-columns: 1fr;
-        gap: 40px;
-      }
-      .steps::before { display: none; }
-
-      .trust-grid {
-        grid-template-columns: 1fr;
-        gap: 32px;
-      }
-
-      .download-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .footer-inner {
-        flex-direction: column;
-        text-align: center;
-      }
+      .features-grid { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr; }
+      .step-connector { display: none; }
+      .trust-grid { grid-template-columns: 1fr; }
+      .download-grid { grid-template-columns: 1fr; }
+      .preview-gallery { grid-template-columns: 1fr; }
+      .stats-strip { flex-direction: column; align-items: center; }
+      .footer-inner { flex-direction: column; text-align: center; }
     }
-
     @media (max-width: 480px) {
       .hero h1 { font-size: 1.8rem; }
-      .hero-secondary-links { flex-direction: column; align-items: center; }
-    }
-
-    @media (min-width: 769px) and (max-width: 1024px) {
-      .features-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-      .download-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
+      .hero-alt { flex-direction: column; align-items: center; }
     }
   </style>
 </head>
 <body>
 
-  <!-- ─── Navigation ─── -->
+  <!-- 3D Reactive Background -->
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
+
+  <!-- ─── Nav ─── -->
   <nav aria-label="Main navigation">
     <div class="container nav-inner">
       <a href="#" class="nav-logo" aria-label="OpenTokenMonitor Home">
-        <img src="images/icon.png" alt="" width="24" height="24" style="border-radius:5px;" aria-hidden="true">
+        <img src="images/icon.png" alt="" width="24" height="24" aria-hidden="true">
         OpenTokenMonitor
       </a>
       <ul class="nav-links">
@@ -718,43 +428,85 @@
 
   <!-- ─── Hero ─── -->
   <header class="hero">
-    <div class="hero-glow" aria-hidden="true"></div>
     <div class="container hero-content">
-      <h1>Track Every Token.<br>Own Every Dollar.</h1>
-      <p class="hero-subtitle">
+      <h1>Track Every Token.<br><span class="gradient">Own Every Dollar.</span></h1>
+      <p class="hero-sub">
         Open-source desktop app that monitors token usage and costs across your AI CLI tools — locally, privately, in real-time.
       </p>
       <div class="hero-actions">
-        <a id="hero-download-btn" href="#download" class="btn btn-primary hero-primary-btn">
+        <a id="hero-download-btn" href="#download" class="btn btn-primary hero-primary">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span id="hero-download-text">Download for Your OS</span>
         </a>
-        <div class="hero-secondary-links" id="hero-alt-links">
+        <div class="hero-alt" id="hero-alt-links">
           <a href="#download" class="btn btn-ghost">See all platforms</a>
         </div>
       </div>
       <div class="hero-badges">
         <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest" aria-label="Latest release version">
-          <img src="https://img.shields.io/github/v/release/Hitheshkaranth/OpenTokenMonitor?style=flat-square&color=00b4d8" alt="Latest release version" class="badge" loading="lazy">
+          <img src="https://img.shields.io/github/v/release/Hitheshkaranth/OpenTokenMonitor?style=flat-square&color=00b4d8" alt="Latest release version" loading="lazy">
         </a>
         <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor" aria-label="GitHub stars">
-          <img src="https://img.shields.io/github/stars/Hitheshkaranth/OpenTokenMonitor?style=flat-square&color=8892a4" alt="GitHub stars" class="badge" loading="lazy">
+          <img src="https://img.shields.io/github/stars/Hitheshkaranth/OpenTokenMonitor?style=flat-square&color=8892a4" alt="GitHub stars" loading="lazy">
         </a>
+      </div>
+
+      <!-- Live Stats Strip (app-style) -->
+      <div class="stats-strip">
+        <div class="stat-chip">
+          <div class="stat-ring">
+            <svg viewBox="0 0 36 36">
+              <circle class="stat-ring-bg" cx="18" cy="18" r="15.5"/>
+              <circle class="stat-ring-fill" cx="18" cy="18" r="15.5" stroke="var(--cyan)" stroke-dasharray="97.4" stroke-dashoffset="24"/>
+            </svg>
+            <span class="stat-ring-value">75%</span>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Tokens Today</span>
+            <span class="stat-value cyan">142,837</span>
+          </div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-ring">
+            <svg viewBox="0 0 36 36">
+              <circle class="stat-ring-bg" cx="18" cy="18" r="15.5"/>
+              <circle class="stat-ring-fill" cx="18" cy="18" r="15.5" stroke="var(--green)" stroke-dasharray="97.4" stroke-dashoffset="58"/>
+            </svg>
+            <span class="stat-ring-value">40%</span>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Cost Today</span>
+            <span class="stat-value green">$4.28</span>
+          </div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-ring">
+            <svg viewBox="0 0 36 36">
+              <circle class="stat-ring-bg" cx="18" cy="18" r="15.5"/>
+              <circle class="stat-ring-fill" cx="18" cy="18" r="15.5" stroke="var(--green)" stroke-dasharray="97.4" stroke-dashoffset="0"/>
+            </svg>
+            <span class="stat-ring-value"><span class="stat-live"><span class="stat-live-dot"></span></span></span>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Status</span>
+            <span class="stat-live"><span class="stat-live-dot"></span> LIVE</span>
+          </div>
+        </div>
       </div>
     </div>
   </header>
 
-  <!-- ─── Visual Preview ─── -->
+  <!-- ─── App Preview ─── -->
   <section class="preview-section" aria-label="App preview">
     <div class="container">
       <div class="preview-gallery">
-        <div class="preview-item">
+        <div class="preview-card" data-tilt>
           <img src="images/widget-0.3.1.png" alt="OpenTokenMonitor widget view showing real-time token usage and costs for Claude, Codex, and Gemini" loading="lazy">
-          <p class="preview-label">Widget View</p>
+          <span class="preview-label">Widget View</span>
         </div>
-        <div class="preview-item">
-          <img src="images/overview-0.3.1.png" alt="OpenTokenMonitor dashboard showing detailed provider analytics with session history and cost breakdowns" loading="lazy">
-          <p class="preview-label">Dashboard</p>
+        <div class="preview-card" data-tilt>
+          <img src="images/overview-0.3.1.png" alt="OpenTokenMonitor dashboard with provider analytics, session history, and cost breakdowns" loading="lazy">
+          <span class="preview-label">Dashboard</span>
         </div>
       </div>
     </div>
@@ -764,95 +516,78 @@
   <section class="section" id="features">
     <div class="container">
       <div class="section-label">Features</div>
-      <h2 class="section-title">Everything you need to understand your AI spend</h2>
-      <p class="section-subtitle">Lightweight, private, and built for developers who care about what their tools actually cost.</p>
+      <h2 class="section-title">Everything you need to<br>understand your AI spend</h2>
+      <p class="section-desc">Lightweight, private, and built for developers who care about what their tools actually cost.</p>
 
       <div class="features-grid">
-        <!-- Real-Time Tracking -->
         <div class="feature-card">
-          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <polyline points="4 28 10 22 16 25 22 15 28 18 34 10" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="34" cy="10" r="3" fill="currentColor" opacity="0.3"/>
-          </svg>
+          <div class="feature-ring">
+            <svg viewBox="0 0 48 48"><circle class="feature-ring-bg" cx="24" cy="24" r="20"/><circle class="feature-ring-fill" cx="24" cy="24" r="20" stroke="var(--cyan)" stroke-dasharray="125.6" stroke-dashoffset="31"/></svg>
+            <span class="feature-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round"><polyline points="4 18 8 14 12 16 16 9 20 6"/><circle cx="20" cy="6" r="2" fill="var(--cyan)" stroke="none" opacity="0.5"/></svg></span>
+          </div>
           <h3 class="feature-title">Real-Time Tracking</h3>
           <p class="feature-desc">Watch input/output tokens and cost estimates update live as your AI tools work.</p>
         </div>
 
-        <!-- Multi-Tool Support -->
         <div class="feature-card">
-          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <rect x="4" y="4" width="14" height="14" rx="3"/>
-            <rect x="22" y="4" width="14" height="14" rx="3"/>
-            <rect x="4" y="22" width="14" height="14" rx="3"/>
-            <rect x="22" y="22" width="14" height="14" rx="3" stroke-dasharray="3 2"/>
-          </svg>
+          <div class="feature-ring">
+            <svg viewBox="0 0 48 48"><circle class="feature-ring-bg" cx="24" cy="24" r="20"/><circle class="feature-ring-fill" cx="24" cy="24" r="20" stroke="var(--green)" stroke-dasharray="125.6" stroke-dashoffset="44"/></svg>
+            <span class="feature-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2" stroke-dasharray="3 2"/></svg></span>
+          </div>
           <h3 class="feature-title">Multi-Tool Support</h3>
-          <p class="feature-desc">Claude Code, Copilot, Cursor, Aider, Codex CLI — track them all from one dashboard.</p>
+          <p class="feature-desc">Claude Code, Codex CLI, Gemini CLI — all from one dashboard.</p>
         </div>
 
-        <!-- Cost Analytics -->
         <div class="feature-card">
-          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <circle cx="20" cy="20" r="16"/>
-            <text x="20" y="26" text-anchor="middle" font-size="18" font-weight="600" fill="currentColor">$</text>
-          </svg>
+          <div class="feature-ring">
+            <svg viewBox="0 0 48 48"><circle class="feature-ring-bg" cx="24" cy="24" r="20"/><circle class="feature-ring-fill" cx="24" cy="24" r="20" stroke="var(--amber)" stroke-dasharray="125.6" stroke-dashoffset="50"/></svg>
+            <span class="feature-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><circle cx="12" cy="12" r="10"/><text x="12" y="16" text-anchor="middle" font-size="12" font-weight="600" fill="var(--amber)" stroke="none">$</text></svg></span>
+          </div>
           <h3 class="feature-title">Cost Analytics</h3>
           <p class="feature-desc">Per-session breakdowns, daily trends, and monthly projections mapped to provider pricing.</p>
         </div>
 
-        <!-- 100% Private -->
         <div class="feature-card">
-          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <rect x="8" y="18" width="24" height="18" rx="3"/>
-            <path d="M13 18v-5a7 7 0 0 1 14 0v5"/>
-            <circle cx="20" cy="28" r="2" fill="currentColor"/>
-          </svg>
+          <div class="feature-ring">
+            <svg viewBox="0 0 48 48"><circle class="feature-ring-bg" cx="24" cy="24" r="20"/><circle class="feature-ring-fill" cx="24" cy="24" r="20" stroke="var(--green)" stroke-dasharray="125.6" stroke-dashoffset="0"/></svg>
+            <span class="feature-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="11" rx="2"/><path d="M8 11v-3a4 4 0 0 1 8 0v3"/><circle cx="12" cy="17" r="1.5" fill="var(--green)" stroke="none"/></svg></span>
+          </div>
           <h3 class="feature-title">100% Private</h3>
           <p class="feature-desc">All data stays on your machine in SQLite. Zero telemetry, zero cloud, zero tracking.</p>
         </div>
 
-        <!-- Plugin Architecture -->
         <div class="feature-card">
-          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <path d="M16 4v6a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V4" stroke-linecap="round"/>
-            <rect x="8" y="12" width="24" height="20" rx="3"/>
-            <line x1="16" y1="20" x2="16" y2="26" stroke-linecap="round"/>
-            <line x1="24" y1="20" x2="24" y2="26" stroke-linecap="round"/>
-          </svg>
+          <div class="feature-ring">
+            <svg viewBox="0 0 48 48"><circle class="feature-ring-bg" cx="24" cy="24" r="20"/><circle class="feature-ring-fill" cx="24" cy="24" r="20" stroke="var(--cyan)" stroke-dasharray="125.6" stroke-dashoffset="63"/></svg>
+            <span class="feature-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></span>
+          </div>
           <h3 class="feature-title">Plugin Architecture</h3>
           <p class="feature-desc">Extensible parsers for any AI CLI tool. Add support for new tools with minimal code.</p>
         </div>
 
-        <!-- System Tray -->
         <div class="feature-card">
-          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <rect x="4" y="6" width="32" height="22" rx="3"/>
-            <line x1="4" y1="24" x2="36" y2="24"/>
-            <line x1="16" y1="28" x2="24" y2="28" stroke-linecap="round"/>
-            <line x1="20" y1="28" x2="20" y2="34" stroke-linecap="round"/>
-            <line x1="14" y1="34" x2="26" y2="34" stroke-linecap="round"/>
-          </svg>
+          <div class="feature-ring">
+            <svg viewBox="0 0 48 48"><circle class="feature-ring-bg" cx="24" cy="24" r="20"/><circle class="feature-ring-fill" cx="24" cy="24" r="20" stroke="var(--green)" stroke-dasharray="125.6" stroke-dashoffset="75"/></svg>
+            <span class="feature-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="2" y1="14" x2="22" y2="14"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/></svg></span>
+          </div>
           <h3 class="feature-title">System Tray</h3>
           <p class="feature-desc">Runs quietly in the background. Quick-glance stats without switching windows.</p>
         </div>
 
-        <!-- Lightweight -->
         <div class="feature-card">
-          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <path d="M20 4c-4 8-12 12-12 22a12 12 0 0 0 24 0c0-10-8-14-12-22z" stroke-linejoin="round"/>
-            <path d="M20 36v-12" stroke-linecap="round" opacity="0.4"/>
-            <path d="M20 24c-3 3-6 5-6 8" stroke-linecap="round" opacity="0.4"/>
-          </svg>
+          <div class="feature-ring">
+            <svg viewBox="0 0 48 48"><circle class="feature-ring-bg" cx="24" cy="24" r="20"/><circle class="feature-ring-fill" cx="24" cy="24" r="20" stroke="var(--cyan)" stroke-dasharray="125.6" stroke-dashoffset="95"/></svg>
+            <span class="feature-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 17c0-4-8-12-8-14s-8 10-8 14a8 8 0 0 0 16 0z"/><path d="M12 21v-6" opacity="0.4"/></svg></span>
+          </div>
           <h3 class="feature-title">Lightweight</h3>
           <p class="feature-desc">Rust + Tauri means minimal RAM and CPU footprint. No Electron bloat.</p>
         </div>
 
-        <!-- Session History -->
         <div class="feature-card">
-          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-            <circle cx="20" cy="20" r="16"/>
-            <polyline points="20 10 20 20 28 24" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+          <div class="feature-ring">
+            <svg viewBox="0 0 48 48"><circle class="feature-ring-bg" cx="24" cy="24" r="20"/><circle class="feature-ring-fill" cx="24" cy="24" r="20" stroke="var(--amber)" stroke-dasharray="125.6" stroke-dashoffset="38"/></svg>
+            <span class="feature-ring-icon"><svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+          </div>
           <h3 class="feature-title">Session History</h3>
           <p class="feature-desc">Full session logs with per-interaction token counts and cost breakdowns over time.</p>
         </div>
@@ -861,26 +596,26 @@
   </section>
 
   <!-- ─── How It Works ─── -->
-  <section class="section" id="how-it-works" style="background: var(--bg-surface); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
-    <div class="container">
-      <div style="text-align:center;">
-        <div class="section-label">How It Works</div>
-        <h2 class="section-title" style="margin-left:auto;margin-right:auto;">Three steps. Thirty seconds.</h2>
-      </div>
+  <section class="section how-section" id="how-it-works">
+    <div class="container" style="text-align:center;">
+      <div class="section-label">How It Works</div>
+      <h2 class="section-title">Three steps. Thirty seconds.</h2>
 
       <div class="steps">
-        <div class="step">
-          <div class="step-number">01</div>
+        <div class="step-card">
+          <div class="step-num">01</div>
           <h3 class="step-title">Install</h3>
           <p class="step-desc">Download the binary for your OS. No dependencies, no setup wizards.</p>
+          <span class="step-connector" aria-hidden="true">&#8594;</span>
         </div>
-        <div class="step">
-          <div class="step-number">02</div>
+        <div class="step-card">
+          <div class="step-num">02</div>
           <h3 class="step-title">Configure</h3>
           <p class="step-desc">Point it at your AI tool logs. Claude Code paths are auto-detected.</p>
+          <span class="step-connector" aria-hidden="true">&#8594;</span>
         </div>
-        <div class="step">
-          <div class="step-number">03</div>
+        <div class="step-card">
+          <div class="step-num">03</div>
           <h3 class="step-title">Monitor</h3>
           <p class="step-desc">See tokens and costs in real-time, session by session, tool by tool.</p>
         </div>
@@ -892,47 +627,45 @@
   <section class="section" id="tools">
     <div class="container" style="text-align:center;">
       <div class="section-label">Compatibility</div>
-      <h2 class="section-title" style="margin-left:auto;margin-right:auto;">Works with your AI tools</h2>
+      <h2 class="section-title">Works with your AI tools</h2>
 
-      <div class="tools-strip">
-        <span class="tool-chip"><span class="chip-dot"></span>Claude Code</span>
-        <span class="tool-chip"><span class="chip-dot"></span>GitHub Copilot CLI</span>
-        <span class="tool-chip"><span class="chip-dot"></span>Cursor</span>
-        <span class="tool-chip"><span class="chip-dot"></span>Aider</span>
-        <span class="tool-chip"><span class="chip-dot"></span>OpenAI Codex CLI</span>
-        <span class="tool-chip more">+ more via plugins</span>
+      <div class="tools-grid">
+        <span class="tool-pill"><span class="tool-dot" style="background:var(--green)"></span>Claude Code</span>
+        <span class="tool-pill"><span class="tool-dot" style="background:var(--cyan)"></span>OpenAI Codex CLI</span>
+        <span class="tool-pill"><span class="tool-dot" style="background:var(--amber)"></span>Gemini CLI</span>
+        <span class="tool-pill more"><span class="tool-dot" style="background:var(--text-3)"></span>+ more coming soon</span>
       </div>
     </div>
   </section>
 
-  <!-- ─── Open Source & Trust ─── -->
-  <section class="section" id="open-source" style="background: var(--bg-surface); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
+  <!-- ─── Open Source ─── -->
+  <section class="section trust-section" id="open-source">
     <div class="container">
       <div class="section-label">Open Source</div>
-      <h2 class="section-title">Fully open source. MIT licensed. Audit every line.</h2>
-      <p class="section-subtitle" style="margin-bottom:0;">Built with Rust, Tauri, React, TypeScript, and SQLite. No black boxes.</p>
+      <h2 class="section-title">Fully open source. MIT licensed.<br>Audit every line.</h2>
+      <p class="section-desc" style="margin-bottom:0;">Built with Rust, Tauri, React, TypeScript, and SQLite. No black boxes.</p>
 
       <div class="trust-grid">
         <div>
-          <ul class="trust-points">
-            <li class="trust-point">
-              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              <span>Zero telemetry — no data ever leaves your machine</span>
+          <ul class="trust-list">
+            <li class="trust-item">
+              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              Zero telemetry — no data ever leaves your machine
             </li>
-            <li class="trust-point">
-              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              <span>No cloud services — everything runs locally</span>
+            <li class="trust-item">
+              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              No cloud services — everything runs locally
             </li>
-            <li class="trust-point">
-              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              <span>SQLite on disk — your data in a format you control</span>
+            <li class="trust-item">
+              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              SQLite on disk — your data in a format you control
             </li>
-            <li class="trust-point">
-              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              <span>Rust-safe memory — no buffer overflows, no data leaks</span>
+            <li class="trust-item">
+              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              Rust-safe memory — no buffer overflows, no data leaks
             </li>
           </ul>
-          <div style="margin-top:24px;">
+          <div style="margin-top:20px;">
             <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor" class="btn btn-secondary">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
               View on GitHub
@@ -962,53 +695,41 @@
   <section class="section download-section" id="download">
     <div class="container" style="text-align:center;">
       <div class="section-label">Download</div>
-      <h2 class="section-title" style="margin-left:auto;margin-right:auto;">Get OpenTokenMonitor</h2>
-      <p class="section-subtitle" style="margin-left:auto;margin-right:auto;">Pick your platform. Install in seconds. Start tracking.</p>
+      <h2 class="section-title">Get OpenTokenMonitor</h2>
+      <p class="section-desc" style="margin-left:auto;margin-right:auto;">Pick your platform. Install in seconds. Start tracking.</p>
 
       <div class="download-grid">
-        <!-- Windows -->
-        <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64-setup.msi" class="download-card" data-os="windows">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
-          <span class="download-os">Windows</span>
-          <span class="download-format">.msi — x64</span>
+        <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64-setup.msi" class="dl-card" data-os="windows">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+          <span class="dl-os">Windows</span>
+          <span class="dl-fmt">.msi x64</span>
         </a>
-
-        <!-- macOS Intel -->
-        <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64.dmg" class="download-card" data-os="mac-intel">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-          <span class="download-os">macOS Intel</span>
-          <span class="download-format">.dmg — x64</span>
+        <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64.dmg" class="dl-card" data-os="mac-intel">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <span class="dl-os">macOS Intel</span>
+          <span class="dl-fmt">.dmg x64</span>
         </a>
-
-        <!-- macOS Apple Silicon -->
-        <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_aarch64.dmg" class="download-card" data-os="mac-arm">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-          <span class="download-os">macOS Apple Silicon</span>
-          <span class="download-format">.dmg — aarch64</span>
+        <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_aarch64.dmg" class="dl-card" data-os="mac-arm">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <span class="dl-os">macOS Silicon</span>
+          <span class="dl-fmt">.dmg aarch64</span>
         </a>
-
-        <!-- Linux .deb -->
-        <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_amd64.deb" class="download-card" data-os="linux">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.777.064 1.613-.205 2.118-.78l.04-.036c.564-.039 1.126-.63 1.41-1.363.29-.734.292-1.573.057-2.165-.622-.33-1.4-.8-2.267-1.235a7.015 7.015 0 00-2.044-3.4l-.164-.076a5.09 5.09 0 00-.267-.702c.262-.64.422-1.399.399-2.195-.022-.772-.17-1.575-.535-2.268a4.1 4.1 0 00-.266-.4c.09-.3.158-.605.195-.89.184-1.265-.203-2.523-.828-3.064a2.1 2.1 0 00-.397-.271c-.094-.06-.21-.09-.316-.09z"/></svg>
-          <span class="download-os">Linux</span>
-          <span class="download-format">.deb — amd64</span>
+        <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_amd64.deb" class="dl-card" data-os="linux">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.777.064 1.613-.205 2.118-.78l.04-.036c.564-.039 1.126-.63 1.41-1.363.29-.734.292-1.573.057-2.165-.622-.33-1.4-.8-2.267-1.235a7.015 7.015 0 00-2.044-3.4l-.164-.076a5.09 5.09 0 00-.267-.702c.262-.64.422-1.399.399-2.195-.022-.772-.17-1.575-.535-2.268a4.1 4.1 0 00-.266-.4c.09-.3.158-.605.195-.89.184-1.265-.203-2.523-.828-3.064a2.1 2.1 0 00-.397-.271c-.094-.06-.21-.09-.316-.09z"/></svg>
+          <span class="dl-os">Linux</span>
+          <span class="dl-fmt">.deb amd64</span>
         </a>
-
-        <!-- Linux .AppImage -->
-        <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_amd64.AppImage" class="download-card" data-os="linux">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.777.064 1.613-.205 2.118-.78l.04-.036c.564-.039 1.126-.63 1.41-1.363.29-.734.292-1.573.057-2.165-.622-.33-1.4-.8-2.267-1.235a7.015 7.015 0 00-2.044-3.4l-.164-.076a5.09 5.09 0 00-.267-.702c.262-.64.422-1.399.399-2.195-.022-.772-.17-1.575-.535-2.268a4.1 4.1 0 00-.266-.4c.09-.3.158-.605.195-.89.184-1.265-.203-2.523-.828-3.064a2.1 2.1 0 00-.397-.271c-.094-.06-.21-.09-.316-.09z"/></svg>
-          <span class="download-os">Linux</span>
-          <span class="download-format">.AppImage — amd64</span>
+        <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_amd64.AppImage" class="dl-card" data-os="linux">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.777.064 1.613-.205 2.118-.78l.04-.036c.564-.039 1.126-.63 1.41-1.363.29-.734.292-1.573.057-2.165-.622-.33-1.4-.8-2.267-1.235a7.015 7.015 0 00-2.044-3.4l-.164-.076a5.09 5.09 0 00-.267-.702c.262-.64.422-1.399.399-2.195-.022-.772-.17-1.575-.535-2.268a4.1 4.1 0 00-.266-.4c.09-.3.158-.605.195-.89.184-1.265-.203-2.523-.828-3.064a2.1 2.1 0 00-.397-.271c-.094-.06-.21-.09-.316-.09z"/></svg>
+          <span class="dl-os">Linux</span>
+          <span class="dl-fmt">.AppImage amd64</span>
         </a>
       </div>
 
-      <p class="download-source">
-        Or <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor">build from source</a> on GitHub.
-      </p>
-
-      <div class="download-badge">
+      <p class="dl-source">Or <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor">build from source</a> on GitHub.</p>
+      <div class="dl-badge">
         <a href="https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest" aria-label="Latest release version">
-          <img src="https://img.shields.io/github/v/release/Hitheshkaranth/OpenTokenMonitor?style=flat-square&color=00b4d8" alt="Latest release version" class="badge" loading="lazy">
+          <img src="https://img.shields.io/github/v/release/Hitheshkaranth/OpenTokenMonitor?style=flat-square&color=00b4d8" alt="Latest release version" loading="lazy">
         </a>
       </div>
     </div>
@@ -1034,78 +755,213 @@
   </footer>
 
   <script>
-    (function() {
-      // ─── OS Detection ───
-      var ua = navigator.userAgent || '';
-      var platform = navigator.platform || '';
-      var os = 'unknown';
+  (function() {
+    // ─── 3D Reactive Particle Background ───
+    var canvas = document.getElementById('bg-canvas');
+    var ctx = canvas.getContext('2d');
+    var mouse = { x: -1000, y: -1000 };
+    var particles = [];
+    var particleCount = 80;
+    var connectionDist = 140;
+    var mouseRadius = 200;
+    var w, h, dpr;
 
-      if (/Win/i.test(platform) || /Windows/i.test(ua)) {
-        os = 'windows';
-      } else if (/Mac/i.test(platform) || /Macintosh/i.test(ua)) {
-        // Attempt Apple Silicon detection
-        // navigator.userAgent on Safari/macOS doesn't always distinguish,
-        // but we can try via GPU or known patterns
-        if (/ARM/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
-          os = 'mac-arm';
-        } else {
-          os = 'mac-intel';
-        }
-      } else if (/Linux/i.test(platform) || /Linux/i.test(ua)) {
-        os = 'linux';
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function Particle() {
+      this.x = Math.random() * w;
+      this.y = Math.random() * h;
+      this.z = Math.random() * 0.5 + 0.5; // depth layer
+      this.vx = (Math.random() - 0.5) * 0.3;
+      this.vy = (Math.random() - 0.5) * 0.3;
+      this.r = Math.random() * 1.5 + 0.5;
+    }
+
+    function init() {
+      resize();
+      particles = [];
+      for (var i = 0; i < particleCount; i++) {
+        particles.push(new Particle());
       }
+    }
 
-      var downloads = {
-        'windows': {
-          url: 'https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64-setup.msi',
-          label: 'Download for Windows',
-          format: '.msi'
-        },
-        'mac-intel': {
-          url: 'https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64.dmg',
-          label: 'Download for macOS (Intel)',
-          format: '.dmg'
-        },
-        'mac-arm': {
-          url: 'https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_aarch64.dmg',
-          label: 'Download for macOS (Apple Silicon)',
-          format: '.dmg'
-        },
-        'linux': {
-          url: 'https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_amd64.deb',
-          label: 'Download for Linux',
-          format: '.deb'
+    function animate() {
+      ctx.clearRect(0, 0, w, h);
+
+      for (var i = 0; i < particles.length; i++) {
+        var p = particles[i];
+
+        // Mouse repulsion with depth
+        var dx = p.x - mouse.x;
+        var dy = p.y - mouse.y;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < mouseRadius) {
+          var force = (1 - dist / mouseRadius) * 0.8 * p.z;
+          p.vx += (dx / dist) * force;
+          p.vy += (dy / dist) * force;
         }
-      };
 
-      var heroBtn = document.getElementById('hero-download-btn');
-      var heroText = document.getElementById('hero-download-text');
-      var altLinks = document.getElementById('hero-alt-links');
+        // Damping
+        p.vx *= 0.98;
+        p.vy *= 0.98;
 
-      if (os !== 'unknown' && downloads[os]) {
-        heroBtn.href = downloads[os].url;
-        heroText.textContent = downloads[os].label;
+        // Base drift
+        p.x += p.vx + (Math.random() - 0.5) * 0.05;
+        p.y += p.vy + (Math.random() - 0.5) * 0.05;
 
-        // Build alt links for other platforms
-        var alts = [];
-        var others = Object.keys(downloads);
-        for (var i = 0; i < others.length; i++) {
-          if (others[i] !== os) {
-            alts.push('<a href="' + downloads[others[i]].url + '" class="btn btn-ghost">' + downloads[others[i]].label.replace('Download for ', '') + '</a>');
+        // Wrap
+        if (p.x < -20) p.x = w + 20;
+        if (p.x > w + 20) p.x = -20;
+        if (p.y < -20) p.y = h + 20;
+        if (p.y > h + 20) p.y = -20;
+
+        // Draw particle
+        var alpha = p.z * 0.4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * p.z, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 180, 216, ' + alpha + ')';
+        ctx.fill();
+
+        // Connections
+        for (var j = i + 1; j < particles.length; j++) {
+          var p2 = particles[j];
+          var ddx = p.x - p2.x;
+          var ddy = p.y - p2.y;
+          var d = Math.sqrt(ddx * ddx + ddy * ddy);
+          var connDist = connectionDist * ((p.z + p2.z) / 2);
+          if (d < connDist) {
+            var lineAlpha = (1 - d / connDist) * 0.12 * ((p.z + p2.z) / 2);
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = 'rgba(0, 180, 216, ' + lineAlpha + ')';
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
           }
         }
-        altLinks.innerHTML = alts.join('') + '<a href="#download" class="btn btn-ghost">All platforms</a>';
       }
 
-      // ─── Highlight matching download card ───
-      var cards = document.querySelectorAll('.download-card[data-os]');
-      for (var j = 0; j < cards.length; j++) {
-        if (cards[j].getAttribute('data-os') === os) {
-          cards[j].style.borderColor = 'rgba(0, 180, 216, 0.35)';
-          cards[j].style.boxShadow = '0 0 20px rgba(0, 180, 216, 0.1)';
+      requestAnimationFrame(animate);
+    }
+
+    document.addEventListener('mousemove', function(e) {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    });
+
+    document.addEventListener('mouseleave', function() {
+      mouse.x = -1000;
+      mouse.y = -1000;
+    });
+
+    window.addEventListener('resize', function() {
+      resize();
+    });
+
+    init();
+    animate();
+
+    // ─── 3D Tilt on Preview Cards ───
+    var tiltCards = document.querySelectorAll('[data-tilt]');
+    for (var t = 0; t < tiltCards.length; t++) {
+      (function(card) {
+        card.addEventListener('mousemove', function(e) {
+          var rect = card.getBoundingClientRect();
+          var x = e.clientX - rect.left;
+          var y = e.clientY - rect.top;
+          var cx = rect.width / 2;
+          var cy = rect.height / 2;
+          var rotateX = ((y - cy) / cy) * -8;
+          var rotateY = ((x - cx) / cx) * 8;
+          card.style.transform = 'perspective(800px) rotateX(' + rotateX + 'deg) rotateY(' + rotateY + 'deg) scale(1.02)';
+        });
+        card.addEventListener('mouseleave', function() {
+          card.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) scale(1)';
+        });
+      })(tiltCards[t]);
+    }
+
+    // ─── OS Detection ───
+    var ua = navigator.userAgent || '';
+    var platform = navigator.platform || '';
+    var os = 'unknown';
+
+    if (/Win/i.test(platform) || /Windows/i.test(ua)) {
+      os = 'windows';
+    } else if (/Mac/i.test(platform) || /Macintosh/i.test(ua)) {
+      if (/ARM/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+        os = 'mac-arm';
+      } else {
+        os = 'mac-intel';
+      }
+    } else if (/Linux/i.test(platform) || /Linux/i.test(ua)) {
+      os = 'linux';
+    }
+
+    var downloads = {
+      'windows': { url: 'https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64-setup.msi', label: 'Download for Windows' },
+      'mac-intel': { url: 'https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64.dmg', label: 'Download for macOS (Intel)' },
+      'mac-arm': { url: 'https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_aarch64.dmg', label: 'Download for macOS (Apple Silicon)' },
+      'linux': { url: 'https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_amd64.deb', label: 'Download for Linux' }
+    };
+
+    var heroBtn = document.getElementById('hero-download-btn');
+    var heroText = document.getElementById('hero-download-text');
+    var altLinks = document.getElementById('hero-alt-links');
+
+    if (os !== 'unknown' && downloads[os]) {
+      heroBtn.href = downloads[os].url;
+      heroText.textContent = downloads[os].label;
+
+      var alts = [];
+      var others = Object.keys(downloads);
+      for (var i = 0; i < others.length; i++) {
+        if (others[i] !== os) {
+          alts.push('<a href="' + downloads[others[i]].url + '" class="btn btn-ghost">' + downloads[others[i]].label.replace('Download for ', '') + '</a>');
         }
       }
-    })();
+      altLinks.innerHTML = alts.join('') + '<a href="#download" class="btn btn-ghost">All platforms</a>';
+    }
+
+    // Highlight matching download card
+    var cards = document.querySelectorAll('.dl-card[data-os]');
+    for (var j = 0; j < cards.length; j++) {
+      if (cards[j].getAttribute('data-os') === os) {
+        cards[j].style.borderColor = 'rgba(0,180,216,0.3)';
+        cards[j].style.boxShadow = '0 0 24px rgba(0,180,216,0.1)';
+      }
+    }
+
+    // ─── Animate ring fills on scroll ───
+    var observed = false;
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting && !observed) {
+          observed = true;
+          var rings = document.querySelectorAll('.stat-ring-fill');
+          rings.forEach(function(ring) {
+            var offset = ring.getAttribute('stroke-dashoffset');
+            ring.style.strokeDashoffset = '97.4';
+            setTimeout(function() {
+              ring.style.strokeDashoffset = offset;
+            }, 100);
+          });
+        }
+      });
+    }, { threshold: 0.5 });
+    var statsStrip = document.querySelector('.stats-strip');
+    if (statsStrip) observer.observe(statsStrip);
+
+  })();
   </script>
 
 </body>

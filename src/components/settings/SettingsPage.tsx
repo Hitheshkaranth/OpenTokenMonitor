@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Monitor, Palette, Power, RefreshCw, Server } from 'lucide-react';
-import GlassPanel from '@/components/glass/GlassPanel';
 import GlassToggle from '@/components/glass/GlassToggle';
 import GlassInput from '@/components/glass/GlassInput';
 import GlassButton from '@/components/glass/GlassButton';
@@ -25,10 +24,10 @@ const placeholders: Record<ProviderId, string> = {
   gemini: 'Gemini API key',
 };
 
-const providerTint: Record<ProviderId, 'claude' | 'codex' | 'gemini'> = {
-  claude: 'claude',
-  codex: 'codex',
-  gemini: 'gemini',
+const providerAccents: Record<ProviderId, string> = {
+  claude: '217 119 87',
+  codex: '16 163 127',
+  gemini: '66 133 244',
 };
 
 const themeOptions = [
@@ -38,12 +37,12 @@ const themeOptions = [
 ] as const;
 
 const cadenceOptions: { value: RefreshCadence; label: string; note: string; badge: string; bars: number[] }[] = [
-  { value: 'manual', label: 'Manual', note: 'Refresh only on demand', badge: 'Hold', bars: [8, 14, 10, 6] },
-  { value: 'every30s', label: '30s', note: 'Fastest live polling', badge: 'Rapid', bars: [28, 38, 30, 20] },
-  { value: 'every1m', label: '1m', note: 'Balanced default cadence', badge: 'Live', bars: [24, 34, 28, 18] },
-  { value: 'every2m', label: '2m', note: 'Reduced background work', badge: 'Balanced', bars: [18, 28, 22, 14] },
-  { value: 'every5m', label: '5m', note: 'Low-touch refresh', badge: 'Light', bars: [12, 18, 14, 10] },
-  { value: 'every15m', label: '15m', note: 'Minimal polling', badge: 'Quiet', bars: [8, 12, 9, 6] },
+  { value: 'manual', label: 'Manual', note: 'On demand', badge: 'Hold', bars: [8, 14, 10, 6] },
+  { value: 'every30s', label: '30s', note: 'Fastest', badge: 'Rapid', bars: [28, 38, 30, 20] },
+  { value: 'every1m', label: '1m', note: 'Balanced', badge: 'Live', bars: [24, 34, 28, 18] },
+  { value: 'every2m', label: '2m', note: 'Moderate', badge: 'Balanced', bars: [18, 28, 22, 14] },
+  { value: 'every5m', label: '5m', note: 'Low-touch', badge: 'Light', bars: [12, 18, 14, 10] },
+  { value: 'every15m', label: '15m', note: 'Minimal', badge: 'Quiet', bars: [8, 12, 9, 6] },
 ];
 
 type SettingsView = 'settings' | 'about';
@@ -90,41 +89,12 @@ const SettingsPage = () => {
 
   const enabledCount = providers.filter((provider) => enabledProviders[provider]).length;
   const activeCount = providers.filter((provider) => statuses[provider]?.health === 'active').length;
-  const currentCadence = cadenceOptions.find((option) => option.value === refreshCadence);
 
   const surfaceCards = [
-    {
-      key: 'theme',
-      label: 'Theme',
-      value: formatThemeLabel(theme),
-      badge: theme === 'system' ? 'OS' : 'Fixed',
-      icon: Palette,
-      className: 'settings-metric-card-theme',
-    },
-    {
-      key: 'mode',
-      label: 'Mode',
-      value: widgetMode ? 'Widget' : 'Dashboard',
-      badge: widgetMode ? 'Compact' : 'Full',
-      icon: Monitor,
-      className: 'settings-metric-card-mode',
-    },
-    {
-      key: 'refresh',
-      label: 'Refresh',
-      value: formatCadenceLabel(refreshCadence),
-      badge: refreshCadence === 'manual' ? 'Manual' : 'Auto',
-      icon: RefreshCw,
-      className: 'settings-metric-card-refresh',
-    },
-    {
-      key: 'providers',
-      label: 'Sources',
-      value: `${enabledCount}/3 enabled`,
-      badge: `${activeCount} live`,
-      icon: Server,
-      className: 'settings-metric-card-providers',
-    },
+    { key: 'theme', label: 'Theme', value: formatThemeLabel(theme), badge: theme === 'system' ? 'OS' : 'Fixed', icon: Palette },
+    { key: 'mode', label: 'Mode', value: widgetMode ? 'Widget' : 'Dashboard', badge: widgetMode ? 'Compact' : 'Full', icon: Monitor },
+    { key: 'refresh', label: 'Refresh', value: formatCadenceLabel(refreshCadence), badge: refreshCadence === 'manual' ? 'Manual' : 'Auto', icon: RefreshCw },
+    { key: 'providers', label: 'Sources', value: `${enabledCount}/3`, badge: `${activeCount} live`, icon: Server },
   ] as const;
 
   const saveKey = async (provider: ProviderId) => {
@@ -134,190 +104,140 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="settings-page">
-      <div className="settings-topbar">
-        <div className="segment-bar settings-segment">
-          <button
-            type="button"
-            className={`segment-btn ${view === 'settings' ? 'segment-btn-active' : ''}`}
-            onClick={() => setView('settings')}
-          >
-            Settings
-          </button>
-          <button
-            type="button"
-            className={`segment-btn ${view === 'about' ? 'segment-btn-active' : ''}`}
-            onClick={() => setView('about')}
-          >
-            About
-          </button>
-        </div>
+    <div className="stg-page">
+      {/* Settings / About toggle */}
+      <div className="stg-toggle-row">
+        <button
+          className={`stg-toggle-btn ${view === 'settings' ? 'stg-toggle-active' : ''}`}
+          onClick={() => setView('settings')}
+        >
+          Settings
+        </button>
+        <button
+          className={`stg-toggle-btn ${view === 'about' ? 'stg-toggle-active' : ''}`}
+          onClick={() => setView('about')}
+        >
+          About
+        </button>
       </div>
 
       {view === 'settings' ? (
         <>
-          <GlassPanel className="settings-hero">
-            <div className="settings-surface-header">
-              <div className="settings-section-title">Control Surface</div>
-              <span className="glass-pill settings-inline-badge">Live profile</span>
-            </div>
-            <div className="settings-hero-metrics">
-              {surfaceCards.map((card) => {
-                const Icon = card.icon;
-
-                return (
-                  <div key={card.key} className={`settings-metric-card ${card.className}`}>
-                    <span className="settings-metric-icon">
-                      <Icon size={14} strokeWidth={2.2} />
-                    </span>
-                    <div className="settings-metric-copy">
-                      <span className="settings-metric-label">{card.label}</span>
-                      <span className="settings-metric-value">{card.value}</span>
-                    </div>
-                    <span className="glass-pill settings-metric-badge">{card.badge}</span>
+          {/* Control surface metrics */}
+          <div className="stg-metrics-row">
+            {surfaceCards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <div key={card.key} className="stg-metric-card">
+                  <span className="stg-metric-icon">
+                    <Icon size={13} strokeWidth={2.2} />
+                  </span>
+                  <div className="stg-metric-copy">
+                    <span className="stg-metric-label">{card.label}</span>
+                    <span className="stg-metric-value">{card.value}</span>
                   </div>
+                  <span className="stg-metric-badge">{card.badge}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Appearance */}
+          <div className="stg-section">
+            <div className="stg-section-head">
+              <div className="stg-section-head-left">
+                <span className="stg-section-icon"><Palette size={13} /></span>
+                <span className="stg-section-title">Appearance</span>
+              </div>
+              <span className="stg-badge">{formatThemeLabel(theme)}</span>
+            </div>
+            <div className="stg-theme-row">
+              {themeOptions.map((option) => {
+                const isActive = theme === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    className={`stg-theme-card ${isActive ? 'stg-theme-card-active' : ''}`}
+                    onClick={() => setTheme(option.value)}
+                    title={option.note}
+                  >
+                    <div className={`stg-theme-preview stg-theme-preview-${option.value}`}>
+                      <span className="stg-theme-preview-bar" />
+                      <div className="stg-theme-preview-cols">
+                        <span className="stg-theme-preview-panel" />
+                        <span className="stg-theme-preview-panel stg-theme-preview-side" />
+                      </div>
+                    </div>
+                    <span className="stg-theme-label">{option.label}</span>
+                    <span className="stg-theme-tag">{isActive ? 'Active' : option.tag}</span>
+                  </button>
                 );
               })}
             </div>
-          </GlassPanel>
+          </div>
 
-          <GlassPanel className="settings-section settings-controls-panel">
-            <div className="settings-block-header settings-controls-header">
-              <div className="settings-section-title">Appearance &amp; Refresh</div>
-              <div className="settings-control-live-row">
-                <span className="glass-pill settings-inline-badge settings-control-live-pill">{formatThemeLabel(theme)}</span>
-                <span className="glass-pill settings-inline-badge settings-control-live-pill">{formatCadenceLabel(refreshCadence)}</span>
+          {/* Refresh Cadence */}
+          <div className="stg-section">
+            <div className="stg-section-head">
+              <div className="stg-section-head-left">
+                <span className="stg-section-icon"><RefreshCw size={13} /></span>
+                <span className="stg-section-title">Refresh</span>
               </div>
+              <span className="stg-badge">{formatCadenceLabel(refreshCadence)}</span>
             </div>
-            <div className="settings-designer-grid">
-              <div className="settings-design-board settings-theme-board">
-                <div className="settings-design-header">
-                  <span className="settings-control-icon settings-design-icon">
-                    <Palette size={15} strokeWidth={2.2} />
-                  </span>
-                  <div className="settings-design-copy">
-                    <span className="settings-control-title">Appearance</span>
-                    <span className="settings-design-current">{formatThemeLabel(theme)} profile</span>
-                  </div>
-                </div>
-                <div className="settings-theme-grid">
-                  {themeOptions.map((option) => {
-                    const isActive = theme === option.value;
-
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={`settings-theme-card settings-theme-card-${option.value} ${isActive ? 'settings-theme-card-active' : ''}`.trim()}
-                        onClick={() => setTheme(option.value)}
-                        title={option.note}
-                      >
-                        <div className="settings-theme-card-head">
-                          <span className="settings-theme-card-title">{option.label}</span>
-                          <span className="glass-pill settings-theme-card-chip">
-                            {isActive ? 'Active' : option.tag}
-                          </span>
-                        </div>
-                        <div className={`settings-theme-preview settings-theme-preview-${option.value}`} aria-hidden="true">
-                          <span className="settings-theme-preview-toolbar" />
-                          <div className="settings-theme-preview-columns">
-                            <span className="settings-theme-preview-panel settings-theme-preview-panel-main" />
-                            <span className="settings-theme-preview-panel settings-theme-preview-panel-side" />
-                          </div>
-                          <div className="settings-theme-preview-footer">
-                            <span />
-                            <span />
-                          </div>
-                        </div>
-                        <span className="settings-theme-note">{option.note}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="settings-design-board settings-refresh-board">
-                <div className="settings-design-header">
-                  <span className="settings-control-icon settings-design-icon">
-                    <RefreshCw size={15} strokeWidth={2.2} />
-                  </span>
-                  <div className="settings-design-copy">
-                    <span className="settings-control-title">Refresh</span>
-                    <span className="settings-design-current">{currentCadence?.note ?? 'Polling profile'}</span>
-                  </div>
-                </div>
-                <div className="settings-refresh-grid">
-                  {cadenceOptions.map((option) => {
-                    const isActive = refreshCadence === option.value;
-
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={`settings-refresh-card settings-refresh-card-${option.value} ${isActive ? 'settings-refresh-card-active' : ''}`.trim()}
-                        onClick={() => {
-                          setRefreshCadence(option.value);
-                          setCadenceRemote(option.value);
-                        }}
-                        title={option.note}
-                      >
-                        <div className="settings-refresh-card-head">
-                          <span className="settings-refresh-title">{option.label}</span>
-                          <span className="glass-pill settings-refresh-chip">
-                            {isActive ? 'Selected' : option.badge}
-                          </span>
-                        </div>
-                        <div className="settings-refresh-visual" aria-hidden="true">
-                          {option.bars.map((height, index) => (
-                            <span
-                              key={`${option.value}-${index}`}
-                              className="settings-refresh-bar"
-                              style={{ height }}
-                            />
-                          ))}
-                        </div>
-                        <span className="settings-refresh-note">{option.note}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+            <div className="stg-cadence-row">
+              {cadenceOptions.map((option) => {
+                const isActive = refreshCadence === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    className={`stg-cadence-card ${isActive ? 'stg-cadence-card-active' : ''}`}
+                    onClick={() => { setRefreshCadence(option.value); setCadenceRemote(option.value); }}
+                    title={option.note}
+                  >
+                    <div className="stg-cadence-bars">
+                      {option.bars.map((h, i) => (
+                        <span key={i} className="stg-cadence-bar" style={{ height: h }} />
+                      ))}
+                    </div>
+                    <span className="stg-cadence-label">{option.label}</span>
+                  </button>
+                );
+              })}
             </div>
-          </GlassPanel>
+          </div>
 
-          <GlassPanel className="settings-section settings-startup-shell">
-            <div className="settings-block-header">
-              <div className="settings-section-title">Desktop Behavior</div>
-              <span className="glass-pill settings-inline-badge">
-                {launchAtStartup ? 'Auto-start on' : 'Auto-start off'}
+          {/* Desktop Behavior */}
+          <div className="stg-section">
+            <div className="stg-section-head">
+              <div className="stg-section-head-left">
+                <span className="stg-section-icon"><Power size={13} /></span>
+                <span className="stg-section-title">Startup</span>
+              </div>
+              <span className="stg-badge">{launchAtStartup ? 'Auto' : 'Manual'}</span>
+            </div>
+            <div className="stg-startup-row">
+              <span className="stg-startup-text">
+                {launchAtStartup ? 'Starts automatically after sign-in' : 'Manual launch only'}
               </span>
-            </div>
-            <div className="settings-startup-card">
-              <span className="settings-control-icon settings-startup-icon">
-                <Power size={15} strokeWidth={2.2} />
-              </span>
-              <div className="settings-startup-copy">
-                <span className="settings-control-title">Launch at startup</span>
-                <span className="settings-startup-note">
-                  {launchAtStartup
-                    ? 'OpenTokenMonitor will start automatically after sign-in and stay in the tray on auto-launch.'
-                    : 'OpenTokenMonitor will only run when you start it manually.'}
-                </span>
-              </div>
               <GlassToggle
                 checked={launchAtStartup}
                 onChange={setLaunchAtStartup}
                 label={launchAtStartup ? 'On' : 'Off'}
               />
             </div>
-          </GlassPanel>
+          </div>
 
-          <GlassPanel className="settings-section settings-provider-shell">
-            <div className="settings-block-header">
-              <div className="settings-section-title">Providers</div>
-              <span className="glass-pill settings-inline-badge">{enabledCount} enabled</span>
+          {/* Providers */}
+          <div className="stg-section">
+            <div className="stg-section-head">
+              <div className="stg-section-head-left">
+                <span className="stg-section-icon"><Server size={13} /></span>
+                <span className="stg-section-title">Providers</span>
+              </div>
+              <span className="stg-badge">{enabledCount} enabled</span>
             </div>
-            <div className="settings-provider-list">
+            <div className="stg-providers">
               {providers.map((provider) => {
                 const snapshot = snapshots[provider];
                 const status = statuses[provider];
@@ -325,29 +245,25 @@ const SettingsPage = () => {
                 const isEnabled = enabledProviders[provider];
 
                 return (
-                  <GlassPanel key={provider} tint={providerTint[provider]} className="settings-provider-card">
-                    <div className="settings-provider-card-top">
-                      <div className="settings-provider-identity">
-                        <ProviderLogo provider={provider} size={18} />
-                        <div className="settings-provider-copy">
-                          <div className="settings-provider-name">{providerLabels[provider]}</div>
-                          <div className="settings-provider-description">{status?.message ?? placeholders[provider]}</div>
-                        </div>
-                      </div>
+                  <div
+                    key={provider}
+                    className="stg-provider-card"
+                    style={{ '--widget-accent': providerAccents[provider] } as React.CSSProperties}
+                  >
+                    <div className="stg-provider-top">
+                      <ProviderLogo provider={provider} size={16} />
+                      <span className="stg-provider-name">{providerLabels[provider]}</span>
+                      <span className="stg-badge" style={{ color: status?.health === 'active' ? '#34d399' : status?.health === 'error' ? '#f87171' : '#fbbf24' }}>
+                        {healthLabel(status?.health)}
+                      </span>
+                      <span className="stg-badge">{providerAlertCount} alerts</span>
                       <GlassToggle
                         checked={isEnabled}
                         onChange={(next) => setProviderEnabled(provider, next)}
                         label={isEnabled ? 'On' : 'Off'}
                       />
                     </div>
-
-                    <div className="settings-provider-tags">
-                      <span className="glass-pill settings-tag">{healthLabel(status?.health)}</span>
-                      {snapshot && <span className="glass-pill settings-tag">{snapshot.source}</span>}
-                      <span className="glass-pill settings-tag">{providerAlertCount} alerts</span>
-                    </div>
-
-                    <div className="settings-key-row settings-provider-input-row">
+                    <div className="stg-provider-key-row">
                       <GlassInput
                         type="password"
                         value={apiKeys[provider]}
@@ -359,16 +275,16 @@ const SettingsPage = () => {
                         Save
                       </GlassButton>
                     </div>
-
-                    <div className="settings-provider-footer">
-                      <span className="metric-label">{formatFetchedAt(snapshot?.fetched_at)}</span>
-                      <span className="metric-label">{snapshot?.stale ? 'stale snapshot' : 'live state'}</span>
+                    <div className="stg-provider-footer">
+                      <span>{formatFetchedAt(snapshot?.fetched_at)}</span>
+                      <span>{snapshot?.stale ? 'stale' : 'live'}</span>
+                      {snapshot && <span>{snapshot.source}</span>}
                     </div>
-                  </GlassPanel>
+                  </div>
                 );
               })}
             </div>
-          </GlassPanel>
+          </div>
 
           <DiagnosticsPanel
             statuses={statuses}

@@ -1,7 +1,7 @@
-import GlassPanel from '@/components/glass/GlassPanel';
 import ProviderLogo from '@/components/providers/ProviderLogo';
 import Sparkline from '@/components/charts/Sparkline';
-import UsageBar from '@/components/meters/UsageBar';
+import WidgetGauge, { arcColor } from '@/components/meters/WidgetGauge';
+import ResetCountdown from '@/components/meters/ResetCountdown';
 import {
   ModelBreakdownEntry,
   ProviderId,
@@ -11,12 +11,23 @@ import {
   UsageSnapshot,
 } from '@/types';
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
-import { countdownLabel } from '@/utils/usageWindows';
 
 const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'gemini'; color: string }> = {
   claude: { label: 'Claude', tint: 'claude', color: '#d97757' },
   codex: { label: 'Codex', tint: 'codex', color: '#10a37f' },
   gemini: { label: 'Gemini', tint: 'gemini', color: '#4285f4' },
+};
+
+const widgetWindowLabel = (windowType?: string) => {
+  switch (windowType) {
+    case 'five_hour': return '5H';
+    case 'seven_day': return '7D';
+    case 'daily': return 'DAY';
+    case 'monthly': return 'MO';
+    case 'weekly': return 'WK';
+    case 'session': return 'SES';
+    default: return 'WIN';
+  }
 };
 
 const severityColor: Record<UsageAlert['severity'], string> = {
@@ -46,104 +57,113 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
   const primary = snapshot?.windows[0];
   const secondary = snapshot?.windows[1];
   const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
-  const secondaryPct = Math.max(0, Math.min(100, secondary?.utilization ?? 0));
+  const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
   const costToday = trend?.points[trend.points.length - 1]?.cost_usd ?? 0;
   const access = getProviderAccessState(status, snapshot);
   const healthClass = providerAccessDotClass(access.health);
 
   return (
-    <GlassPanel
-      tint={meta.tint}
-      className={`hover-lift overview-card accent-${provider}`}
-      style={{ padding: '8px 10px', cursor: 'pointer', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 5 }}
+    <div
+      className={`overview-card-v2 glass-${meta.tint}`}
       onClick={onClick}
+      title={access.detail}
     >
-      {/* Row 1: Provider identity + cost + sparkline */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <ProviderLogo provider={provider} size={22} />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>{meta.label}</span>
-            <span className={`nav-tab-dot ${healthClass}`} />
-            {access.health !== 'active' && (
-              <span
-                className="glass-pill"
-                style={{
-                  fontSize: 7,
-                  padding: '0 5px',
-                  color: access.color,
-                  borderColor: access.color,
-                }}
-              >
-                {access.label}
+      {/* Left: Gauge */}
+      <div className="overview-card-gauge-wrap">
+        <WidgetGauge provider={provider} primaryPct={primaryPct} secondaryPct={secondaryPct} />
+      </div>
+
+      {/* Center: Identity + metrics */}
+      <div className="overview-card-body">
+        <div className="overview-card-title-row">
+          <ProviderLogo provider={provider} size={14} />
+          <span className="overview-card-title">{meta.label}</span>
+          <span className={`nav-tab-dot ${healthClass}`} />
+          <span
+            className="overview-card-status-badge"
+            style={{ color: access.color, borderColor: access.color }}
+          >
+            {access.label}
+          </span>
+        </div>
+
+        {/* Usage windows */}
+        <div className="overview-card-windows">
+          {snapshot ? (
+            <>
+              <div className="overview-card-window">
+                <div className="overview-card-window-head">
+                  <span className="widget-provider-window-label">
+                    {widgetWindowLabel(primary?.window_type)}
+                  </span>
+                  <span className="overview-card-pct" style={{ color: arcColor(primaryPct) }}>
+                    {primaryPct.toFixed(0)}%
+                  </span>
+                </div>
+                <ResetCountdown resetsAt={primary?.resets_at} className="overview-card-reset" />
+              </div>
+              {secondaryPct != null && secondary && (
+                <div className="overview-card-window">
+                  <div className="overview-card-window-head">
+                    <span className="widget-provider-window-label">
+                      {widgetWindowLabel(secondary?.window_type)}
+                    </span>
+                    <span className="overview-card-pct" style={{ color: arcColor(secondaryPct) }}>
+                      {secondaryPct.toFixed(0)}%
+                    </span>
+                  </div>
+                  <ResetCountdown resetsAt={secondary?.resets_at} className="overview-card-reset" />
+                </div>
+              )}
+            </>
+          ) : (
+            <span className="widget-provider-empty" title={access.detail}>
+              {access.health === 'error' ? 'Unavailable' : 'Awaiting'}
+            </span>
+          )}
+        </div>
+
+        {/* Model + alerts row */}
+        {(breakdown.length > 0 || alerts.length > 0) && (
+          <div className="overview-card-meta-row">
+            {breakdown.length > 0 && (
+              <span className="overview-card-model-chip">
+                {breakdown[0].model} · {formatTokens(breakdown[0].total_tokens)}
               </span>
             )}
+            {alerts.length > 0 && (
+              <div className="overview-card-alerts">
+                {alerts.slice(0, 2).map((alert) => (
+                  <span
+                    key={`${alert.window_type}-${alert.threshold_percent}`}
+                    className="overview-card-alert-badge"
+                    style={{
+                      color: severityColor[alert.severity],
+                      borderColor: severityColor[alert.severity],
+                    }}
+                  >
+                    {alert.severity}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ fontSize: 9, fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
-              ${costToday.toFixed(2)}
-            </span>
-            <span className="metric-label" style={{ fontSize: 8 }}>
-              / ${trend?.total_cost_usd.toFixed(2) ?? '0.00'} 30d
-            </span>
-          </div>
-        </div>
-        <div style={{ flex: 1, minWidth: 30 }}>
-          <Sparkline points={trend?.points ?? []} color={meta.color} height={28} />
-        </div>
+        )}
       </div>
 
-      {/* Row 2: Usage bars with countdown labels */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <UsageBar pct={primaryPct} label={countdownLabel(primary)} />
-        {secondary && <UsageBar pct={secondaryPct} label={countdownLabel(secondary)} />}
+      {/* Right: Sparkline + cost */}
+      <div className="overview-card-spark-col">
+        <div className="overview-card-spark">
+          <Sparkline points={trend?.points ?? []} color={meta.color} height={36} />
+        </div>
+        <div className="overview-card-cost-row">
+          <span className="overview-card-cost">${costToday.toFixed(2)}</span>
+          <span className="overview-card-cost-label">
+            / ${trend?.total_cost_usd.toFixed(2) ?? '0.00'} 30d
+          </span>
+        </div>
       </div>
-
-      {access.health !== 'active' && (
-        <div
-          className="metric-label"
-          style={{
-            fontSize: 8,
-            color: access.color,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-          title={access.detail}
-        >
-          {access.detail}
-        </div>
-      )}
-
-      {/* Row 3: Model + alerts (compact) */}
-      {(breakdown.length > 0 || alerts.length > 0) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {breakdown.length > 0 && (
-            <span className="metric-label" style={{ fontSize: 8 }}>
-              {breakdown[0].model} · {formatTokens(breakdown[0].total_tokens)}
-            </span>
-          )}
-          {alerts.length > 0 && (
-            <div style={{ display: 'flex', gap: 3, marginLeft: 'auto' }}>
-              {alerts.slice(0, 2).map((alert) => (
-                <span
-                  key={`${alert.window_type}-${alert.threshold_percent}`}
-                  className="glass-pill"
-                  style={{
-                    fontSize: 8,
-                    padding: '0px 4px',
-                    color: severityColor[alert.severity],
-                    borderColor: severityColor[alert.severity],
-                  }}
-                >
-                  {alert.severity}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </GlassPanel>
+    </div>
   );
 };
 

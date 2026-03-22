@@ -1,31 +1,14 @@
 import { Activity, Cpu, Github, LayoutDashboard, Package } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import GlassButton from '@/components/glass/GlassButton';
-import GlassPanel from '@/components/glass/GlassPanel';
 import { APP_NAME, APP_REPO_URL, APP_VERSION } from '@/constants/appMeta';
 import { isTauriRuntime } from '@/utils/runtime';
 
 const signalCards = [
-  {
-    label: 'Providers',
-    value: 'Claude, Codex, Gemini',
-    icon: Cpu,
-  },
-  {
-    label: 'Surfaces',
-    value: 'Widget and dashboard',
-    icon: LayoutDashboard,
-  },
-  {
-    label: 'Coverage',
-    value: 'Usage, prompts, and health',
-    icon: Activity,
-  },
-  {
-    label: 'Version',
-    value: `v${APP_VERSION}`,
-    icon: Package,
-  },
+  { label: 'Providers', value: 'Claude, Codex, Gemini', icon: Cpu },
+  { label: 'Surfaces', value: 'Widget + Dashboard', icon: LayoutDashboard },
+  { label: 'Coverage', value: 'Usage, prompts, health', icon: Activity },
+  { label: 'Version', value: `v${APP_VERSION}`, icon: Package },
 ] as const;
 
 const openRepo = async () => {
@@ -37,86 +20,67 @@ const openRepo = async () => {
   } catch (error) {
     console.error('failed to open repo url', error);
   }
-
   window.open(APP_REPO_URL, '_blank', 'noopener,noreferrer');
 };
 
 const AboutPanel = () => (
-  <div className="about-shell">
-    <GlassPanel className="settings-section about-hero-panel">
-      <div className="about-hero-grid">
-        <div className="about-brand-block">
-          <div className="about-logo-frame">
-            <img src="/open_token_monitor_icon.png" alt="OpenToken Monitor" className="about-app-logo" />
+  <div className="abt-root">
+    {/* Hero */}
+    <div className="abt-hero">
+      <div className="abt-logo-frame">
+        <img src="/open_token_monitor_icon.png" alt="OpenToken Monitor" className="abt-logo" />
+      </div>
+      <div className="abt-hero-copy">
+        <span className="abt-app-name">{APP_NAME}</span>
+        <span className="stg-badge">v{APP_VERSION}</span>
+      </div>
+      <p className="abt-desc">
+        Local-first desktop monitor for Claude, Codex, and Gemini usage.
+        Quota windows, model activity, prompts, and provider health in one surface.
+      </p>
+      <div className="abt-tags">
+        <span className="stg-badge">Local-first</span>
+        <span className="stg-badge">Widget + Dashboard</span>
+        <span className="stg-badge">CLI History</span>
+      </div>
+    </div>
+
+    {/* Signal cards */}
+    <div className="abt-signals">
+      {signalCards.map((card) => {
+        const Icon = card.icon;
+        return (
+          <div key={card.label} className="abt-signal">
+            <span className="abt-signal-icon"><Icon size={13} strokeWidth={2.2} /></span>
+            <span className="abt-signal-label">{card.label}</span>
+            <span className="abt-signal-value">{card.value}</span>
           </div>
-          <div className="about-brand-copy">
-            <div className="settings-section-title">About</div>
-            <div className="about-title">{APP_NAME}</div>
-            <span className="glass-pill about-version-pill">Version {APP_VERSION}</span>
-            <div className="about-description">
-              {APP_NAME} is a local-first desktop monitor for Claude, Codex, and Gemini usage.
-              It brings quota windows, model activity, recent prompts, and provider health into one glass surface.
-            </div>
-            <div className="about-badge-row">
-              <span className="glass-pill about-badge">Local-first</span>
-              <span className="glass-pill about-badge">Desktop widget + dashboard</span>
-              <span className="glass-pill about-badge">Recent CLI history</span>
-            </div>
-          </div>
-        </div>
+        );
+      })}
+    </div>
 
-        <div className="about-signal-grid">
-          {signalCards.map((card) => {
-            const Icon = card.icon;
-
-            return (
-              <div key={card.label} className="about-signal-card">
-                <span className="about-signal-icon">
-                  <Icon size={14} strokeWidth={2.2} />
-                </span>
-                <div className="about-signal-copy">
-                  <span className="about-signal-label">{card.label}</span>
-                  <span className="about-signal-value">{card.value}</span>
-                </div>
-              </div>
-            );
-          })}
+    {/* Project info */}
+    <div className="abt-project-card">
+      <span className="abt-section-title">Project</span>
+      <span className="abt-maintainer">Developed by Hithesh Karanth</span>
+      <p className="abt-project-desc">
+        Open source on GitHub. Local-first by design.
+      </p>
+      <div className="abt-version-row">
+        <div className="abt-version-cell">
+          <span className="abt-version-label">Version</span>
+          <span className="abt-version-value">{APP_VERSION}</span>
+        </div>
+        <div className="abt-version-cell">
+          <span className="abt-version-label">Track</span>
+          <span className="abt-version-value">Open source</span>
         </div>
       </div>
-    </GlassPanel>
-
-    <GlassPanel className="settings-section about-detail-panel about-repo-panel">
-      <div className="settings-section-title">Project</div>
-      <div className="about-maintainer-card">
-        <div className="about-maintainer-name">Developed by Hithesh Karanth</div>
-        <div className="about-project-copy">
-          OpenToken Monitor stays openly available on GitHub, with the repository acting as the canonical home for the project.
-        </div>
-      </div>
-      <div className="about-version-strip">
-        <div className="about-version-card">
-          <span className="about-version-label">Current version</span>
-          <span className="about-version-value">{APP_VERSION}</span>
-        </div>
-        <div className="about-version-card">
-          <span className="about-version-label">Release track</span>
-          <span className="about-version-value">Open source</span>
-        </div>
-      </div>
-      <div className="about-action-surface">
-        <div className="about-action-copy">
-          <div className="about-action-title">Project repository</div>
-          <div className="metric-label about-repo-link">github.com/Hitheshkaranth/OpenTokenMonitor</div>
-        </div>
-        <div className="about-action-row">
-          <GlassButton variant="primary" size="sm" onClick={openRepo} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Github size={12} />
-            GitHub Repo
-          </GlassButton>
-        </div>
-      </div>
-      <div className="about-footnote">Always open source. Local-first by design.</div>
-    </GlassPanel>
+      <GlassButton variant="primary" size="sm" onClick={openRepo} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'center' }}>
+        <Github size={12} />
+        GitHub Repo
+      </GlassButton>
+    </div>
   </div>
 );
 

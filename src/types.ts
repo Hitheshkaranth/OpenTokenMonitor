@@ -1,6 +1,6 @@
 export type ProviderId = 'claude' | 'codex' | 'gemini';
-export type ProviderTab = ProviderId | 'overview';
-export type PageId = 'overview' | ProviderId | 'settings';
+export type ProviderTab = ProviderId | 'overview' | 'projects';
+export type PageId = 'overview' | 'projects' | ProviderId | 'settings';
 
 export type DataSource = 'oauth' | 'cookie' | 'cli' | 'local_log';
 export type DataProvenance = 'official' | 'internal' | 'derived_local';
@@ -82,6 +82,26 @@ export interface RecentActivityEntry {
   terminal_label?: string;
   cwd?: string;
   model?: string;
+}
+
+export interface ProjectCommandEntry extends RecentActivityEntry {
+  project_id: string;
+  project_label: string;
+  project_path?: string;
+}
+
+export interface ProjectSummary {
+  id: string;
+  label: string;
+  path?: string;
+  latest_timestamp: string;
+  activity_count: number;
+  providers: ProviderId[];
+  models: string[];
+  estimated_cost_usd: number;
+  estimated_cost_today_usd: number;
+  estimated_tokens: number;
+  commands: ProjectCommandEntry[];
 }
 
 export interface UsageAlert {

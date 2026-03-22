@@ -4,6 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { LogicalSize } from '@tauri-apps/api/dpi';
 import NavBar from '@/components/layout/Sidebar';
 import WidgetMode from '@/components/layout/WidgetMode';
+import ProjectOverview from '@/components/projects/ProjectOverview';
 import ProviderCard from '@/components/providers/ProviderCard';
 import ProviderOverview from '@/components/providers/ProviderOverview';
 import SettingsPage from '@/components/settings/SettingsPage';
@@ -34,6 +35,7 @@ const App = () => {
   const settingsHydrated = useSettingsStore((s) => s.hydrated);
 
   const snapshots = useUsageStore((s) => s.snapshots);
+  const costHistory = useUsageStore((s) => s.costHistory);
   const trends = useUsageStore((s) => s.trends);
   const modelBreakdowns = useUsageStore((s) => s.modelBreakdowns);
   const recentActivity = useUsageStore((s) => s.recentActivity);
@@ -43,6 +45,7 @@ const App = () => {
   const error = useUsageStore((s) => s.error);
   const refreshProvider = useUsageStore((s) => s.refreshProvider);
   const refreshAll = useUsageStore((s) => s.refreshAll);
+  const fetchCostHistory = useUsageStore((s) => s.fetchCostHistory);
   const fetchTrend = useUsageStore((s) => s.fetchTrend);
   const fetchModelBreakdown = useUsageStore((s) => s.fetchModelBreakdown);
   const fetchRecentActivity = useUsageStore((s) => s.fetchRecentActivity);
@@ -77,7 +80,7 @@ const App = () => {
   useEffect(() => {
     if (!isTauriRuntime()) return;
     const currentWindow = getCurrentWindow();
-    const targetHeight = widgetMode ? 244 : 390;
+    const targetHeight = widgetMode ? 274 : 390;
     (async () => {
       try {
         await currentWindow.setResizable(true);
@@ -113,20 +116,22 @@ const App = () => {
   // Eagerly fetch trends for all providers so overview sparklines load fast
   useEffect(() => {
     (['claude', 'codex', 'gemini'] as ProviderId[]).forEach((p) => {
+      fetchCostHistory(p);
       fetchTrend(p);
       fetchModelBreakdown(p);
-      fetchRecentActivity(p);
+      fetchRecentActivity(p, 120);
     });
-  }, [fetchModelBreakdown, fetchRecentActivity, fetchTrend]);
+  }, [fetchCostHistory, fetchModelBreakdown, fetchRecentActivity, fetchTrend]);
 
   // Also re-fetch when navigating to a specific provider page
   useEffect(() => {
-    if (page !== 'overview' && page !== 'settings') {
+    if (page !== 'overview' && page !== 'settings' && page !== 'projects') {
+      fetchCostHistory(page);
       fetchTrend(page);
       fetchModelBreakdown(page);
-      fetchRecentActivity(page);
+      fetchRecentActivity(page, 120);
     }
-  }, [page, fetchModelBreakdown, fetchRecentActivity, fetchTrend]);
+  }, [page, fetchCostHistory, fetchModelBreakdown, fetchRecentActivity, fetchTrend]);
 
   // Auto-fetch usage report when snapshots update
   useEffect(() => {
@@ -142,7 +147,7 @@ const App = () => {
 
   // Redirect to valid page if current provider gets disabled
   useEffect(() => {
-    if (page === 'overview' || page === 'settings') return;
+    if (page === 'overview' || page === 'settings' || page === 'projects') return;
     if (enabledProviders[page]) return;
     setPage(activeProviders.length > 0 ? activeProviders[0] : 'overview');
   }, [page, enabledProviders, activeProviders]);
@@ -173,6 +178,7 @@ const App = () => {
       if (event.key === '1') setPage('claude');
       if (event.key === '2') setPage('codex');
       if (event.key === '3') setPage('gemini');
+      if (event.key === '4') setPage('projects');
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -188,8 +194,9 @@ const App = () => {
       await refreshAll();
       await Promise.all(
         (['claude', 'codex', 'gemini'] as ProviderId[]).flatMap((p) => [
+          fetchCostHistory(p),
           fetchTrend(p),
-          fetchRecentActivity(p),
+          fetchRecentActivity(p, 120),
         ])
       );
       await fetchUsageReport();
@@ -243,6 +250,10 @@ const App = () => {
       );
     }
 
+    if (page === 'projects') {
+      return <ProjectOverview recentActivity={recentActivity} costHistory={costHistory} />;
+    }
+
     const currentProvider = page as ProviderId;
     return (
       <ErrorBoundary onRetry={() => refreshProvider(currentProvider)}>
@@ -251,13 +262,16 @@ const App = () => {
           trend={trends[currentProvider]}
           breakdown={modelBreakdowns[currentProvider]}
           recentActivity={recentActivity[currentProvider]}
+          allRecentActivity={recentActivity}
+          costHistory={costHistory}
           alerts={alerts[currentProvider]}
           status={statuses[currentProvider]}
           onRefresh={() => {
             refreshProvider(currentProvider);
+            fetchCostHistory(currentProvider);
             fetchTrend(currentProvider);
             fetchModelBreakdown(currentProvider);
-            fetchRecentActivity(currentProvider);
+            fetchRecentActivity(currentProvider, 120);
             fetchUsageReport();
           }}
         />
@@ -289,7 +303,7 @@ const App = () => {
           refreshBusy={refreshBusy}
           onWidget={() => setWidgetMode(true)}
         />
-        <div className="main-content soft-scroll" style={page === 'overview' ? { display: 'flex', flexDirection: 'column' } : undefined}>
+        <div className="main-content soft-scroll" style={page === 'overview' ? { display: 'flex', flexDirection: 'column', overflow: 'hidden' } : undefined}>
           {renderContent()}
         </div>
       </div>

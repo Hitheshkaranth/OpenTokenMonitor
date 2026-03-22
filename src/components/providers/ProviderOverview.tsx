@@ -19,7 +19,14 @@ type ProviderOverviewProps = {
 
 const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
 
-const ProviderOverview = ({ snapshots, trends, modelBreakdowns, alerts, statuses, onNavigate }: ProviderOverviewProps) => (
+const ProviderOverview = ({
+  snapshots,
+  trends,
+  modelBreakdowns,
+  alerts,
+  statuses,
+  onNavigate,
+}: ProviderOverviewProps) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
     {providers.map((id) => (
       <OverviewCard

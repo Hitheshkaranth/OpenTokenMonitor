@@ -1,19 +1,29 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { History, RefreshCw } from 'lucide-react';
 import CostTrendChart from '@/components/charts/CostTrendChart';
 import RecentActivitySlides from '@/components/activity/RecentActivitySlides';
-import GlassPanel from '@/components/glass/GlassPanel';
-import GlassPill from '@/components/glass/GlassPill';
 import ProviderLogo from '@/components/providers/ProviderLogo';
+import WidgetGauge, { arcColor } from '@/components/meters/WidgetGauge';
+import ResetCountdown from '@/components/meters/ResetCountdown';
 import UsageBar from '@/components/meters/UsageBar';
-import { ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry, TrendData, UsageAlert, UsageSnapshot } from '@/types';
+import {
+  CostEntry,
+  ModelBreakdownEntry,
+  ProviderId,
+  ProviderStatus,
+  RecentActivityEntry,
+  TrendData,
+  UsageAlert,
+  UsageSnapshot,
+} from '@/types';
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
-import { windowLabel, countdownLabel, windowValueLabel } from '@/utils/usageWindows';
+import { windowLabel, windowValueLabel } from '@/utils/usageWindows';
+import { buildProjectSummaries } from '@/utils/projectActivity';
 
-const providerMeta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemini'; color: string }> = {
-  claude: { name: 'Claude', tint: 'claude', color: '#d97757' },
-  codex: { name: 'Codex', tint: 'codex', color: '#10a37f' },
-  gemini: { name: 'Gemini', tint: 'gemini', color: '#4285f4' },
+const providerMeta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemini'; color: string; accent: string }> = {
+  claude: { name: 'Claude', tint: 'claude', color: '#d97757', accent: '217 119 87' },
+  codex: { name: 'Codex', tint: 'codex', color: '#10a37f', accent: '16 163 127' },
+  gemini: { name: 'Gemini', tint: 'gemini', color: '#4285f4', accent: '66 133 244' },
 };
 
 const severityColor: Record<UsageAlert['severity'], string> = {
@@ -28,11 +38,25 @@ const formatTokens = (value: number) => {
   return String(value);
 };
 
+const formatAge = (timestamp: string) => {
+  const deltaMs = Date.now() - new Date(timestamp).getTime();
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) return 'now';
+  const minutes = Math.floor(deltaMs / 60_000);
+  if (minutes < 1) return 'now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+};
+
 type ProviderCardProps = {
   snapshot?: UsageSnapshot;
   trend?: TrendData;
   breakdown?: ModelBreakdownEntry[];
   recentActivity?: RecentActivityEntry[];
+  allRecentActivity: Record<ProviderId, RecentActivityEntry[]>;
+  costHistory: Record<ProviderId, CostEntry[]>;
   alerts?: UsageAlert[];
   status?: ProviderStatus;
   onRefresh: () => void;
@@ -43,193 +67,281 @@ const ProviderCard = ({
   trend,
   breakdown = [],
   recentActivity = [],
+  allRecentActivity,
+  costHistory,
   alerts = [],
   status,
   onRefresh,
 }: ProviderCardProps) => {
-  const [showRecentInputs, setShowRecentInputs] = useState(true);
+  const [showRecent, setShowRecent] = useState(false);
   const access = getProviderAccessState(status, snapshot);
 
-  if (!snapshot) {
+  const providerId = snapshot?.provider;
+
+  // Build project summaries filtered for this provider
+  const providerProjects = useMemo(() => {
+    if (!providerId) return [];
+    const providerOnlyActivity: Record<ProviderId, RecentActivityEntry[]> = {
+      claude: providerId === 'claude' ? allRecentActivity.claude ?? [] : [],
+      codex: providerId === 'codex' ? allRecentActivity.codex ?? [] : [],
+      gemini: providerId === 'gemini' ? allRecentActivity.gemini ?? [] : [],
+    };
+    const providerOnlyCostHistory: Record<ProviderId, CostEntry[]> = {
+      claude: providerId === 'claude' ? costHistory.claude ?? [] : [],
+      codex: providerId === 'codex' ? costHistory.codex ?? [] : [],
+      gemini: providerId === 'gemini' ? costHistory.gemini ?? [] : [],
+    };
+    return buildProjectSummaries(providerOnlyActivity, providerOnlyCostHistory, {
+      maxProjects: 12,
+      maxCommandsPerProject: 4,
+    });
+  }, [providerId, allRecentActivity, costHistory]);
+
+  // Count active sessions (entries in last 15 minutes)
+  const activeSessionCount = useMemo(() => {
+    if (!providerId) return 0;
+    const cutoff = Date.now() - 15 * 60 * 1000;
+    const entries = allRecentActivity[providerId] ?? [];
+    const activeCwds = new Set<string>();
+    for (const e of entries) {
+      if (new Date(e.timestamp).getTime() > cutoff && e.cwd) {
+        activeCwds.add(e.cwd);
+      }
+    }
+    return activeCwds.size;
+  }, [providerId, allRecentActivity]);
+
+  if (!snapshot || !providerId) {
     return (
-      <GlassPanel style={{ padding: 14, textAlign: 'center' }}>
-        <div style={{ display: 'grid', gap: 6 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: access.color }}>{access.label}</div>
-          <div className="metric-label">{access.detail}</div>
-        </div>
-      </GlassPanel>
+      <div className="pcard-empty">
+        <div className="pcard-empty-label" style={{ color: access.color }}>{access.label}</div>
+        <div className="pcard-empty-detail">{access.detail}</div>
+      </div>
     );
   }
 
-  const meta = providerMeta[snapshot.provider];
+  const meta = providerMeta[providerId];
   const [primary, secondary] = snapshot.windows;
   const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
-  const secondaryPct = Math.max(0, Math.min(100, secondary?.utilization ?? 0));
+  const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
   const costToday = trend?.points[trend.points.length - 1]?.cost_usd ?? 0;
 
   return (
-    <div style={{ display: 'grid', gap: 8 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <ProviderLogo provider={snapshot.provider} size={22} />
-          <span style={{ fontWeight: 700, fontSize: 13 }}>{meta.name}</span>
+    <div
+      className="pcard-root"
+      style={{ '--widget-accent': meta.accent } as React.CSSProperties}
+    >
+      {/* Top row: identity + actions */}
+      <div className="pcard-top">
+        <div className="pcard-identity">
+          <ProviderLogo provider={providerId} size={18} />
+          <span className="pcard-name">{meta.name}</span>
           <span className={`nav-tab-dot ${providerAccessDotClass(access.health)}`} />
-          <span className="metric-label" style={{ fontSize: 9 }}>{snapshot.source}</span>
-          {access.health !== 'active' && (
-            <span
-              className="glass-pill"
-              style={{
-                fontSize: 8,
-                padding: '1px 6px',
-                color: access.color,
-                borderColor: access.color,
-              }}
-              title={access.detail}
-            >
-              {access.label}
+          <span className="pcard-source">{snapshot.source}</span>
+          <span
+            className="pcard-status-badge"
+            style={{ color: access.color, borderColor: access.color }}
+          >
+            {access.label}
+          </span>
+          {activeSessionCount > 0 && (
+            <span className="pcard-active-badge">
+              <span className="pcard-active-dot" />
+              {activeSessionCount} active
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <GlassPill
-            active={showRecentInputs}
-            onClick={() => setShowRecentInputs((value) => !value)}
+        <div className="pcard-actions">
+          <button
+            className="pcard-action-btn"
+            onClick={() => setShowRecent((v) => !v)}
             title="Toggle recent conversations"
-            style={{ fontSize: 9, padding: '2px 6px', gap: 3 }}
+            style={showRecent ? { borderColor: 'var(--control-border-strong)' } : undefined}
           >
-            <History size={10} /> Recent
-          </GlassPill>
-          <GlassPill onClick={onRefresh} title="Refresh provider" style={{ fontSize: 9, padding: '2px 6px', gap: 3 }}>
-            <RefreshCw size={10} /> Refresh
-          </GlassPill>
+            <History size={11} />
+          </button>
+          <button className="pcard-action-btn" onClick={onRefresh} title="Refresh provider">
+            <RefreshCw size={11} />
+          </button>
         </div>
       </div>
 
-      {/* Usage Windows — bars with labels */}
-      {access.health !== 'active' && (
-        <GlassPanel style={{ padding: '6px 8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span
-              className="glass-pill"
-              style={{
-                fontSize: 8,
-                padding: '1px 6px',
-                color: access.color,
-                borderColor: access.color,
-              }}
-            >
-              {access.label}
-            </span>
-            <span style={{ fontSize: 9, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-              {access.detail}
-            </span>
-          </div>
-        </GlassPanel>
-      )}
-
-      <GlassPanel tint={meta.tint} style={{ padding: '8px 10px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 10, fontWeight: 600 }}>{windowLabel(primary)}</span>
-              <span className="metric-label" style={{ fontSize: 8 }}>{countdownLabel(primary)}</span>
+      {/* Main content: two columns */}
+      <div className="pcard-body">
+        {/* Left column: gauge + usage + projects */}
+        <div className="pcard-left">
+          <div className="pcard-gauge-section">
+            <div className="pcard-gauge-wrap">
+              <WidgetGauge provider={providerId} primaryPct={primaryPct} secondaryPct={secondaryPct} />
             </div>
-            <UsageBar pct={primaryPct} />
-            {primary?.note && <span className="metric-label" style={{ fontSize: 8, opacity: 0.7, lineHeight: 1.2 }}>{primary.note}</span>}
-            <span className="metric-label" style={{ fontSize: 8 }}>{windowValueLabel(primary) ?? ''}</span>
-          </div>
-          {secondary && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 10, fontWeight: 600 }}>{windowLabel(secondary)}</span>
-                <span className="metric-label" style={{ fontSize: 8 }}>{countdownLabel(secondary)}</span>
+            <div className="pcard-gauge-legends">
+              <div className="pcard-window-compact">
+                <span className="pcard-window-label">{windowLabel(primary)}</span>
+                <span className="pcard-window-pct" style={{ color: arcColor(primaryPct) }}>
+                  {primaryPct.toFixed(0)}%
+                </span>
+                <ResetCountdown resetsAt={primary?.resets_at} className="pcard-reset" />
               </div>
-              <UsageBar pct={secondaryPct} />
-              <span className="metric-label" style={{ fontSize: 8 }}>{windowValueLabel(secondary) ?? ''}</span>
+              {secondary && secondaryPct != null && (
+                <div className="pcard-window-compact">
+                  <span className="pcard-window-label">{windowLabel(secondary)}</span>
+                  <span className="pcard-window-pct" style={{ color: arcColor(secondaryPct) }}>
+                    {secondaryPct.toFixed(0)}%
+                  </span>
+                  <ResetCountdown resetsAt={secondary?.resets_at} className="pcard-reset" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Usage bars */}
+          <div className="pcard-usage-panel">
+            <div className="pcard-usage-row">
+              <UsageBar pct={primaryPct} label={windowLabel(primary)} />
+              <span className="pcard-usage-detail">{windowValueLabel(primary)}</span>
+              {primary?.note && <span className="pcard-usage-note">{primary.note}</span>}
+            </div>
+            {secondary && (
+              <div className="pcard-usage-row">
+                <UsageBar pct={secondaryPct ?? 0} label={windowLabel(secondary)} />
+                <span className="pcard-usage-detail">{windowValueLabel(secondary)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Alerts */}
+          {alerts.length > 0 && (
+            <div className="pcard-alerts">
+              {alerts.map((alert) => (
+                <span
+                  key={`${alert.window_type}-${alert.threshold_percent}`}
+                  className="pcard-alert-chip"
+                  style={{ color: severityColor[alert.severity], borderColor: severityColor[alert.severity] }}
+                >
+                  {alert.window_type} {alert.severity} {alert.utilization.toFixed(0)}%
+                </span>
+              ))}
             </div>
           )}
         </div>
-      </GlassPanel>
 
-      {/* Cost Trend */}
-      <GlassPanel style={{ padding: '6px 8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 700 }}>Cost</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <span className="glass-pill" style={{ fontSize: 9, padding: '1px 5px' }}>Today ${costToday.toFixed(2)}</span>
-            <span className="glass-pill" style={{ fontSize: 9, padding: '1px 5px' }}>30d ${trend?.total_cost_usd.toFixed(2) ?? '0.00'}</span>
+        {/* Right column: cost chart + models */}
+        <div className="pcard-right">
+          <div className="pcard-section-panel">
+            <div className="pcard-section-head">
+              <span className="pcard-section-title">Cost</span>
+              <div className="pcard-cost-pills">
+                <span className="pcard-cost-chip">Today ${costToday.toFixed(2)}</span>
+                <span className="pcard-cost-chip">30d ${trend?.total_cost_usd.toFixed(2) ?? '0.00'}</span>
+              </div>
+            </div>
+            <CostTrendChart points={trend?.points ?? []} color={meta.color} compact />
+          </div>
+
+          <div className="pcard-section-panel">
+            <span className="pcard-section-title">Models</span>
+            {breakdown.length === 0 ? (
+              <span className="pcard-empty-detail" style={{ fontSize: 8, marginTop: 2 }}>No per-model data yet.</span>
+            ) : (
+              <div className="pcard-model-list">
+                {breakdown.map((entry) => (
+                  <div key={entry.model} className="pcard-model-row">
+                    <span className="pcard-model-name">{entry.model}</span>
+                    <span className="pcard-model-stat">{formatTokens(entry.input_tokens)}in</span>
+                    <span className="pcard-model-stat">{formatTokens(entry.output_tokens)}out</span>
+                    <span className="pcard-model-cost">${entry.estimated_cost_usd.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-        <CostTrendChart points={trend?.points ?? []} color={meta.color} compact />
-      </GlassPanel>
+      </div>
 
-      {/* Model Usage */}
-      <GlassPanel style={{ padding: '6px 8px' }}>
-        <span style={{ fontSize: 11, fontWeight: 700 }}>Models</span>
-        {breakdown.length === 0 ? (
-          <div className="metric-label" style={{ fontSize: 9, marginTop: 2 }}>No per-model breakdown yet.</div>
+      {/* Projects section */}
+      <div className="pcard-section-panel pcard-projects-section">
+        <div className="pcard-section-head">
+          <span className="pcard-section-title">Projects</span>
+          <span className="pcard-cost-chip">{providerProjects.length} projects</span>
+        </div>
+        {providerProjects.length === 0 ? (
+          <div className="pcard-proj-empty">No project activity detected for this provider yet.</div>
         ) : (
-          <div style={{ display: 'grid', gap: 3, marginTop: 4 }}>
-            {breakdown.map((entry) => (
-              <div key={entry.model} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}>
-                <span style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.model}</span>
-                <span className="metric-label" style={{ fontSize: 8 }}>{formatTokens(entry.input_tokens)}in</span>
-                <span className="metric-label" style={{ fontSize: 8 }}>{formatTokens(entry.output_tokens)}out</span>
-                <span style={{ fontWeight: 700, fontSize: 9, fontFamily: 'var(--font-mono)' }}>${entry.estimated_cost_usd.toFixed(2)}</span>
-              </div>
-            ))}
+          <div className="pcard-proj-grid soft-scroll">
+            {providerProjects.map((project) => {
+              const providerCommands = project.commands;
+              const providerCost = project.estimated_cost_usd;
+              // Check if project has recent activity (last 15 min)
+              const cutoff = Date.now() - 15 * 60 * 1000;
+              const isActive = providerCommands.some((c) => new Date(c.timestamp).getTime() > cutoff);
+
+              return (
+                <div key={project.id} className="pcard-proj-card">
+                  <div className="pcard-proj-header">
+                    <div className="pcard-proj-title-col">
+                      <div className="pcard-proj-title-row">
+                        <span className="pcard-proj-title">{project.label}</span>
+                        {isActive && (
+                          <span className="pcard-proj-active-dot" title="Active in last 15 min" />
+                        )}
+                      </div>
+                      <span className="pcard-proj-path" title={project.path ?? ''}>
+                        {project.path ?? 'session activity'}
+                      </span>
+                    </div>
+                    <span className="pcard-proj-cost">${providerCost.toFixed(2)}</span>
+                  </div>
+
+                  <div className="pcard-proj-stats">
+                    <span className="pcard-proj-stat">
+                      <span className="pcard-proj-stat-val">{providerCommands.length}</span>
+                      <span className="pcard-proj-stat-label">requests</span>
+                    </span>
+                    <span className="pcard-proj-stat">
+                      <span className="pcard-proj-stat-val">{formatTokens(project.estimated_tokens)}</span>
+                      <span className="pcard-proj-stat-label">tokens</span>
+                    </span>
+                    <span className="pcard-proj-stat">
+                      <span className="pcard-proj-stat-val">{project.models.length}</span>
+                      <span className="pcard-proj-stat-label">models</span>
+                    </span>
+                    <span className="pcard-proj-stat">
+                      <span className="pcard-proj-stat-val">{formatAge(project.latest_timestamp)}</span>
+                      <span className="pcard-proj-stat-label">last seen</span>
+                    </span>
+                  </div>
+
+                  {project.models.length > 0 && (
+                    <div className="pcard-proj-models">
+                      {project.models.slice(0, 3).map((model) => (
+                        <span key={model} className="pcard-proj-model-chip" title={model}>{model}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
-      </GlassPanel>
+      </div>
 
-      {showRecentInputs && (
-        <GlassPanel style={{ padding: '6px 8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <span style={{ fontSize: 11, fontWeight: 700 }}>Recent Conversations</span>
-              <span className="metric-label" style={{ fontSize: 8 }}>Recent conversations</span>
-            </div>
+      {/* Recent conversations (expandable) */}
+      {showRecent && (
+        <div className="pcard-section-panel pcard-recent">
+          <div className="pcard-section-head">
+            <span className="pcard-section-title">Recent Conversations</span>
             {breakdown[0] && (
-              <span
-                className="glass-pill"
-                style={{ fontSize: 8, padding: '1px 5px', maxWidth: 138, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                title={`${breakdown[0].model} / ${formatTokens(breakdown[0].total_tokens)} tokens`}
-              >
+              <span className="pcard-cost-chip" title={`${breakdown[0].model} / ${formatTokens(breakdown[0].total_tokens)} tokens`}>
                 {breakdown[0].model} / {formatTokens(breakdown[0].total_tokens)}
               </span>
             )}
           </div>
-
           <RecentActivitySlides
             entries={recentActivity}
-            emptyMessage="No recent conversations were detected for this provider yet."
-            resetKey={snapshot.provider}
+            emptyMessage="No recent conversations detected for this provider yet."
+            resetKey={providerId}
           />
-        </GlassPanel>
-      )}
-
-      {/* Alerts */}
-      {alerts.length > 0 && (
-        <GlassPanel style={{ padding: '6px 8px' }}>
-          <span style={{ fontSize: 11, fontWeight: 700 }}>Alerts</span>
-          <div style={{ display: 'grid', gap: 3, marginTop: 4 }}>
-            {alerts.map((alert) => (
-              <div
-                key={`${alert.window_type}-${alert.threshold_percent}`}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9 }}
-              >
-                <span>{alert.window_type}</span>
-                <span style={{ color: severityColor[alert.severity], fontWeight: 700 }}>
-                  {alert.severity.toUpperCase()}
-                </span>
-                <span className="metric-label" style={{ fontSize: 8, marginLeft: 'auto' }}>
-                  {alert.utilization.toFixed(0)}% / {alert.threshold_percent}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </GlassPanel>
+        </div>
       )}
     </div>
   );

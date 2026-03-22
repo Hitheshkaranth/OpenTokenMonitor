@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Gauge, History, RefreshCw } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import GlassPill from '@/components/glass/GlassPill';
 import GlassPanel from '@/components/glass/GlassPanel';
 import WidgetActivityView from '@/components/layout/WidgetActivityView';
 import WidgetGauge, { arcColor } from '@/components/meters/WidgetGauge';
@@ -79,113 +78,57 @@ const WidgetMode = ({
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div className="nav-bar" data-tauri-drag-region style={{ flexShrink: 0 }}>
         <div className="nav-header" data-tauri-drag-region>
-          <div className="nav-brand" data-tauri-drag-region>
+          {/* Left: logo + title + refresh */}
+          <div className="nav-header-left" data-tauri-drag-region>
             <img src="/open_token_monitor_icon.png" alt="OTM" className="nav-logo" />
-            <span className="nav-title">OpenToken Monitor</span>
-          </div>
-          <div className="nav-controls">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginRight: 2 }}>
-              <GlassPill
-                active={screen === 'usage'}
-                onClick={() => setScreen('usage')}
-                title="Usage rings"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 0,
-                  width: 26,
-                  height: 26,
-                  minWidth: 26,
-                  padding: 0,
-                  fontSize: 9,
-                }}
-              >
-                <Gauge size={11} />
-              </GlassPill>
-              <GlassPill
-                active={screen === 'activity'}
-                onClick={() => setScreen('activity')}
-                title="Recent conversations"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 0,
-                  width: 26,
-                  height: 26,
-                  minWidth: 26,
-                  padding: 0,
-                  fontSize: 9,
-                }}
-              >
-                <History size={11} />
-              </GlassPill>
-            </div>
+            <span className="nav-title" data-tauri-drag-region>OpenToken Monitor</span>
             <button
-              className="glass-pill compact-action-btn"
+              className="nav-action-btn"
               onClick={onRefresh}
               disabled={refreshBusy}
               title="Refresh all (Ctrl+R)"
-              style={{ width: 26, height: 26, minWidth: 26 }}
             >
-              <RefreshCw size={12} className={refreshBusy ? 'spin-icon' : ''} />
+              <RefreshCw size={11} className={refreshBusy ? 'spin-icon' : ''} />
+            </button>
+          </div>
+
+          {/* Center: screen toggle pills */}
+          <nav className="nav-pill-bar" data-tauri-drag-region>
+            <button
+              className={`nav-pill ${screen === 'usage' ? 'nav-pill-active' : ''}`}
+              onClick={() => setScreen('usage')}
+              title="Usage rings"
+            >
+              <Gauge size={12} />
             </button>
             <button
-              type="button"
-              aria-label="Expand to full view"
+              className={`nav-pill ${screen === 'activity' ? 'nav-pill-active' : ''}`}
+              onClick={() => setScreen('activity')}
+              title="Recent conversations"
+            >
+              <History size={12} />
+            </button>
+          </nav>
+
+          {/* Right: expand + window controls */}
+          <div className="nav-header-right">
+            <button
+              className="nav-action-btn"
               onClick={onExpand}
               title="Expand to full view"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 24,
-                height: 24,
-                minWidth: 24,
-                padding: 0,
-                color: 'var(--text-primary)',
-                background: 'rgba(255,255,255,0.12)',
-                border: '1px solid rgba(255,255,255,0.18)',
-                borderRadius: 7,
-                cursor: 'pointer',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                transition: 'background .15s, border-color .15s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.22)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)';
-              }}
             >
-              <svg width="9" height="9" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M1 9L9 1M9 1H3.5M9 1V6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <button
-              type="button"
-              aria-label="Minimize"
-              title="Minimize"
-              className="window-btn"
-              onClick={() => {
-                if (isTauriRuntime()) getCurrentWindow().minimize();
-              }}
-              style={{ background: '#febc2e' }}
-            />
-            <button
-              type="button"
-              aria-label="Close"
-              title="Close"
-              className="window-btn"
-              onClick={() => {
-                if (isTauriRuntime()) invoke('quit_app');
-              }}
-              style={{ background: '#ff5f57' }}
-            />
+            <div className="nav-traffic-lights">
+              <button type="button" aria-label="Minimize" title="Minimize" className="window-btn window-btn-minimize"
+                onClick={() => { if (isTauriRuntime()) getCurrentWindow().minimize(); }}
+              />
+              <button type="button" aria-label="Close" title="Close" className="window-btn window-btn-close"
+                onClick={() => { if (isTauriRuntime()) invoke('quit_app'); }}
+              />
+            </div>
           </div>
         </div>
       </div>

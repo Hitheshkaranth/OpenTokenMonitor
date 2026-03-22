@@ -26,7 +26,7 @@ export const useUsageData = () => {
         await fetchAll();
       } finally {
         providers.forEach((provider) => {
-          fetchRecentActivity(provider).catch(() => undefined);
+          fetchRecentActivity(provider, 120).catch(() => undefined);
         });
       }
     };
@@ -42,12 +42,12 @@ export const useUsageData = () => {
         // store keeps its provider-keyed shape.
         payload.forEach((snapshot) => {
           upsertSnapshot(snapshot);
-          fetchRecentActivity(snapshot.provider).catch(() => undefined);
+          fetchRecentActivity(snapshot.provider, 120).catch(() => undefined);
         });
         return;
       }
       upsertSnapshot(payload);
-      fetchRecentActivity(payload.provider).catch(() => undefined);
+      fetchRecentActivity(payload.provider, 120).catch(() => undefined);
     });
 
     return () => {

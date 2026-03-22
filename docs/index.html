@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenTokenMonitor — Track AI Token Usage &amp; Costs</title>
+  <meta name="description" content="Free, open-source desktop app to monitor token consumption and costs across Claude Code, Copilot, Cursor, and other AI CLI tools. Private. Lightweight. Cross-platform.">
+  <meta property="og:title" content="OpenTokenMonitor — Track AI Token Usage &amp; Costs">
+  <meta property="og:description" content="Free, open-source desktop app to monitor token consumption and costs across Claude Code, Copilot, Cursor, and other AI CLI tools. Private. Lightweight. Cross-platform.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://hithesh-p.github.io/OpenTokenMonitor/">
+  <meta property="og:image" content="https://hithesh-p.github.io/OpenTokenMonitor/images/overview-0.3.1.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="OpenTokenMonitor — Track AI Token Usage &amp; Costs">
+  <meta name="twitter:description" content="Free, open-source desktop app to monitor token consumption and costs across Claude Code, Copilot, Cursor, and other AI CLI tools. Private. Lightweight. Cross-platform.">
+  <meta name="twitter:image" content="https://hithesh-p.github.io/OpenTokenMonitor/images/overview-0.3.1.png">
+  <meta name="theme-color" content="#09090f">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='none' stroke='%2300b4d8' stroke-width='2'/><circle cx='16' cy='16' r='8' fill='none' stroke='%2300b4d8' stroke-width='1.5'/><text x='16' y='21' text-anchor='middle' font-size='14' font-weight='bold' fill='%2300b4d8'>T</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-deep: #09090f;
+      --bg-surface: #111118;
+      --bg-card: #16161f;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-hover: rgba(255, 255, 255, 0.12);
+      --cyan: #00b4d8;
+      --cyan-glow: rgba(0, 180, 216, 0.15);
+      --cyan-glow-strong: rgba(0, 180, 216, 0.3);
+      --green: #06d6a0;
+      --green-glow: rgba(6, 214, 160, 0.15);
+      --text-primary: #e8e8ed;
+      --text-secondary: #6b7280;
+      --text-muted: #4b5563;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ─── Utilities ─── */
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    a {
+      color: var(--cyan);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    a:hover { color: #33c9e8; }
+    a:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+      border-radius: 2px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      line-height: 1.4;
+    }
+
+    .btn-primary {
+      background: var(--cyan);
+      color: #09090f;
+    }
+    .btn-primary:hover {
+      background: #33c9e8;
+      color: #09090f;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px var(--cyan-glow-strong);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border-subtle);
+    }
+    .btn-secondary:hover {
+      border-color: var(--border-hover);
+      background: #1c1c28;
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+      padding: 8px 16px;
+      font-size: 0.85rem;
+    }
+    .btn-ghost:hover {
+      color: var(--text-primary);
+      border-color: var(--border-hover);
+    }
+
+    .badge {
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .section {
+      padding: 96px 0;
+    }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 16px;
+    }
+
+    .section-subtitle {
+      color: var(--text-secondary);
+      font-size: 1.05rem;
+      max-width: 540px;
+      line-height: 1.6;
+    }
+
+    /* ─── Nav ─── */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(9, 9, 15, 0.8);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--text-primary);
+      text-decoration: none;
+    }
+    .nav-logo:hover { color: var(--text-primary); }
+
+    .nav-logo svg {
+      flex-shrink: 0;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text-primary); }
+
+    .nav-cta {
+      font-size: 0.8rem !important;
+      padding: 6px 14px !important;
+      border-radius: 6px;
+    }
+
+    /* ─── Hero ─── */
+    .hero {
+      position: relative;
+      padding: 160px 0 80px;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .hero-glow {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 600px;
+      height: 400px;
+      background: radial-gradient(ellipse, var(--cyan-glow) 0%, transparent 70%);
+      filter: blur(80px);
+      pointer-events: none;
+      animation: glow-pulse 6s ease-in-out infinite;
+    }
+
+    @keyframes glow-pulse {
+      0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.1); }
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.2rem, 5.5vw, 3.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--text-primary) 40%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: var(--text-secondary);
+      max-width: 540px;
+      margin: 0 auto 32px;
+      line-height: 1.5;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .hero-primary-btn {
+      font-size: 1.05rem;
+      padding: 14px 32px;
+      border-radius: 10px;
+    }
+
+    .hero-secondary-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .hero-badges {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .hero-badges img {
+      height: 22px;
+    }
+
+    /* ─── App Preview ─── */
+    .preview-section {
+      padding: 0 0 96px;
+    }
+
+    .app-window {
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--bg-card);
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.03);
+    }
+
+    .window-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #111116;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .window-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .window-dot.red { background: #ff5f57; }
+    .window-dot.yellow { background: #febc2e; }
+    .window-dot.green { background: #28c840; }
+
+    .window-title {
+      flex: 1;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-right: 36px;
+    }
+
+    .app-content {
+      padding: 0;
+    }
+
+    .app-nav {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .app-nav-tab {
+      padding: 10px 20px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      cursor: default;
+    }
+    .app-nav-tab.active {
+      color: var(--cyan);
+      border-bottom-color: var(--cyan);
+    }
+
+    .app-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border-subtle);
+    }
+
+    .app-stat {
+      padding: 16px 20px;
+      background: var(--bg-card);
+    }
+
+    .app-stat-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .app-stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .app-stat-value.cyan { color: var(--cyan); }
+    .app-stat-value.green { color: var(--green); }
+
+    .app-chart {
+      padding: 20px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .app-chart-title {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .chart-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      height: 80px;
+    }
+
+    .chart-bar-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chart-bar {
+      width: 100%;
+      max-width: 40px;
+      border-radius: 3px 3px 0 0;
+      background: linear-gradient(to top, var(--cyan), rgba(0, 180, 216, 0.6));
+      transition: opacity 0.2s;
+    }
+
+    .chart-bar-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+
+    .app-sessions {
+      padding: 0;
+    }
+
+    .app-session-header {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1.2fr;
+      padding: 8px 20px;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .app-session-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1.2fr;
+      padding: 10px 20px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      border-bottom: 1px solid var(--border-subtle);
+      transition: background 0.15s;
+    }
+    .app-session-row:last-child { border-bottom: none; }
+
+    .session-tool {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-primary);
+    }
+
+    .session-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    .session-dot.idle { background: var(--text-muted); }
+
+    .session-tokens { color: var(--text-secondary); }
+    .session-cost { color: var(--green); }
+    .session-time { color: var(--text-muted); font-size: 0.75rem; }
+
+    /* ─── Features ─── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 48px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 28px 24px;
+      transition: all 0.25s ease;
+    }
+    .feature-card:hover {
+      border-color: rgba(0, 180, 216, 0.2);
+      box-shadow: 0 0 24px var(--cyan-glow);
+      transform: translateY(-2px);
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      margin-bottom: 16px;
+      color: var(--cyan);
+    }
+
+    .feature-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature-desc {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ─── How It Works ─── */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      margin-top: 48px;
+      position: relative;
+    }
+
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 32px;
+      left: calc(16.67% + 32px);
+      right: calc(16.67% + 32px);
+      height: 1px;
+      background: linear-gradient(to right, var(--cyan), var(--border-subtle), var(--cyan));
+    }
+
+    .step {
+      text-align: center;
+      position: relative;
+    }
+
+    .step-number {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--cyan);
+      margin-bottom: 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .step-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .step-desc {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ─── Supported Tools ─── */
+    .tools-strip {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 40px;
+    }
+
+    .tool-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 18px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+    .tool-chip:hover {
+      border-color: var(--border-hover);
+      color: var(--text-primary);
+    }
+    .tool-chip .chip-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--cyan);
+    }
+    .tool-chip.more {
+      border-style: dashed;
+      color: var(--text-muted);
+    }
+
+    /* ─── Open Source ─── */
+    .trust-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      margin-top: 40px;
+      align-items: start;
+    }
+
+    .trust-points {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .trust-point {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 0.925rem;
+      color: var(--text-secondary);
+    }
+
+    .trust-check {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      color: var(--green);
+      margin-top: 2px;
+    }
+
+    .code-block {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid var(--border-subtle);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .code-body {
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      overflow-x: auto;
+    }
+
+    .code-body .kw { color: #c792ea; }
+    .code-body .ty { color: var(--cyan); }
+    .code-body .st { color: var(--green); }
+    .code-body .cm { color: var(--text-muted); font-style: italic; }
+    .code-body .attr { color: #f78c6c; }
+
+    /* ─── Download ─── */
+    .download-section {
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 40px;
+    }
+
+    .download-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 24px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .download-card:hover {
+      border-color: rgba(0, 180, 216, 0.25);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .download-card svg {
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+    .download-card:hover svg { color: var(--cyan); }
+
+    .download-os {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text-primary);
+    }
+
+    .download-format {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .download-source {
+      text-align: center;
+      margin-top: 24px;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    .download-badge {
+      display: flex;
+      justify-content: center;
+      margin-top: 16px;
+    }
+
+    /* ─── Footer ─── */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-left {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .footer-left a {
+      color: var(--text-secondary);
+    }
+    .footer-left a:hover { color: var(--text-primary); }
+
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .footer-right a {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .footer-right a:hover { color: var(--text-secondary); }
+
+    .footer-disclaimer {
+      width: 100%;
+      text-align: center;
+      margin-top: 16px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 768px) {
+      .section { padding: 64px 0; }
+      .hero { padding: 120px 0 48px; }
+
+      .nav-links .nav-link-item { display: none; }
+
+      .features-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .steps {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+      .steps::before { display: none; }
+
+      .trust-grid {
+        grid-template-columns: 1fr;
+        gap: 32px;
+      }
+
+      .download-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .app-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .app-session-header,
+      .app-session-row {
+        grid-template-columns: 1.5fr 1fr 1fr;
+      }
+      .app-session-header > :last-child,
+      .app-session-row > :last-child {
+        display: none;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        text-align: center;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .hero h1 { font-size: 1.8rem; }
+      .hero-secondary-links { flex-direction: column; align-items: center; }
+    }
+
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .download-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── Navigation ─── -->
+  <nav aria-label="Main navigation">
+    <div class="container nav-inner">
+      <a href="#" class="nav-logo" aria-label="OpenTokenMonitor Home">
+        <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <circle cx="16" cy="16" r="14" stroke="#00b4d8" stroke-width="2"/>
+          <circle cx="16" cy="16" r="8" stroke="#00b4d8" stroke-width="1.5"/>
+          <text x="16" y="21" text-anchor="middle" font-size="14" font-weight="bold" fill="#00b4d8">T</text>
+        </svg>
+        OpenTokenMonitor
+      </a>
+      <ul class="nav-links">
+        <li class="nav-link-item"><a href="#features">Features</a></li>
+        <li class="nav-link-item"><a href="#how-it-works">How It Works</a></li>
+        <li class="nav-link-item"><a href="#open-source">Open Source</a></li>
+        <li><a href="#download" class="btn btn-primary nav-cta">Download</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ─── Hero ─── -->
+  <header class="hero">
+    <div class="hero-glow" aria-hidden="true"></div>
+    <div class="container hero-content">
+      <h1>Track Every Token.<br>Own Every Dollar.</h1>
+      <p class="hero-subtitle">
+        Open-source desktop app that monitors token usage and costs across your AI CLI tools — locally, privately, in real-time.
+      </p>
+      <div class="hero-actions">
+        <a id="hero-download-btn" href="#download" class="btn btn-primary hero-primary-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span id="hero-download-text">Download for Your OS</span>
+        </a>
+        <div class="hero-secondary-links" id="hero-alt-links">
+          <a href="#download" class="btn btn-ghost">See all platforms</a>
+        </div>
+      </div>
+      <div class="hero-badges">
+        <a href="https://github.com/hithesh-p/OpenTokenMonitor/releases/latest" aria-label="Latest release version">
+          <img src="https://img.shields.io/github/v/release/hithesh-p/OpenTokenMonitor?style=flat-square&color=00b4d8" alt="Latest release version" class="badge" loading="lazy">
+        </a>
+        <a href="https://github.com/hithesh-p/OpenTokenMonitor" aria-label="GitHub stars">
+          <img src="https://img.shields.io/github/stars/hithesh-p/OpenTokenMonitor?style=flat-square&color=8892a4" alt="GitHub stars" class="badge" loading="lazy">
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── Visual Preview ─── -->
+  <section class="preview-section" aria-label="App preview">
+    <div class="container">
+      <div class="app-window" role="img" aria-label="OpenTokenMonitor dashboard preview showing token counts, costs, usage charts, and active sessions">
+        <div class="window-titlebar" aria-hidden="true">
+          <span class="window-dot red"></span>
+          <span class="window-dot yellow"></span>
+          <span class="window-dot green"></span>
+          <span class="window-title">OpenTokenMonitor</span>
+        </div>
+        <div class="app-content">
+          <div class="app-nav" aria-hidden="true">
+            <span class="app-nav-tab active">Dashboard</span>
+            <span class="app-nav-tab">Sessions</span>
+            <span class="app-nav-tab">Projects</span>
+            <span class="app-nav-tab">Settings</span>
+          </div>
+          <div class="app-stats">
+            <div class="app-stat">
+              <div class="app-stat-label">Tokens Today</div>
+              <div class="app-stat-value">142,837</div>
+            </div>
+            <div class="app-stat">
+              <div class="app-stat-label">Cost Today</div>
+              <div class="app-stat-value green">$4.28</div>
+            </div>
+            <div class="app-stat">
+              <div class="app-stat-label">Active Tool</div>
+              <div class="app-stat-value cyan">Claude Code</div>
+            </div>
+          </div>
+          <div class="app-chart">
+            <div class="app-chart-title">Daily Usage — This Week</div>
+            <div class="chart-bars">
+              <div class="chart-bar-group">
+                <div class="chart-bar" style="height:45%"></div>
+                <span class="chart-bar-label">Mon</span>
+              </div>
+              <div class="chart-bar-group">
+                <div class="chart-bar" style="height:72%"></div>
+                <span class="chart-bar-label">Tue</span>
+              </div>
+              <div class="chart-bar-group">
+                <div class="chart-bar" style="height:58%"></div>
+                <span class="chart-bar-label">Wed</span>
+              </div>
+              <div class="chart-bar-group">
+                <div class="chart-bar" style="height:90%"></div>
+                <span class="chart-bar-label">Thu</span>
+              </div>
+              <div class="chart-bar-group">
+                <div class="chart-bar" style="height:65%"></div>
+                <span class="chart-bar-label">Fri</span>
+              </div>
+              <div class="chart-bar-group">
+                <div class="chart-bar" style="height:30%"></div>
+                <span class="chart-bar-label">Sat</span>
+              </div>
+              <div class="chart-bar-group">
+                <div class="chart-bar" style="height:22%"></div>
+                <span class="chart-bar-label">Sun</span>
+              </div>
+            </div>
+          </div>
+          <div class="app-sessions">
+            <div class="app-session-header">
+              <span>Tool</span>
+              <span>Tokens</span>
+              <span>Cost</span>
+              <span>Last Active</span>
+            </div>
+            <div class="app-session-row">
+              <span class="session-tool"><span class="session-dot"></span>Claude Code</span>
+              <span class="session-tokens">87,241</span>
+              <span class="session-cost">$2.61</span>
+              <span class="session-time">2 min ago</span>
+            </div>
+            <div class="app-session-row">
+              <span class="session-tool"><span class="session-dot"></span>Cursor</span>
+              <span class="session-tokens">41,096</span>
+              <span class="session-cost">$1.23</span>
+              <span class="session-time">14 min ago</span>
+            </div>
+            <div class="app-session-row">
+              <span class="session-tool"><span class="session-dot idle"></span>Aider</span>
+              <span class="session-tokens">14,500</span>
+              <span class="session-cost">$0.44</span>
+              <span class="session-time">3 hrs ago</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Features ─── -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-label">Features</div>
+      <h2 class="section-title">Everything you need to understand your AI spend</h2>
+      <p class="section-subtitle">Lightweight, private, and built for developers who care about what their tools actually cost.</p>
+
+      <div class="features-grid">
+        <!-- Real-Time Tracking -->
+        <div class="feature-card">
+          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <polyline points="4 28 10 22 16 25 22 15 28 18 34 10" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="34" cy="10" r="3" fill="currentColor" opacity="0.3"/>
+          </svg>
+          <h3 class="feature-title">Real-Time Tracking</h3>
+          <p class="feature-desc">Watch input/output tokens and cost estimates update live as your AI tools work.</p>
+        </div>
+
+        <!-- Multi-Tool Support -->
+        <div class="feature-card">
+          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <rect x="4" y="4" width="14" height="14" rx="3"/>
+            <rect x="22" y="4" width="14" height="14" rx="3"/>
+            <rect x="4" y="22" width="14" height="14" rx="3"/>
+            <rect x="22" y="22" width="14" height="14" rx="3" stroke-dasharray="3 2"/>
+          </svg>
+          <h3 class="feature-title">Multi-Tool Support</h3>
+          <p class="feature-desc">Claude Code, Copilot, Cursor, Aider, Codex CLI — track them all from one dashboard.</p>
+        </div>
+
+        <!-- Cost Analytics -->
+        <div class="feature-card">
+          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <circle cx="20" cy="20" r="16"/>
+            <text x="20" y="26" text-anchor="middle" font-size="18" font-weight="600" fill="currentColor">$</text>
+          </svg>
+          <h3 class="feature-title">Cost Analytics</h3>
+          <p class="feature-desc">Per-session breakdowns, daily trends, and monthly projections mapped to provider pricing.</p>
+        </div>
+
+        <!-- 100% Private -->
+        <div class="feature-card">
+          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <rect x="8" y="18" width="24" height="18" rx="3"/>
+            <path d="M13 18v-5a7 7 0 0 1 14 0v5"/>
+            <circle cx="20" cy="28" r="2" fill="currentColor"/>
+          </svg>
+          <h3 class="feature-title">100% Private</h3>
+          <p class="feature-desc">All data stays on your machine in SQLite. Zero telemetry, zero cloud, zero tracking.</p>
+        </div>
+
+        <!-- Plugin Architecture -->
+        <div class="feature-card">
+          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M16 4v6a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V4" stroke-linecap="round"/>
+            <rect x="8" y="12" width="24" height="20" rx="3"/>
+            <line x1="16" y1="20" x2="16" y2="26" stroke-linecap="round"/>
+            <line x1="24" y1="20" x2="24" y2="26" stroke-linecap="round"/>
+          </svg>
+          <h3 class="feature-title">Plugin Architecture</h3>
+          <p class="feature-desc">Extensible parsers for any AI CLI tool. Add support for new tools with minimal code.</p>
+        </div>
+
+        <!-- System Tray -->
+        <div class="feature-card">
+          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <rect x="4" y="6" width="32" height="22" rx="3"/>
+            <line x1="4" y1="24" x2="36" y2="24"/>
+            <line x1="16" y1="28" x2="24" y2="28" stroke-linecap="round"/>
+            <line x1="20" y1="28" x2="20" y2="34" stroke-linecap="round"/>
+            <line x1="14" y1="34" x2="26" y2="34" stroke-linecap="round"/>
+          </svg>
+          <h3 class="feature-title">System Tray</h3>
+          <p class="feature-desc">Runs quietly in the background. Quick-glance stats without switching windows.</p>
+        </div>
+
+        <!-- Lightweight -->
+        <div class="feature-card">
+          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M20 4c-4 8-12 12-12 22a12 12 0 0 0 24 0c0-10-8-14-12-22z" stroke-linejoin="round"/>
+            <path d="M20 36v-12" stroke-linecap="round" opacity="0.4"/>
+            <path d="M20 24c-3 3-6 5-6 8" stroke-linecap="round" opacity="0.4"/>
+          </svg>
+          <h3 class="feature-title">Lightweight</h3>
+          <p class="feature-desc">Rust + Tauri means minimal RAM and CPU footprint. No Electron bloat.</p>
+        </div>
+
+        <!-- Session History -->
+        <div class="feature-card">
+          <svg class="feature-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <circle cx="20" cy="20" r="16"/>
+            <polyline points="20 10 20 20 28 24" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <h3 class="feature-title">Session History</h3>
+          <p class="feature-desc">Full session logs with per-interaction token counts and cost breakdowns over time.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── How It Works ─── -->
+  <section class="section" id="how-it-works" style="background: var(--bg-surface); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
+    <div class="container">
+      <div style="text-align:center;">
+        <div class="section-label">How It Works</div>
+        <h2 class="section-title" style="margin-left:auto;margin-right:auto;">Three steps. Thirty seconds.</h2>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">01</div>
+          <h3 class="step-title">Install</h3>
+          <p class="step-desc">Download the binary for your OS. No dependencies, no setup wizards.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">02</div>
+          <h3 class="step-title">Configure</h3>
+          <p class="step-desc">Point it at your AI tool logs. Claude Code paths are auto-detected.</p>
+        </div>
+        <div class="step">
+          <div class="step-number">03</div>
+          <h3 class="step-title">Monitor</h3>
+          <p class="step-desc">See tokens and costs in real-time, session by session, tool by tool.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Supported Tools ─── -->
+  <section class="section" id="tools">
+    <div class="container" style="text-align:center;">
+      <div class="section-label">Compatibility</div>
+      <h2 class="section-title" style="margin-left:auto;margin-right:auto;">Works with your AI tools</h2>
+
+      <div class="tools-strip">
+        <span class="tool-chip"><span class="chip-dot"></span>Claude Code</span>
+        <span class="tool-chip"><span class="chip-dot"></span>GitHub Copilot CLI</span>
+        <span class="tool-chip"><span class="chip-dot"></span>Cursor</span>
+        <span class="tool-chip"><span class="chip-dot"></span>Aider</span>
+        <span class="tool-chip"><span class="chip-dot"></span>OpenAI Codex CLI</span>
+        <span class="tool-chip more">+ more via plugins</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Open Source & Trust ─── -->
+  <section class="section" id="open-source" style="background: var(--bg-surface); border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle);">
+    <div class="container">
+      <div class="section-label">Open Source</div>
+      <h2 class="section-title">Fully open source. MIT licensed. Audit every line.</h2>
+      <p class="section-subtitle" style="margin-bottom:0;">Built with Rust, Tauri, React, TypeScript, and SQLite. No black boxes.</p>
+
+      <div class="trust-grid">
+        <div>
+          <ul class="trust-points">
+            <li class="trust-point">
+              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Zero telemetry — no data ever leaves your machine</span>
+            </li>
+            <li class="trust-point">
+              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>No cloud services — everything runs locally</span>
+            </li>
+            <li class="trust-point">
+              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>SQLite on disk — your data in a format you control</span>
+            </li>
+            <li class="trust-point">
+              <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Rust-safe memory — no buffer overflows, no data leaks</span>
+            </li>
+          </ul>
+          <div style="margin-top:24px;">
+            <a href="https://github.com/hithesh-p/OpenTokenMonitor" class="btn btn-secondary">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+              View on GitHub
+            </a>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>
+            src-tauri/src/config.rs
+          </div>
+          <pre class="code-body"><span class="cm">// All data stays local — by design</span>
+<span class="attr">#[derive(Serialize, Deserialize)]</span>
+<span class="kw">pub struct</span> <span class="ty">AppConfig</span> {
+    <span class="kw">pub</span> db_path: <span class="ty">PathBuf</span>,
+    <span class="kw">pub</span> poll_interval_ms: <span class="ty">u64</span>,
+    <span class="kw">pub</span> log_sources: <span class="ty">Vec</span>&lt;<span class="ty">LogSource</span>&gt;,
+    <span class="kw">pub</span> telemetry: <span class="ty">bool</span>, <span class="cm">// always false</span>
+}</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Download ─── -->
+  <!-- TODO: verify these asset filenames match your actual GitHub release asset names -->
+  <section class="section download-section" id="download">
+    <div class="container" style="text-align:center;">
+      <div class="section-label">Download</div>
+      <h2 class="section-title" style="margin-left:auto;margin-right:auto;">Get OpenTokenMonitor</h2>
+      <p class="section-subtitle" style="margin-left:auto;margin-right:auto;">Pick your platform. Install in seconds. Start tracking.</p>
+
+      <div class="download-grid">
+        <!-- Windows -->
+        <a href="https://github.com/hithesh-p/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64-setup.msi" class="download-card" data-os="windows">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+          <span class="download-os">Windows</span>
+          <span class="download-format">.msi — x64</span>
+        </a>
+
+        <!-- macOS Intel -->
+        <a href="https://github.com/hithesh-p/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64.dmg" class="download-card" data-os="mac-intel">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <span class="download-os">macOS Intel</span>
+          <span class="download-format">.dmg — x64</span>
+        </a>
+
+        <!-- macOS Apple Silicon -->
+        <a href="https://github.com/hithesh-p/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_aarch64.dmg" class="download-card" data-os="mac-arm">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <span class="download-os">macOS Apple Silicon</span>
+          <span class="download-format">.dmg — aarch64</span>
+        </a>
+
+        <!-- Linux .deb -->
+        <a href="https://github.com/hithesh-p/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_amd64.deb" class="download-card" data-os="linux">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.777.064 1.613-.205 2.118-.78l.04-.036c.564-.039 1.126-.63 1.41-1.363.29-.734.292-1.573.057-2.165-.622-.33-1.4-.8-2.267-1.235a7.015 7.015 0 00-2.044-3.4l-.164-.076a5.09 5.09 0 00-.267-.702c.262-.64.422-1.399.399-2.195-.022-.772-.17-1.575-.535-2.268a4.1 4.1 0 00-.266-.4c.09-.3.158-.605.195-.89.184-1.265-.203-2.523-.828-3.064a2.1 2.1 0 00-.397-.271c-.094-.06-.21-.09-.316-.09z"/></svg>
+          <span class="download-os">Linux</span>
+          <span class="download-format">.deb — amd64</span>
+        </a>
+
+        <!-- Linux .AppImage -->
+        <a href="https://github.com/hithesh-p/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_amd64.AppImage" class="download-card" data-os="linux">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.777.064 1.613-.205 2.118-.78l.04-.036c.564-.039 1.126-.63 1.41-1.363.29-.734.292-1.573.057-2.165-.622-.33-1.4-.8-2.267-1.235a7.015 7.015 0 00-2.044-3.4l-.164-.076a5.09 5.09 0 00-.267-.702c.262-.64.422-1.399.399-2.195-.022-.772-.17-1.575-.535-2.268a4.1 4.1 0 00-.266-.4c.09-.3.158-.605.195-.89.184-1.265-.203-2.523-.828-3.064a2.1 2.1 0 00-.397-.271c-.094-.06-.21-.09-.316-.09z"/></svg>
+          <span class="download-os">Linux</span>
+          <span class="download-format">.AppImage — amd64</span>
+        </a>
+      </div>
+
+      <p class="download-source">
+        Or <a href="https://github.com/hithesh-p/OpenTokenMonitor">build from source</a> on GitHub.
+      </p>
+
+      <div class="download-badge">
+        <a href="https://github.com/hithesh-p/OpenTokenMonitor/releases/latest" aria-label="Latest release version">
+          <img src="https://img.shields.io/github/v/release/hithesh-p/OpenTokenMonitor?style=flat-square&color=00b4d8" alt="Latest release version" class="badge" loading="lazy">
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Footer ─── -->
+  <footer>
+    <div class="container">
+      <div class="footer-inner">
+        <div class="footer-left">
+          Built by <a href="https://github.com/hithesh-p">Hithesh P</a> &middot; MIT License &middot; 2025
+        </div>
+        <div class="footer-right">
+          <a href="https://github.com/hithesh-p/OpenTokenMonitor">GitHub</a>
+          <a href="https://github.com/hithesh-p/OpenTokenMonitor/releases">Releases</a>
+          <a href="https://github.com/hithesh-p/OpenTokenMonitor/issues">Issues</a>
+        </div>
+      </div>
+      <p class="footer-disclaimer">
+        OpenTokenMonitor is not affiliated with Anthropic, OpenAI, or any AI tool vendor.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    (function() {
+      // ─── OS Detection ───
+      var ua = navigator.userAgent || '';
+      var platform = navigator.platform || '';
+      var os = 'unknown';
+
+      if (/Win/i.test(platform) || /Windows/i.test(ua)) {
+        os = 'windows';
+      } else if (/Mac/i.test(platform) || /Macintosh/i.test(ua)) {
+        // Attempt Apple Silicon detection
+        // navigator.userAgent on Safari/macOS doesn't always distinguish,
+        // but we can try via GPU or known patterns
+        if (/ARM/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+          os = 'mac-arm';
+        } else {
+          os = 'mac-intel';
+        }
+      } else if (/Linux/i.test(platform) || /Linux/i.test(ua)) {
+        os = 'linux';
+      }
+
+      var downloads = {
+        'windows': {
+          url: 'https://github.com/hithesh-p/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64-setup.msi',
+          label: 'Download for Windows',
+          format: '.msi'
+        },
+        'mac-intel': {
+          url: 'https://github.com/hithesh-p/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_x64.dmg',
+          label: 'Download for macOS (Intel)',
+          format: '.dmg'
+        },
+        'mac-arm': {
+          url: 'https://github.com/hithesh-p/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_aarch64.dmg',
+          label: 'Download for macOS (Apple Silicon)',
+          format: '.dmg'
+        },
+        'linux': {
+          url: 'https://github.com/hithesh-p/OpenTokenMonitor/releases/latest/download/OpenTokenMonitor_amd64.deb',
+          label: 'Download for Linux',
+          format: '.deb'
+        }
+      };
+
+      var heroBtn = document.getElementById('hero-download-btn');
+      var heroText = document.getElementById('hero-download-text');
+      var altLinks = document.getElementById('hero-alt-links');
+
+      if (os !== 'unknown' && downloads[os]) {
+        heroBtn.href = downloads[os].url;
+        heroText.textContent = downloads[os].label;
+
+        // Build alt links for other platforms
+        var alts = [];
+        var others = Object.keys(downloads);
+        for (var i = 0; i < others.length; i++) {
+          if (others[i] !== os) {
+            alts.push('<a href="' + downloads[others[i]].url + '" class="btn btn-ghost">' + downloads[others[i]].label.replace('Download for ', '') + '</a>');
+          }
+        }
+        altLinks.innerHTML = alts.join('') + '<a href="#download" class="btn btn-ghost">All platforms</a>';
+      }
+
+      // ─── Highlight matching download card ───
+      var cards = document.querySelectorAll('.download-card[data-os]');
+      for (var j = 0; j < cards.length; j++) {
+        if (cards[j].getAttribute('data-os') === os) {
+          cards[j].style.borderColor = 'rgba(0, 180, 216, 0.35)';
+          cards[j].style.boxShadow = '0 0 20px rgba(0, 180, 216, 0.1)';
+        }
+      }
+    })();
+  </script>
+
+</body>
+</html>

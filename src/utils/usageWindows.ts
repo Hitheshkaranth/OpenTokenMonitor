@@ -1,4 +1,4 @@
-import { UsageWindow } from '@/types';
+import { UsageSnapshot, UsageWindow } from '@/types';
 
 const compactNumber = (value?: number | null) => {
   if (value == null) return '-';
@@ -24,6 +24,20 @@ export const windowLabel = (window?: UsageWindow) => {
     default:
       return 'Window';
   }
+};
+
+export const displayWindows = (snapshot?: UsageSnapshot): [UsageWindow | undefined, UsageWindow | undefined] => {
+  if (!snapshot) return [undefined, undefined];
+
+  const [first, second] = snapshot.windows;
+  if (!first || !second || snapshot.provider !== 'gemini') {
+    return [first, second];
+  }
+
+  const firstReset = first.reset_countdown_secs ?? Number.POSITIVE_INFINITY;
+  const secondReset = second.reset_countdown_secs ?? Number.POSITIVE_INFINITY;
+
+  return secondReset < firstReset ? [second, first] : [first, second];
 };
 
 export const windowValueLabel = (window?: UsageWindow) => {

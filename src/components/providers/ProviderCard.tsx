@@ -17,7 +17,7 @@ import {
   UsageSnapshot,
 } from '@/types';
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
-import { windowLabel, windowValueLabel } from '@/utils/usageWindows';
+import { displayWindows, windowLabel, windowValueLabel } from '@/utils/usageWindows';
 import { buildProjectSummaries } from '@/utils/projectActivity';
 
 const providerMeta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemini'; color: string; accent: string }> = {
@@ -121,7 +121,7 @@ const ProviderCard = ({
   }
 
   const meta = providerMeta[providerId];
-  const [primary, secondary] = snapshot.windows;
+  const [primary, secondary] = displayWindows(snapshot);
   const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
   const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
   const costToday = trend?.points[trend.points.length - 1]?.cost_usd ?? 0;

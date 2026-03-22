@@ -9,6 +9,7 @@ import ResetCountdown from '@/components/meters/ResetCountdown';
 import { ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry, UsageSnapshot, WindowType } from '@/types';
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { isTauriRuntime } from '@/utils/runtime';
+import { displayWindows } from '@/utils/usageWindows';
 
 const meta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemini' }> = {
   claude: { name: 'Claude', tint: 'claude' },
@@ -138,8 +139,7 @@ const WidgetMode = ({
           {providers.map((id) => {
             const snapshot = snapshots[id];
             const access = getProviderAccessState(statuses[id], snapshot);
-            const primary = snapshot?.windows[0];
-            const secondary = snapshot?.windows[1];
+            const [primary, secondary] = displayWindows(snapshot);
             const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
             const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
             const emptyStateLabel = access.health === 'error' ? 'Unavailable' : 'Awaiting';

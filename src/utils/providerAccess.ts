@@ -4,7 +4,7 @@ export type ProviderAccessHealth = ProviderStatus['health'] | 'unknown';
 
 export type ProviderAccessState = {
   health: ProviderAccessHealth;
-  label: 'Live' | 'Limited' | 'Retrying' | 'No access' | 'Checking';
+  label: 'Live' | 'Local' | 'Retrying' | 'No access' | 'Checking';
   detail: string;
   color: string;
 };
@@ -37,10 +37,10 @@ export const getProviderAccessState = (
 
   if (snapshot && (snapshot.provenance === 'derived_local' || snapshot.source === 'local_log')) {
     return {
-      health: 'waiting',
-      label: 'Limited',
-      detail: 'Showing limited usage data until live provider usage becomes accessible.',
-      color: providerAccessColor('waiting'),
+      health: 'active',
+      label: 'Local',
+      detail: 'Showing usage data derived from local session logs.',
+      color: providerAccessColor('active'),
     };
   }
 

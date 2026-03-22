@@ -183,8 +183,54 @@ struct ClaudeScannerCache {
     files: HashMap<String, ClaudeFileCache>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct GeminiDailyUsagePoint {
+    pub day: String,
+    pub input_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
+    pub cost_usd: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct GeminiModelDailyUsagePoint {
+    pub day: String,
+    pub model: String,
+    pub input_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub output_tokens: u64,
+    pub total_tokens: u64,
+    pub cost_usd: f64,
+}
+
+#[derive(Clone, Debug, Default)]
+struct GeminiContribution {
+    input: u64,
+    cache_read: u64,
+    output: u64,
+    total: u64,
+    cost: f64,
+    daily: HashMap<String, GeminiDailyUsagePoint>,
+    daily_by_model: HashMap<String, GeminiModelDailyUsagePoint>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct GeminiFileCache {
+    mtime_ms: u64,
+    size: u64,
+    parsed_bytes: u64,
+    contribution: GeminiContribution,
+}
+
+#[derive(Default)]
+struct GeminiScannerCache {
+    files: HashMap<String, GeminiFileCache>,
+}
+
 static CODEX_CACHE: OnceLock<Mutex<CodexScannerCache>> = OnceLock::new();
 static CLAUDE_CACHE: OnceLock<Mutex<ClaudeScannerCache>> = OnceLock::new();
+static GEMINI_CACHE: OnceLock<Mutex<GeminiScannerCache>> = OnceLock::new();
 
 pub fn read_codex_auth_bridge() -> CodexAuthBridge {
     let Some(home) = dirs::home_dir() else {
@@ -320,6 +366,20 @@ pub fn scan_claude_model_daily_usage() -> Vec<ClaudeModelDailyUsagePoint> {
     let mut guard = cache.lock().expect("claude scanner cache lock poisoned");
     guard.refresh_claude();
     guard.claude_model_daily()
+}
+
+pub fn scan_gemini_daily_usage() -> Vec<GeminiDailyUsagePoint> {
+    let cache = GEMINI_CACHE.get_or_init(|| Mutex::new(GeminiScannerCache::default()));
+    let mut guard = cache.lock().expect("gemini scanner cache lock poisoned");
+    guard.refresh_gemini();
+    guard.gemini_daily()
+}
+
+pub fn scan_gemini_model_daily_usage() -> Vec<GeminiModelDailyUsagePoint> {
+    let cache = GEMINI_CACHE.get_or_init(|| Mutex::new(GeminiScannerCache::default()));
+    let mut guard = cache.lock().expect("gemini scanner cache lock poisoned");
+    guard.refresh_gemini();
+    guard.gemini_model_daily()
 }
 
 pub fn scan_recent_activity(provider: ProviderId, limit: usize) -> Vec<RecentActivityEntry> {
@@ -1238,6 +1298,94 @@ impl ClaudeScannerCache {
         out
     }
 }
+impl GeminiScannerCache {
+    fn refresh_gemini(&mut self) {
+        let mut files = Vec::<PathBuf>::new();
+        for log_file in discover_gemini_log_files() {
+            if let Some(root) = log_file.path.parent() {
+                files.extend(discover_gemini_chat_files(root));
+            }
+        }
+
+        let mut keep = HashSet::<String>::new();
+        for path in files {
+            let key = file_key(&path);
+            keep.insert(key.clone());
+            let meta = match std::fs::metadata(&path) {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            let mtime_ms = file_mtime_ms(&meta);
+            let size = meta.len();
+
+            let entry = self.files.entry(key).or_default();
+            let unchanged = entry.mtime_ms == mtime_ms && entry.size == size;
+            if unchanged {
+                continue;
+            }
+
+            if size < entry.parsed_bytes {
+                *entry = GeminiFileCache::default();
+            }
+
+            entry.mtime_ms = mtime_ms;
+            entry.size = size;
+            parse_gemini_file_incremental(&path, entry);
+        }
+
+        self.files.retain(|k, _| keep.contains(k));
+    }
+
+    fn gemini_daily(&self) -> Vec<GeminiDailyUsagePoint> {
+        let mut merged = HashMap::<String, GeminiDailyUsagePoint>::new();
+        for file in self.files.values() {
+            for (day, point) in &file.contribution.daily {
+                let slot = merged
+                    .entry(day.clone())
+                    .or_insert_with(|| GeminiDailyUsagePoint {
+                        day: day.clone(),
+                        ..GeminiDailyUsagePoint::default()
+                    });
+                slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
+                slot.cache_read_tokens = slot
+                    .cache_read_tokens
+                    .saturating_add(point.cache_read_tokens);
+                slot.output_tokens = slot.output_tokens.saturating_add(point.output_tokens);
+                slot.total_tokens = slot.total_tokens.saturating_add(point.total_tokens);
+                slot.cost_usd += point.cost_usd;
+            }
+        }
+        let mut out: Vec<_> = merged.into_values().collect();
+        out.sort_by(|a, b| a.day.cmp(&b.day));
+        out
+    }
+
+    fn gemini_model_daily(&self) -> Vec<GeminiModelDailyUsagePoint> {
+        let mut merged = HashMap::<String, GeminiModelDailyUsagePoint>::new();
+        for file in self.files.values() {
+            for (key, point) in &file.contribution.daily_by_model {
+                let slot = merged
+                    .entry(key.clone())
+                    .or_insert_with(|| GeminiModelDailyUsagePoint {
+                        day: point.day.clone(),
+                        model: point.model.clone(),
+                        ..GeminiModelDailyUsagePoint::default()
+                    });
+                slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
+                slot.cache_read_tokens = slot
+                    .cache_read_tokens
+                    .saturating_add(point.cache_read_tokens);
+                slot.output_tokens = slot.output_tokens.saturating_add(point.output_tokens);
+                slot.total_tokens = slot.total_tokens.saturating_add(point.total_tokens);
+                slot.cost_usd += point.cost_usd;
+            }
+        }
+        let mut out: Vec<_> = merged.into_values().collect();
+        out.sort_by(|a, b| a.day.cmp(&b.day).then(a.model.cmp(&b.model)));
+        out
+    }
+}
+
 fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
     let Ok(mut file) = File::open(path) else {
         return;
@@ -1569,6 +1717,132 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
         model_daily.cost_usd += cost;
     }
 }
+struct GeminiPricePoint {
+    input_usd_per_1m: f64,
+    output_usd_per_1m: f64,
+}
+
+static GEMINI_PRICES: OnceLock<HashMap<&'static str, GeminiPricePoint>> = OnceLock::new();
+
+fn gemini_cost_usd(model: &str, input: u64, _cached: u64, output: u64) -> f64 {
+    let prices = GEMINI_PRICES.get_or_init(|| {
+        let mut m = HashMap::new();
+        m.insert(
+            "gemini-2.0-flash",
+            GeminiPricePoint {
+                input_usd_per_1m: 0.10,
+                output_usd_per_1m: 0.40,
+            },
+        );
+        m.insert(
+            "gemini-2.0-flash-lite",
+            GeminiPricePoint {
+                input_usd_per_1m: 0.075,
+                output_usd_per_1m: 0.30,
+            },
+        );
+        m.insert(
+            "gemini-1.5-flash",
+            GeminiPricePoint {
+                input_usd_per_1m: 0.10,
+                output_usd_per_1m: 0.40,
+            },
+        );
+        m.insert(
+            "gemini-1.5-pro",
+            GeminiPricePoint {
+                input_usd_per_1m: 1.25,
+                output_usd_per_1m: 5.00,
+            },
+        );
+        m
+    });
+
+    if let Some(price) = prices.get(model) {
+        let input_cost = (input as f64 / 1_000_000.0) * price.input_usd_per_1m;
+        let output_cost = (output as f64 / 1_000_000.0) * price.output_usd_per_1m;
+        input_cost + output_cost
+    } else {
+        let input_cost = (input as f64 / 1_000_000.0) * 0.15;
+        let output_cost = (output as f64 / 1_000_000.0) * 0.60;
+        input_cost + output_cost
+    }
+}
+
+fn parse_gemini_file_incremental(path: &Path, cache: &mut GeminiFileCache) {
+    let Ok(file) = File::open(path) else {
+        return;
+    };
+    // Gemini session files are full JSON objects, not JSONL.
+    // We read the whole thing and update our contribution.
+    // Since they are small, we don't need to be truly incremental here,
+    // we just replace the contribution from this file.
+    let Ok(json) = serde_json::from_reader::<_, Value>(BufReader::new(file)) else {
+        return;
+    };
+
+    let mut contribution = GeminiContribution::default();
+    let day = pick_first_str(&json, &[&["startTime"], &["timestamp"]])
+        .and_then(|s| try_iso_to_day(&s))
+        .unwrap_or_else(|| day_from_ms(epoch_ms_now()));
+
+    if let Some(messages) = json.get("messages").and_then(|v| v.as_array()) {
+        for msg in messages {
+            if let Some(tokens) = msg.get("tokens") {
+                let input = pick_first_u64(tokens, &[&["input"]]).unwrap_or(0);
+                let output = pick_first_u64(tokens, &[&["output"]]).unwrap_or(0);
+                let cached = pick_first_u64(tokens, &[&["cached"]]).unwrap_or(0);
+                let total = pick_first_u64(tokens, &[&["total"]]).unwrap_or(input + output);
+
+                let model = msg
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("gemini-mixed");
+                let model_norm = normalize_gemini_model(model);
+
+                let cost = gemini_cost_usd(&model_norm, input, cached, output);
+
+                contribution.input = contribution.input.saturating_add(input);
+
+                contribution.cache_read = contribution.cache_read.saturating_add(cached);
+                contribution.output = contribution.output.saturating_add(output);
+                contribution.total = contribution.total.saturating_add(total);
+                contribution.cost += cost;
+
+                let daily = contribution
+                    .daily
+                    .entry(day.clone())
+                    .or_insert_with(|| GeminiDailyUsagePoint {
+                        day: day.clone(),
+                        ..GeminiDailyUsagePoint::default()
+                    });
+                daily.input_tokens = daily.input_tokens.saturating_add(input);
+                daily.cache_read_tokens = daily.cache_read_tokens.saturating_add(cached);
+                daily.output_tokens = daily.output_tokens.saturating_add(output);
+                daily.total_tokens = daily.total_tokens.saturating_add(total);
+                daily.cost_usd += cost;
+
+                let model_key = format!("{day}|{model_norm}");
+                let model_daily = contribution
+                    .daily_by_model
+                    .entry(model_key)
+                    .or_insert_with(|| GeminiModelDailyUsagePoint {
+                        day: day.clone(),
+                        model: model_norm.clone(),
+                        ..GeminiModelDailyUsagePoint::default()
+                    });
+                model_daily.input_tokens = model_daily.input_tokens.saturating_add(input);
+                model_daily.cache_read_tokens = model_daily.cache_read_tokens.saturating_add(cached);
+                model_daily.output_tokens = model_daily.output_tokens.saturating_add(output);
+                model_daily.total_tokens = model_daily.total_tokens.saturating_add(total);
+                model_daily.cost_usd += cost;
+            }
+        }
+    }
+
+    cache.contribution = contribution;
+}
+
 fn dedupe_codex_contributions(items: Vec<CodexContribution>) -> Vec<CodexContribution> {
     let mut by_session = HashMap::<String, CodexContribution>::new();
     let mut no_session = Vec::<CodexContribution>::new();
@@ -1994,6 +2268,44 @@ mod tests {
         let out = dedupe_codex_contributions(vec![archived, active.clone()]);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].input, active.input);
+    }
+
+    #[test]
+    fn gemini_session_parsing_v2() {
+        let dir = temp_dir("gemini-v2");
+        let file = dir.join("session-1.json");
+        let mut f = File::create(&file).unwrap();
+        writeln!(
+            f,
+            "{}",
+            r#"{
+  "startTime": "2026-03-22T17:25:19.501Z",
+  "messages": [
+    {
+      "type": "user",
+      "tokens": { "input": 100, "output": 0, "total": 100 }
+    },
+    {
+      "type": "gemini",
+      "model": "gemini-3-flash",
+      "tokens": { "input": 0, "output": 50, "cached": 10, "total": 60 }
+    }
+  ]
+}"#
+        )
+        .unwrap();
+
+        let mut cache = GeminiFileCache::default();
+        parse_gemini_file_incremental(&file, &mut cache);
+
+        assert_eq!(cache.contribution.input, 100);
+        assert_eq!(cache.contribution.output, 50);
+        assert_eq!(cache.contribution.cache_read, 10);
+        assert_eq!(cache.contribution.total, 160);
+        assert!((cache.contribution.cost - 0.000045).abs() < 0.000001);
+        assert!(cache.contribution.daily.contains_key("2026-03-22"));
+
+        let _ = remove_dir_all(dir);
     }
 
     #[test]

@@ -11,6 +11,7 @@ import {
   UsageSnapshot,
 } from '@/types';
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
+import { displayWindows } from '@/utils/usageWindows';
 
 const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'gemini'; color: string }> = {
   claude: { label: 'Claude', tint: 'claude', color: '#d97757' },
@@ -54,8 +55,7 @@ type OverviewCardProps = {
 
 const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], status, onClick }: OverviewCardProps) => {
   const meta = providerMeta[provider];
-  const primary = snapshot?.windows[0];
-  const secondary = snapshot?.windows[1];
+  const [primary, secondary] = displayWindows(snapshot);
   const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
   const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
   const costToday = trend?.points[trend.points.length - 1]?.cost_usd ?? 0;

@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Local-first desktop monitor for Claude, Codex, and Gemini usage.</strong></p>
 
-<p align="center">Version 0.3.0</p>
+<p align="center">Version 0.3.1</p>
 
 <p align="center">
   <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white" alt="Tauri" /></a>
@@ -18,11 +18,15 @@
 
 | Overview | Projects |
 |---|---|
-| ![Overview](./docs/images/overview-0.3.0.png) | ![Projects](./docs/images/projects-0.3.0.png) |
+| ![Overview](./docs/images/overview-0.3.1.png) | ![Projects](./docs/images/projects-0.3.1.png) |
 
 | Provider Detail | Widget |
 |---|---|
-| ![Provider detail](./docs/images/provider-detail-0.3.0.png) | ![Widget](./docs/images/widget-0.3.0.png) |
+| ![Provider detail](./docs/images/provider-detail-0.3.1.png) | ![Widget](./docs/images/widget-0.3.1.png) |
+
+| Settings |
+|---|
+| ![Settings](./docs/images/settings-0.3.1.png) |
 
 ## What It Does
 
@@ -30,13 +34,14 @@ OpenToken Monitor gives you one desktop surface for usage windows, recent prompt
 
 The app is local-first. It reads local CLI/session artifacts where possible, then augments them with live provider usage fetchers when credentials are available.
 
-## Highlights In 0.3.0
+## Highlights In 0.3.1
 
 - New Projects view that groups recent activity into workspace-level cost and command summaries
 - Updated dashboard flow with overview, provider detail, settings, about, and compact widget surfaces
 - Stronger provider-status handling so unavailable sources remain visible instead of failing silently
 - Refined startup, refresh, and theme controls in the settings surface
 - Centralized app versioning and metadata cleanup across the frontend and desktop shell
+- **Improved Gemini CLI Integration**: Accurately tracks tokens and estimates costs by recursively scanning local `session-*.json` telemetry logs, bypassing the need for a live API key. Status now correctly reflects "Local" rather than "Limited" when using these logs.
 
 ## Core Features
 

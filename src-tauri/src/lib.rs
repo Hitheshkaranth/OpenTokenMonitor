@@ -62,10 +62,19 @@ impl AppState {
 
     // Provider fetchers all need the same small set of auth/runtime inputs.
     fn fetch_context(&self) -> FetchContext {
+        self.fetch_context_with_cli(true)
+    }
+
+    fn file_watcher_context(&self) -> FetchContext {
+        self.fetch_context_with_cli(false)
+    }
+
+    fn fetch_context_with_cli(&self, allow_cli_strategy: bool) -> FetchContext {
         let api_keys = self.api_keys.lock().map(|g| g.clone()).unwrap_or_default();
         FetchContext {
             api_keys,
             allow_cookie_strategy: true,
+            allow_cli_strategy,
         }
     }
 }
@@ -159,6 +168,7 @@ async fn refresh_provider(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<UsageSnapshot, String> {
+    usage_scanners::invalidate_activity_cache();
     let snapshot = aggregator::refresh_provider(
         &state.registry,
         &state.store,
@@ -178,6 +188,7 @@ async fn refresh_all(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<UsageSnapshot>, String> {
+    usage_scanners::invalidate_activity_cache();
     let snapshots =
         aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context()).await?;
     update_tray_tooltip(&app, &snapshots);
@@ -311,12 +322,13 @@ fn start_file_watchers(app: &AppHandle) {
     let _handles = watchers::file_watcher::start(move |provider| {
         let app_inner = app_handle.clone();
         tauri::async_runtime::spawn(async move {
+            usage_scanners::invalidate_activity_cache();
             let state = app_inner.state::<AppState>();
             if let Ok(snapshot) = aggregator::refresh_provider(
                 &state.registry,
                 &state.store,
                 provider,
-                &state.fetch_context(),
+                &state.file_watcher_context(),
             )
             .await
             {
@@ -440,6 +452,7 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
             "refresh-all" => {
                 let app_inner = app.clone();
                 tauri::async_runtime::spawn(async move {
+                    usage_scanners::invalidate_activity_cache();
                     let state = app_inner.state::<AppState>();
                     if let Ok(snapshots) = aggregator::refresh_all(
                         &state.registry,

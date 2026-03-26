@@ -2,6 +2,12 @@ use serde_json::Value;
 use std::process::Command;
 use std::sync::OnceLock;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[derive(Debug, Clone)]
 pub struct GeminiCliStats {
     pub daily_used: u64,
@@ -15,7 +21,7 @@ pub fn fetch_stats() -> Result<GeminiCliStats, String> {
         return Err("gemini CLI does not support --stats".to_string());
     }
 
-    let output = Command::new(gemini_command())
+    let output = cli_command()
         .args(["--stats", "--json"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -57,7 +63,7 @@ pub fn fetch_stats() -> Result<GeminiCliStats, String> {
 pub fn supports_stats_command() -> bool {
     static SUPPORTS: OnceLock<bool> = OnceLock::new();
     *SUPPORTS.get_or_init(|| {
-        let Ok(output) = Command::new(gemini_command()).arg("--help").output() else {
+        let Ok(output) = cli_command().arg("--help").output() else {
             return false;
         };
         if !output.status.success() {
@@ -71,6 +77,13 @@ pub fn supports_stats_command() -> bool {
 #[cfg(target_os = "windows")]
 fn gemini_command() -> &'static str {
     "gemini"
+}
+
+fn cli_command() -> Command {
+    let mut command = Command::new(gemini_command());
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
 }
 
 #[cfg(not(target_os = "windows"))]

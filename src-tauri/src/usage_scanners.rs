@@ -6,7 +6,28 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use std::time::UNIX_EPOCH;
+use std::time::{Instant, UNIX_EPOCH};
+
+/// Cached results for scan_recent_activity, keyed by (ProviderId, limit).
+/// Each entry stores (timestamp, results). Entries older than CACHE_TTL are stale.
+static ACTIVITY_CACHE: OnceLock<
+    Mutex<HashMap<(ProviderId, usize), (Instant, Vec<RecentActivityEntry>)>>,
+> = OnceLock::new();
+
+const ACTIVITY_CACHE_TTL_SECS: u64 = 5;
+
+fn activity_cache(
+) -> &'static Mutex<HashMap<(ProviderId, usize), (Instant, Vec<RecentActivityEntry>)>> {
+    ACTIVITY_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Clear cached activity results for all providers. Called after refreshes
+/// so the next activity query returns fresh data.
+pub fn invalidate_activity_cache() {
+    if let Ok(mut cache) = activity_cache().lock() {
+        cache.clear();
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct CodexAuthBridge {
@@ -383,11 +404,27 @@ pub fn scan_gemini_model_daily_usage() -> Vec<GeminiModelDailyUsagePoint> {
 }
 
 pub fn scan_recent_activity(provider: ProviderId, limit: usize) -> Vec<RecentActivityEntry> {
-    match provider {
+    // Return cached result if fresh enough.
+    if let Ok(cache) = activity_cache().lock() {
+        if let Some((ts, entries)) = cache.get(&(provider, limit)) {
+            if ts.elapsed().as_secs() < ACTIVITY_CACHE_TTL_SECS {
+                return entries.clone();
+            }
+        }
+    }
+
+    let result = match provider {
         ProviderId::Codex => scan_codex_recent_activity(limit),
         ProviderId::Claude => scan_claude_recent_activity(limit),
         ProviderId::Gemini => scan_gemini_recent_activity(limit),
+    };
+
+    // Store in cache.
+    if let Ok(mut cache) = activity_cache().lock() {
+        cache.insert((provider, limit), (Instant::now(), result.clone()));
     }
+
+    result
 }
 
 fn scan_codex_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
@@ -1364,13 +1401,14 @@ impl GeminiScannerCache {
         let mut merged = HashMap::<String, GeminiModelDailyUsagePoint>::new();
         for file in self.files.values() {
             for (key, point) in &file.contribution.daily_by_model {
-                let slot = merged
-                    .entry(key.clone())
-                    .or_insert_with(|| GeminiModelDailyUsagePoint {
-                        day: point.day.clone(),
-                        model: point.model.clone(),
-                        ..GeminiModelDailyUsagePoint::default()
-                    });
+                let slot =
+                    merged
+                        .entry(key.clone())
+                        .or_insert_with(|| GeminiModelDailyUsagePoint {
+                            day: point.day.clone(),
+                            model: point.model.clone(),
+                            ..GeminiModelDailyUsagePoint::default()
+                        });
                 slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
                 slot.cache_read_tokens = slot
                     .cache_read_tokens
@@ -1809,13 +1847,12 @@ fn parse_gemini_file_incremental(path: &Path, cache: &mut GeminiFileCache) {
                 contribution.total = contribution.total.saturating_add(total);
                 contribution.cost += cost;
 
-                let daily = contribution
-                    .daily
-                    .entry(day.clone())
-                    .or_insert_with(|| GeminiDailyUsagePoint {
+                let daily = contribution.daily.entry(day.clone()).or_insert_with(|| {
+                    GeminiDailyUsagePoint {
                         day: day.clone(),
                         ..GeminiDailyUsagePoint::default()
-                    });
+                    }
+                });
                 daily.input_tokens = daily.input_tokens.saturating_add(input);
                 daily.cache_read_tokens = daily.cache_read_tokens.saturating_add(cached);
                 daily.output_tokens = daily.output_tokens.saturating_add(output);
@@ -1823,16 +1860,18 @@ fn parse_gemini_file_incremental(path: &Path, cache: &mut GeminiFileCache) {
                 daily.cost_usd += cost;
 
                 let model_key = format!("{day}|{model_norm}");
-                let model_daily = contribution
-                    .daily_by_model
-                    .entry(model_key)
-                    .or_insert_with(|| GeminiModelDailyUsagePoint {
-                        day: day.clone(),
-                        model: model_norm.clone(),
-                        ..GeminiModelDailyUsagePoint::default()
-                    });
+                let model_daily =
+                    contribution
+                        .daily_by_model
+                        .entry(model_key)
+                        .or_insert_with(|| GeminiModelDailyUsagePoint {
+                            day: day.clone(),
+                            model: model_norm.clone(),
+                            ..GeminiModelDailyUsagePoint::default()
+                        });
                 model_daily.input_tokens = model_daily.input_tokens.saturating_add(input);
-                model_daily.cache_read_tokens = model_daily.cache_read_tokens.saturating_add(cached);
+                model_daily.cache_read_tokens =
+                    model_daily.cache_read_tokens.saturating_add(cached);
                 model_daily.output_tokens = model_daily.output_tokens.saturating_add(output);
                 model_daily.total_tokens = model_daily.total_tokens.saturating_add(total);
                 model_daily.cost_usd += cost;

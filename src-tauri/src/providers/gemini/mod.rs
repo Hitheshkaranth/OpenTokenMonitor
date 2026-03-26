@@ -10,9 +10,7 @@ use crate::usage::models::{
     CostEntry, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus,
     UsageSnapshot, UsageUnit, UsageWindow, WindowType,
 };
-use crate::usage_scanners::{
-    scan_gemini_daily_usage, scan_gemini_model_daily_usage,
-};
+use crate::usage_scanners::{scan_gemini_daily_usage, scan_gemini_model_daily_usage};
 
 pub struct GeminiProvider {
     descriptor: ProviderDescriptor,
@@ -67,43 +65,45 @@ impl UsageProvider for GeminiProvider {
             }
         }
 
-        if let Ok(stats) = stats_parser::fetch_stats() {
-            return Ok(UsageSnapshot {
-                provider: ProviderId::Gemini,
-                windows: vec![
-                    UsageWindow::exact(
-                        WindowType::Daily,
-                        stats.daily_used,
-                        stats.daily_limit,
-                        Some(Utc::now() + Duration::days(1)),
-                        UsageUnit::Requests,
-                    ),
-                    UsageWindow::exact(
-                        WindowType::Session,
-                        stats.session_used,
-                        stats.session_limit,
-                        Some(Utc::now() + Duration::hours(1)),
-                        UsageUnit::Tokens,
-                    ),
-                ],
-                credits: None,
-                plan: None,
-                fetched_at: Utc::now(),
-                source: DataSource::Cli,
-                provenance: DataProvenance::Official,
-                stale: false,
-            });
+        if ctx.allow_cli_strategy {
+            if let Ok(stats) = stats_parser::fetch_stats() {
+                return Ok(UsageSnapshot {
+                    provider: ProviderId::Gemini,
+                    windows: vec![
+                        UsageWindow::exact(
+                            WindowType::Daily,
+                            stats.daily_used,
+                            stats.daily_limit,
+                            Some(Utc::now() + Duration::days(1)),
+                            UsageUnit::Requests,
+                        ),
+                        UsageWindow::exact(
+                            WindowType::Session,
+                            stats.session_used,
+                            stats.session_limit,
+                            Some(Utc::now() + Duration::hours(1)),
+                            UsageUnit::Tokens,
+                        ),
+                    ],
+                    credits: None,
+                    plan: None,
+                    fetched_at: Utc::now(),
+                    source: DataSource::Cli,
+                    provenance: DataProvenance::Official,
+                    stale: false,
+                });
+            }
         }
 
         let daily = scan_gemini_daily_usage();
         let today = Utc::now().format("%Y-%m-%d").to_string();
         let today_point = daily.iter().find(|p| p.day == today);
-        
+
         let daily_used = today_point.map(|p| p.total_tokens).unwrap_or(0);
 
         // Local session counts are raw tokens; use generous limits for sensible utilization display.
         // Free tier is ~50M tokens/day or similar depending on the model.
-        let daily_limit = 50_000_000; 
+        let daily_limit = 50_000_000;
         let session_limit = daily_used.max(1_000_000) * 2;
 
         Ok(UsageSnapshot {

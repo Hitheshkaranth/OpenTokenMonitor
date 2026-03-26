@@ -13,11 +13,29 @@ where
 
     let watches: Vec<(ProviderId, PathBuf)> = {
         let mut out = Vec::new();
+        if let Ok(custom) = std::env::var("CODEX_HOME") {
+            let custom = custom.trim();
+            if !custom.is_empty() {
+                let root = PathBuf::from(custom);
+                out.push((ProviderId::Codex, root.join("sessions")));
+                out.push((ProviderId::Codex, root.join("archived_sessions")));
+            }
+        }
         if let Some(home) = dirs::home_dir() {
-            out.push((ProviderId::Claude, home.join(".claude")));
-            out.push((ProviderId::Codex, home.join(".codex")));
-            out.push((ProviderId::Gemini, home.join(".gemini")));
-            out.push((ProviderId::Gemini, home.join(".config").join("gemini")));
+            // Watch only the session/log roots used by the local scanners.
+            // Watching whole provider home dirs lets CLI probes trigger their
+            // own refreshes by touching auth and temp files.
+            out.push((
+                ProviderId::Claude,
+                home.join(".config").join("claude").join("projects"),
+            ));
+            out.push((ProviderId::Claude, home.join(".claude").join("projects")));
+            out.push((ProviderId::Codex, home.join(".codex").join("sessions")));
+            out.push((
+                ProviderId::Codex,
+                home.join(".codex").join("archived_sessions"),
+            ));
+            out.push((ProviderId::Gemini, home.join(".gemini").join("tmp")));
         }
         out
     };
@@ -40,7 +58,7 @@ where
             let _watcher = watcher;
             let mut last_emit = std::time::Instant::now() - std::time::Duration::from_secs(2);
             for _evt in rx {
-                if last_emit.elapsed() < std::time::Duration::from_millis(250) {
+                if last_emit.elapsed() < std::time::Duration::from_secs(2) {
                     continue;
                 }
                 last_emit = std::time::Instant::now();

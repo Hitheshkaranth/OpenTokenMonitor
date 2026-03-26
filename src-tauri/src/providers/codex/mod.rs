@@ -119,32 +119,34 @@ impl UsageProvider for CodexProvider {
             }
         }
 
-        if let Ok(cli) = rpc_fetcher::fetch_usage() {
-            return Ok(UsageSnapshot {
-                provider: ProviderId::Codex,
-                windows: vec![
-                    UsageWindow::exact(
-                        WindowType::Session,
-                        cli.session_used,
-                        cli.session_limit,
-                        cli.resets_at,
-                        UsageUnit::Unknown,
-                    ),
-                    UsageWindow::exact(
-                        WindowType::Weekly,
-                        cli.weekly_used,
-                        cli.weekly_limit,
-                        cli.resets_at,
-                        UsageUnit::Unknown,
-                    ),
-                ],
-                credits: None,
-                plan: None,
-                fetched_at: Utc::now(),
-                source: DataSource::Cli,
-                provenance: DataProvenance::Official,
-                stale: false,
-            });
+        if ctx.allow_cli_strategy {
+            if let Ok(cli) = rpc_fetcher::fetch_usage() {
+                return Ok(UsageSnapshot {
+                    provider: ProviderId::Codex,
+                    windows: vec![
+                        UsageWindow::exact(
+                            WindowType::Session,
+                            cli.session_used,
+                            cli.session_limit,
+                            cli.resets_at,
+                            UsageUnit::Unknown,
+                        ),
+                        UsageWindow::exact(
+                            WindowType::Weekly,
+                            cli.weekly_used,
+                            cli.weekly_limit,
+                            cli.resets_at,
+                            UsageUnit::Unknown,
+                        ),
+                    ],
+                    credits: None,
+                    plan: None,
+                    fetched_at: Utc::now(),
+                    source: DataSource::Cli,
+                    provenance: DataProvenance::Official,
+                    stale: false,
+                });
+            }
         }
 
         let (session, weekly) = log_parser::usage_windows();

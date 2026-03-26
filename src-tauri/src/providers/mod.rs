@@ -21,6 +21,7 @@ pub struct ProviderDescriptor {
 pub struct FetchContext {
     pub api_keys: HashMap<ProviderId, String>,
     pub allow_cookie_strategy: bool,
+    pub allow_cli_strategy: bool,
 }
 
 impl FetchContext {

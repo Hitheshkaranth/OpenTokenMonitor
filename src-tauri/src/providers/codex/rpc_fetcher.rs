@@ -2,6 +2,12 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::process::Command;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[derive(Debug, Clone)]
 pub struct CodexCliWindow {
     pub session_used: u64,
@@ -12,7 +18,7 @@ pub struct CodexCliWindow {
 }
 
 pub fn fetch_usage() -> Result<CodexCliWindow, String> {
-    let output = Command::new(codex_command())
+    let output = cli_command()
         .args(["--usage", "--json"])
         .output()
         .map_err(|e| e.to_string())?;
@@ -49,6 +55,13 @@ fn codex_command() -> &'static str {
 #[cfg(not(target_os = "windows"))]
 fn codex_command() -> &'static str {
     "codex"
+}
+
+fn cli_command() -> Command {
+    let mut command = Command::new(codex_command());
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
 }
 
 fn pick_u64(value: &Value, path: &[&str]) -> Option<u64> {

@@ -290,61 +290,62 @@ pub fn read_codex_auth_bridge() -> CodexAuthBridge {
 }
 
 pub fn read_claude_oauth_credentials() -> ClaudeOauthCredentials {
-    let Some(home) = dirs::home_dir() else {
-        return ClaudeOauthCredentials::default();
-    };
-    let path = home.join(".claude").join(".credentials.json");
-    let Ok(file) = File::open(&path) else {
-        return ClaudeOauthCredentials::default();
-    };
-    let Ok(json) = serde_json::from_reader::<_, Value>(file) else {
-        return ClaudeOauthCredentials::default();
-    };
+    for root in resolve_claude_config_roots() {
+        let path = root.join(".credentials.json");
+        let Ok(file) = File::open(&path) else {
+            continue;
+        };
+        let Ok(json) = serde_json::from_reader::<_, Value>(file) else {
+            continue;
+        };
 
-    let scopes = pick_first_array_strings(
-        &json,
-        &[
-            &["claudeAiOauth", "scopes"],
-            &["scopes"],
-            &["scope"],
-            &["oauth", "scopes"],
-        ],
-    );
-    ClaudeOauthCredentials {
-        access_token: pick_first_str(
+        let scopes = pick_first_array_strings(
             &json,
             &[
-                &["claudeAiOauth", "accessToken"],
-                &["claudeAiOauth", "access_token"],
-                &["access_token"],
-                &["accessToken"],
-                &["oauth", "access_token"],
+                &["claudeAiOauth", "scopes"],
+                &["scopes"],
+                &["scope"],
+                &["oauth", "scopes"],
             ],
-        )
-        .unwrap_or_default(),
-        refresh_token: pick_first_str(
-            &json,
-            &[
-                &["claudeAiOauth", "refreshToken"],
-                &["claudeAiOauth", "refresh_token"],
-                &["refresh_token"],
-                &["refreshToken"],
-                &["oauth", "refresh_token"],
-            ],
-        ),
-        scopes,
-        expires_at: pick_first_u64(
-            &json,
-            &[
-                &["claudeAiOauth", "expiresAt"],
-                &["claudeAiOauth", "expires_at"],
-                &["expires_at"],
-                &["expiresAt"],
-                &["exp"],
-            ],
-        ),
-        source_path: path.display().to_string(),
+        );
+        return ClaudeOauthCredentials {
+            access_token: pick_first_str(
+                &json,
+                &[
+                    &["claudeAiOauth", "accessToken"],
+                    &["claudeAiOauth", "access_token"],
+                    &["access_token"],
+                    &["accessToken"],
+                    &["oauth", "access_token"],
+                ],
+            )
+            .unwrap_or_default(),
+            refresh_token: pick_first_str(
+                &json,
+                &[
+                    &["claudeAiOauth", "refreshToken"],
+                    &["claudeAiOauth", "refresh_token"],
+                    &["refresh_token"],
+                    &["refreshToken"],
+                    &["oauth", "refresh_token"],
+                ],
+            ),
+            scopes,
+            expires_at: pick_first_u64(
+                &json,
+                &[
+                    &["claudeAiOauth", "expiresAt"],
+                    &["claudeAiOauth", "expires_at"],
+                    &["expires_at"],
+                    &["expiresAt"],
+                    &["exp"],
+                ],
+            ),
+            source_path: path.display().to_string(),
+        };
     }
+
+    ClaudeOauthCredentials::default()
 }
 
 pub fn scan_codex_cost_snapshot() -> CodexCostSnapshot {
@@ -1905,6 +1906,24 @@ fn dedupe_codex_contributions(items: Vec<CodexContribution>) -> Vec<CodexContrib
     out
 }
 
+fn resolve_claude_config_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::<PathBuf>::new();
+    if let Ok(config_roots) = std::env::var("CLAUDE_CONFIG_DIR") {
+        for part in config_roots.split(',') {
+            let trimmed = part.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            roots.push(PathBuf::from(trimmed));
+        }
+    }
+    if let Some(home) = dirs::home_dir() {
+        roots.push(home.join(".config").join("claude"));
+        roots.push(home.join(".claude"));
+    }
+    roots
+}
+
 fn should_replace_codex(existing: &CodexContribution, next: &CodexContribution) -> bool {
     if existing.is_archived != next.is_archived {
         return existing.is_archived && !next.is_archived;
@@ -1932,21 +1951,10 @@ fn discover_codex_jsonl_files() -> Vec<PathBuf> {
 }
 
 fn resolve_claude_project_roots() -> Vec<PathBuf> {
-    let mut roots = Vec::<PathBuf>::new();
-    if let Ok(config_roots) = std::env::var("CLAUDE_CONFIG_DIR") {
-        for part in config_roots.split(',') {
-            let trimmed = part.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            roots.push(PathBuf::from(trimmed).join("projects"));
-        }
-    }
-    if let Some(home) = dirs::home_dir() {
-        roots.push(home.join(".config").join("claude").join("projects"));
-        roots.push(home.join(".claude").join("projects"));
-    }
-    roots
+    resolve_claude_config_roots()
+        .into_iter()
+        .map(|root| root.join("projects"))
+        .collect()
 }
 
 fn collect_jsonl_recursive(root: &Path, out: &mut Vec<PathBuf>) {
@@ -2460,6 +2468,51 @@ mod tests {
             entries[0].response.as_deref(),
             Some("I can help with that.")
         );
+    }
+
+    #[test]
+    fn claude_oauth_credentials_support_config_dir_location() {
+        let dir = temp_dir("claude-config-root");
+        let config_root = dir.join("claude");
+        create_dir_all(&config_root).unwrap();
+        let creds_path = config_root.join(".credentials.json");
+        let mut f = File::create(&creds_path).unwrap();
+        writeln!(
+            f,
+            "{}",
+            r#"{
+  "claudeAiOauth": {
+    "accessToken": "test-access-token",
+    "refreshToken": "test-refresh-token",
+    "expiresAt": 1234567890,
+    "scopes": ["org:read"]
+  }
+}"#
+        )
+        .unwrap();
+
+        let old_config_dir = std::env::var("CLAUDE_CONFIG_DIR").ok();
+        unsafe {
+            std::env::set_var("CLAUDE_CONFIG_DIR", config_root.as_os_str());
+        }
+
+        let creds = read_claude_oauth_credentials();
+        assert_eq!(creds.access_token, "test-access-token");
+        assert_eq!(creds.refresh_token.as_deref(), Some("test-refresh-token"));
+        assert_eq!(creds.expires_at, Some(1234567890));
+        assert_eq!(creds.scopes, vec!["org:read".to_string()]);
+        assert_eq!(creds.source_path, creds_path.display().to_string());
+
+        match old_config_dir {
+            Some(value) => unsafe {
+                std::env::set_var("CLAUDE_CONFIG_DIR", value);
+            },
+            None => unsafe {
+                std::env::remove_var("CLAUDE_CONFIG_DIR");
+            },
+        }
+
+        let _ = remove_dir_all(dir);
     }
 
     #[test]

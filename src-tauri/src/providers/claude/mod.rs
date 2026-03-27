@@ -14,6 +14,7 @@ use crate::usage::models::{
     CostEntry, CreditsInfo, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus,
     UsageSnapshot, UsageUnit, UsageWindow, WindowType,
 };
+use crate::usage_scanners::read_claude_oauth_credentials;
 
 /// Minimum seconds between OAuth API calls to avoid 429s.
 /// The Claude usage API has known persistent 429 issues — keep cooldown generous.
@@ -179,20 +180,24 @@ impl UsageProvider for ClaudeProvider {
     }
 
     async fn check_status(&self) -> ProviderStatus {
+        let creds = read_claude_oauth_credentials();
+        let has_token = !creds.access_token.trim().is_empty();
         let has_dir = dirs::home_dir()
-            .map(|h| h.join(".claude").exists())
+            .map(|h| h.join(".claude").exists() || h.join(".config").join("claude").exists())
             .unwrap_or(false);
         ProviderStatus {
             provider: ProviderId::Claude,
-            health: if has_dir {
+            health: if has_token || has_dir {
                 ProviderHealth::Active
             } else {
                 ProviderHealth::Waiting
             },
-            message: if has_dir {
+            message: if has_token {
+                format!("Claude auth loaded from {}", creds.source_path)
+            } else if has_dir {
                 "Claude logs detected".to_string()
             } else {
-                "Waiting for ~/.claude data".to_string()
+                "Waiting for Claude credentials/session files".to_string()
             },
             checked_at: Utc::now(),
         }

@@ -79,7 +79,9 @@ export const useUsageStore = create<UsageState>((set, get) => ({
       });
       set({ snapshots: map, loading: false });
     } catch (error: unknown) {
-      set({ loading: false, error: String(error) });
+      const message = String(error);
+      set({ loading: false, error: message });
+      throw error instanceof Error ? error : new Error(message);
     }
   },
 
@@ -102,7 +104,9 @@ export const useUsageStore = create<UsageState>((set, get) => ({
       });
       set({ snapshots: map, loading: false });
     } catch (error: unknown) {
-      set({ loading: false, error: String(error) });
+      const message = String(error);
+      set({ loading: false, error: message });
+      throw error instanceof Error ? error : new Error(message);
     }
   },
 

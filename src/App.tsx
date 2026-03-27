@@ -218,7 +218,7 @@ const App = () => {
       return <LoadingState />;
     }
 
-    if (error) {
+    if (error && !hasAnySnapshot) {
       return <ErrorState message={error} onRetry={refreshEverything} />;
     }
 

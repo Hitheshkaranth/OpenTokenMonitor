@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Local-first desktop monitor for Claude, Codex, and Gemini usage.</strong></p>
 
-<p align="center">Version 0.3.1</p>
+<p align="center">Version 0.3.2</p>
 
 <p align="center">
   <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white" alt="Tauri" /></a>

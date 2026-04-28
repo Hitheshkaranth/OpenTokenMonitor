@@ -115,12 +115,11 @@ section { padding: 0; border-top: 1px solid var(--line); }
   font-size: 13px; letter-spacing: -0.005em;
 }
 .nav-mark {
-  display: grid;
-  grid-template-columns: repeat(4, 4px);
-  gap: 2px;
+  width: 22px;
+  height: 22px;
+  display: block;
+  object-fit: contain;
 }
-.nav-mark span { width: 4px; height: 4px; background: var(--ink-3); }
-.nav-mark span.on { background: var(--accent); }
 .nav-brand b { font-weight: 600; color: var(--ink-0); }
 .nav-brand .v { color: var(--ink-3); margin-left: 4px; }
 

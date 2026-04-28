@@ -28,12 +28,7 @@ const Nav = ({ onPickOS }) => (
   <nav className="nav">
     <div className="wrap nav-row">
       <a href="#top" className="nav-brand" aria-label="OpenTokenMonitor home">
-        <span className="nav-mark" aria-hidden="true">
-          <span className="on"/><span className="on"/><span className="on"/><span className="on"/>
-          <span className="on"/><span className="on"/><span className="on"/><span className="on"/>
-          <span/><span/><span/><span/>
-          <span/><span/><span/><span/>
-        </span>
+        <img className="nav-mark" src="assets/icon.png" alt="" aria-hidden="true"/>
         <span><b>OpenTokenMonitor</b><span className="v">v0.3.3</span></span>
       </a>
       <div className="nav-links">

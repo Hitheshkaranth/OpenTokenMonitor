@@ -65,10 +65,21 @@ Two backend systems keep the UI current even when the user does not press refres
 - managing current page selection
 - kicking off initial fetches
 - coordinating refreshes across providers
-- syncing desktop-only settings such as launch-on-startup
-- resizing the Tauri window when widget mode changes
 
-If you need to understand "what happens when the app opens?", start here.
+Long-lived runtime side-effects are delegated to dedicated hooks so `App.tsx`
+stays focused on render branching:
+
+| Hook                          | Responsibility                                  |
+|-------------------------------|-------------------------------------------------|
+| `useUsageData`                | Bootstrap snapshots, listen for `usage-updated` |
+| `useProviderStatus`           | Poll provider availability                      |
+| `useGlassTheme`               | Apply current theme variables                   |
+| `useLaunchAtStartupSync`      | Sync OS autostart entry with persisted setting  |
+| `useWidgetResize`             | Resize Tauri window when widget mode toggles    |
+| `useKeyboardShortcuts`        | Global keyboard shortcuts (refresh, page nav)   |
+
+If you need to understand "what happens when the app opens?", start here, then
+follow the hook into `src/hooks/`.
 
 ### `src/stores/usageStore.ts`
 
@@ -126,17 +137,31 @@ The main UI surfaces are grouped by responsibility:
 
 ### `src-tauri/src/lib.rs`
 
-This file is the backend composition root. It contains:
+This file is the backend composition root. It owns:
 
 - the shared `AppState`
-- Tauri command handlers
-- startup/shutdown behavior
-- tray setup
-- autostart support
-- event emission after refreshes
-- scheduler and watcher wiring
+- the Tauri builder + plugin wiring (`run`)
+- the scheduler restart helper and the file-watcher attach helper
 
-This is the best place to start when a frontend `invoke(...)` call is failing.
+Command handlers, tray, alerts, autostart, and pricing have been split into
+their own modules to keep `lib.rs` short. See the module map at the top of
+the file for where each concern lives.
+
+| Concern                        | Module                          |
+|--------------------------------|---------------------------------|
+| Tauri command handlers         | `src-tauri/src/commands.rs`     |
+| Tray icon, menu, tooltip       | `src-tauri/src/tray.rs`         |
+| Alert generation + thresholds  | `src-tauri/src/alerts.rs`       |
+| OS launch-at-startup wrapper   | `src-tauri/src/autostart.rs`    |
+| Per-model cost rate tables     | `src-tauri/src/pricing.rs`      |
+| Provider implementations       | `src-tauri/src/providers/`      |
+| Snapshot persistence (SQLite)  | `src-tauri/src/usage/store.rs`  |
+| Refresh orchestration          | `src-tauri/src/usage/aggregator.rs` |
+| Local CLI artifact scanning    | `src-tauri/src/usage_scanners.rs` |
+| Filesystem + poll watchers     | `src-tauri/src/watchers/`       |
+
+This is the best place to start when a frontend `invoke(...)` call is failing
+— `lib.rs` declares all modules, and `commands.rs` owns the actual handlers.
 
 ### `src-tauri/src/providers/`
 
@@ -224,7 +249,22 @@ This separation matters because it keeps provider quirks out of the React tree.
 4. `src/styles/sidebar.css`
 5. `src/App.tsx` if the window size must change
 
-## 7. Best Entry Points For Reading
+## 7. Updating Cost Rates
+
+All per-model pricing lives in `src-tauri/src/pricing.rs`. When a provider
+publishes new rates:
+
+1. Edit the matching tuple inside `claude_rates` / `codex_rates` / `gemini_rates`.
+2. If a brand-new model alias appears in user logs, add a normalization branch
+   in `usage_scanners.rs` (`normalize_codex_model`, `normalize_claude_model`,
+   `normalize_gemini_model`) so the alias maps to a known table key.
+3. Update the rate-review date in the module-level doc comment.
+4. Run `cargo test --lib` — the `pricing::tests` unit tests guard the most
+   common ordering / fallback mistakes.
+
+There is no other place in the codebase that hard-codes per-token prices.
+
+## 8. Best Entry Points For Reading
 
 If you are new to the repo, read in this order:
 
@@ -234,7 +274,8 @@ If you are new to the repo, read in this order:
 4. `src/stores/usageStore.ts`
 5. `src/hooks/useUsageData.ts`
 6. `src-tauri/src/lib.rs`
-7. `src-tauri/src/providers/mod.rs`
-8. `src-tauri/src/usage/aggregator.rs`
+7. `src-tauri/src/commands.rs`
+8. `src-tauri/src/providers/mod.rs`
+9. `src-tauri/src/usage/aggregator.rs`
 
 That sequence gives the fastest path from "what is this app?" to "where do I make the change?"

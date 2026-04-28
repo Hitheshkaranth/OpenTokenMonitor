@@ -1,6 +1,6 @@
 [package]
 name = "open-token-monitor"
-version = "0.3.2"
+version = "0.3.3"
 description = "Local-first desktop monitor for Claude, Codex, and Gemini usage."
 authors = ["Side Quests"]
 license = "MIT"
@@ -41,6 +41,7 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
 
 [dev-dependencies]
 tempfile = "3"

@@ -16,21 +16,35 @@ use crate::usage::models::{
 };
 use crate::usage_scanners::read_claude_oauth_credentials;
 
-/// Minimum seconds between OAuth API calls to avoid 429s.
-/// The Claude usage API has known persistent 429 issues — keep cooldown generous.
+/// Minimum seconds between *successful* OAuth API calls — avoids hammering the
+/// rate-limited usage endpoint when we already have fresh data.
 const OAUTH_COOLDOWN_SECS: u64 = 120;
+/// Minimum seconds between OAuth retries after a *failure*. Short enough that a
+/// transient 429/network blip doesn't lock the UI into local-log mode for 2
+/// minutes, long enough that we don't spam the endpoint.
+const OAUTH_FAILURE_BACKOFF_SECS: u64 = 25;
 
 pub struct ClaudeProvider {
     descriptor: ProviderDescriptor,
-    /// (last_attempt, cached_result) — prevents calling OAuth API more than once per cooldown.
-    oauth_cache: Mutex<(Option<Instant>, Option<UsageSnapshot>)>,
+    /// Cached state for the OAuth path. `last_success` paces the success
+    /// cooldown; `last_failure` paces the (much shorter) failure backoff;
+    /// `cached_snapshot` is the most recent good response we can reuse while
+    /// throttled or to mark stale on consecutive failures.
+    oauth_cache: Mutex<OauthCache>,
+}
+
+#[derive(Default)]
+struct OauthCache {
+    last_success: Option<Instant>,
+    last_failure: Option<Instant>,
+    cached_snapshot: Option<UsageSnapshot>,
 }
 
 impl ClaudeProvider {
     pub fn new() -> Self {
         Self {
             descriptor: descriptor::descriptor(),
-            oauth_cache: Mutex::new((None, None)),
+            oauth_cache: Mutex::new(OauthCache::default()),
         }
     }
 }
@@ -84,14 +98,28 @@ impl UsageProvider for ClaudeProvider {
     }
 
     async fn fetch_usage(&self, ctx: &FetchContext) -> Result<UsageSnapshot, String> {
-        // Check cooldown: return cached result or skip OAuth if called too recently
+        // Cooldown logic:
+        //   - If we have a fresh cached snapshot from the last *successful* call
+        //     within OAUTH_COOLDOWN_SECS, return it (avoids hammering the API).
+        //   - If the last call FAILED, only skip OAuth for OAUTH_FAILURE_BACKOFF_SECS
+        //     so transient blips don't pin the UI to local-log mode for 2 minutes.
+        //   - Otherwise fall through and retry OAuth.
         if let Ok(guard) = self.oauth_cache.lock() {
-            if let Some(last_attempt) = guard.0 {
-                if last_attempt.elapsed().as_secs() < OAUTH_COOLDOWN_SECS {
-                    if let Some(ref snap) = guard.1 {
+            if let Some(last_success) = guard.last_success {
+                if last_success.elapsed().as_secs() < OAUTH_COOLDOWN_SECS {
+                    if let Some(ref snap) = guard.cached_snapshot {
                         return Ok(snap.clone());
                     }
-                    // Last attempt was recent but failed — skip OAuth, fall through to local
+                }
+            }
+            if let Some(last_failure) = guard.last_failure {
+                if last_failure.elapsed().as_secs() < OAUTH_FAILURE_BACKOFF_SECS {
+                    // Recent failure: prefer stale cache over yet another API hit.
+                    if let Some(ref cached) = guard.cached_snapshot {
+                        let mut stale = cached.clone();
+                        stale.stale = true;
+                        return Ok(stale);
+                    }
                     drop(guard);
                     return self.local_log_snapshot();
                 }
@@ -104,17 +132,12 @@ impl UsageProvider for ClaudeProvider {
             .or_else(keychain::read_access_token);
 
         if let Some(token) = token {
-            // Mark attempt timestamp before calling API
-            if let Ok(mut guard) = self.oauth_cache.lock() {
-                guard.0 = Some(Instant::now());
-            }
-
             match oauth_fetcher::fetch_usage(&token).await {
                 Err(e) => {
                     eprintln!("[claude] OAuth failed: {e}");
-                    // If we have a stale cached result, return it marked stale
-                    if let Ok(guard) = self.oauth_cache.lock() {
-                        if let Some(ref cached) = guard.1 {
+                    if let Ok(mut guard) = self.oauth_cache.lock() {
+                        guard.last_failure = Some(Instant::now());
+                        if let Some(ref cached) = guard.cached_snapshot {
                             eprintln!("[claude] returning stale cached OAuth data");
                             let mut stale = cached.clone();
                             stale.stale = true;
@@ -163,7 +186,9 @@ impl UsageProvider for ClaudeProvider {
                         stale: false,
                     };
                     if let Ok(mut guard) = self.oauth_cache.lock() {
-                        *guard = (Some(Instant::now()), Some(snapshot.clone()));
+                        guard.last_success = Some(Instant::now());
+                        guard.last_failure = None;
+                        guard.cached_snapshot = Some(snapshot.clone());
                     }
                     return Ok(snapshot);
                 }

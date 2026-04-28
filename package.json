@@ -1,7 +1,7 @@
 {
   "name": "open-token-monitor",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Local-first desktop monitor for Claude, Codex, and Gemini usage.",
   "license": "MIT",
   "repository": {
@@ -28,9 +28,9 @@
     "@tauri-apps/plugin-store": "^2.4.2",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.575.0",
-    "recharts": "^3.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "recharts": "^3.3.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

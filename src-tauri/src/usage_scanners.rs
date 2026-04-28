@@ -8,16 +8,24 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Instant, UNIX_EPOCH};
 
-/// Cached results for scan_recent_activity, keyed by (ProviderId, limit).
-/// Each entry stores (timestamp, results). Entries older than CACHE_TTL are stale.
-static ACTIVITY_CACHE: OnceLock<
-    Mutex<HashMap<(ProviderId, usize), (Instant, Vec<RecentActivityEntry>)>>,
-> = OnceLock::new();
+/// Key into the activity cache: provider plus the requested row limit (since
+/// callers ask for different windows, e.g. 25 for the widget vs. 120 for the
+/// projects view).
+type ActivityCacheKey = (ProviderId, usize);
+
+/// Value stored alongside each key: when the entry was filled, plus the
+/// pre-computed activity rows ready to hand back to the caller.
+type ActivityCacheValue = (Instant, Vec<RecentActivityEntry>);
+
+/// In-memory cache for `scan_recent_activity`. Entries older than
+/// [`ACTIVITY_CACHE_TTL_SECS`] are considered stale and re-scanned on access.
+type ActivityCache = Mutex<HashMap<ActivityCacheKey, ActivityCacheValue>>;
+
+static ACTIVITY_CACHE: OnceLock<ActivityCache> = OnceLock::new();
 
 const ACTIVITY_CACHE_TTL_SECS: u64 = 5;
 
-fn activity_cache(
-) -> &'static Mutex<HashMap<(ProviderId, usize), (Instant, Vec<RecentActivityEntry>)>> {
+fn activity_cache() -> &'static ActivityCache {
     ACTIVITY_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -1756,57 +1764,9 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
         model_daily.cost_usd += cost;
     }
 }
-struct GeminiPricePoint {
-    input_usd_per_1m: f64,
-    output_usd_per_1m: f64,
-}
-
-static GEMINI_PRICES: OnceLock<HashMap<&'static str, GeminiPricePoint>> = OnceLock::new();
-
-fn gemini_cost_usd(model: &str, input: u64, _cached: u64, output: u64) -> f64 {
-    let prices = GEMINI_PRICES.get_or_init(|| {
-        let mut m = HashMap::new();
-        m.insert(
-            "gemini-2.0-flash",
-            GeminiPricePoint {
-                input_usd_per_1m: 0.10,
-                output_usd_per_1m: 0.40,
-            },
-        );
-        m.insert(
-            "gemini-2.0-flash-lite",
-            GeminiPricePoint {
-                input_usd_per_1m: 0.075,
-                output_usd_per_1m: 0.30,
-            },
-        );
-        m.insert(
-            "gemini-1.5-flash",
-            GeminiPricePoint {
-                input_usd_per_1m: 0.10,
-                output_usd_per_1m: 0.40,
-            },
-        );
-        m.insert(
-            "gemini-1.5-pro",
-            GeminiPricePoint {
-                input_usd_per_1m: 1.25,
-                output_usd_per_1m: 5.00,
-            },
-        );
-        m
-    });
-
-    if let Some(price) = prices.get(model) {
-        let input_cost = (input as f64 / 1_000_000.0) * price.input_usd_per_1m;
-        let output_cost = (output as f64 / 1_000_000.0) * price.output_usd_per_1m;
-        input_cost + output_cost
-    } else {
-        let input_cost = (input as f64 / 1_000_000.0) * 0.15;
-        let output_cost = (output as f64 / 1_000_000.0) * 0.60;
-        input_cost + output_cost
-    }
-}
+// Cost computation moved to `crate::pricing`. The wrapper kept here so the
+// existing call-sites stay simple — see `pricing.rs` for the rate tables.
+use crate::pricing::gemini_cost_usd;
 
 fn parse_gemini_file_incremental(path: &Path, cache: &mut GeminiFileCache) {
     let Ok(file) = File::open(path) else {
@@ -1981,65 +1941,10 @@ fn collect_jsonl_recursive(root: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn codex_cost_usd(model: &str, input: u64, cached_input: u64, output: u64) -> f64 {
-    let Some((in_per_m, cached_per_m, out_per_m)) = codex_price_table(model) else {
-        return 0.0;
-    };
-    let non_cached = input.saturating_sub(cached_input);
-    (non_cached as f64 / 1_000_000.0) * in_per_m
-        + (cached_input as f64 / 1_000_000.0) * cached_per_m
-        + (output as f64 / 1_000_000.0) * out_per_m
-}
-
-fn claude_cost_usd(
-    model: &str,
-    input: u64,
-    cache_read: u64,
-    cache_create: u64,
-    output: u64,
-) -> f64 {
-    let Some((in_per_m, read_per_m, create_per_m, out_per_m)) = claude_price_table(model) else {
-        return 0.0;
-    };
-    (input as f64 / 1_000_000.0) * in_per_m
-        + (cache_read as f64 / 1_000_000.0) * read_per_m
-        + (cache_create as f64 / 1_000_000.0) * create_per_m
-        + (output as f64 / 1_000_000.0) * out_per_m
-}
-
-fn codex_price_table(model: &str) -> Option<(f64, f64, f64)> {
-    let m = model.to_ascii_lowercase();
-    if m.contains("gpt-5") && m.contains("nano") {
-        return Some((0.05, 0.005, 0.40));
-    }
-    if m.contains("gpt-5") && m.contains("mini") {
-        return Some((0.25, 0.025, 2.00));
-    }
-    if m.contains("gpt-5") {
-        return Some((1.25, 0.125, 10.00));
-    }
-    if m.contains("gpt-4.1-mini") {
-        return Some((0.40, 0.04, 1.60));
-    }
-    if m.contains("gpt-4.1") {
-        return Some((2.00, 0.20, 8.00));
-    }
-    None
-}
-
-fn claude_price_table(model: &str) -> Option<(f64, f64, f64, f64)> {
-    let m = model.to_ascii_lowercase();
-    if m.contains("opus") {
-        return Some((15.0, 1.5, 18.75, 75.0));
-    }
-    if m.contains("sonnet") {
-        return Some((3.0, 0.3, 3.75, 15.0));
-    }
-    if m.contains("haiku") {
-        return Some((0.25, 0.03, 0.30, 1.25));
-    }
-    None
-}
+// Cost computations moved to `crate::pricing` so all rate tables live in one
+// place. The thin wrappers below preserve the existing call signatures used
+// by the scanners above.
+use crate::pricing::{claude_cost_usd, codex_cost_usd};
 
 fn normalize_codex_model(model: &str) -> String {
     let raw = model.trim().to_ascii_lowercase();
@@ -2225,7 +2130,7 @@ fn ymd_from_days(mut days: u64) -> String {
 }
 
 fn is_leap(year: u64) -> bool {
-    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+    year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
 }
 
 fn file_key(path: &Path) -> String {
@@ -2247,6 +2152,11 @@ fn epoch_ms_now() -> u64 {
         .as_millis() as u64
 }
 #[cfg(test)]
+// `write_literal` fires on the `writeln!(f, "{}", r#"..."#)` test fixtures —
+// the JSON literals contain `{`/`}` so we can't inline them as the format
+// string itself. The duplicate-format pattern is intentional and isolated to
+// test-only code.
+#[allow(clippy::write_literal)]
 mod tests {
     use super::*;
     use std::fs::{create_dir_all, remove_dir_all, OpenOptions};

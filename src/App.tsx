@@ -1,7 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { LogicalSize } from '@tauri-apps/api/dpi';
 import NavBar from '@/components/layout/Sidebar';
 import WidgetMode from '@/components/layout/WidgetMode';
 import ProjectOverview from '@/components/projects/ProjectOverview';
@@ -14,7 +11,9 @@ import { useUsageStore } from '@/stores/usageStore';
 import { useUsageData } from '@/hooks/useUsageData';
 import { useProviderStatus } from '@/hooks/useProviderStatus';
 import { useGlassTheme } from '@/hooks/useGlassTheme';
-import { isTauriRuntime } from '@/utils/runtime';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useWidgetResize } from '@/hooks/useWidgetResize';
+import { useLaunchAtStartupSync } from '@/hooks/useLaunchAtStartupSync';
 import EmptyState from '@/components/states/EmptyState';
 import ErrorBoundary from '@/components/states/ErrorBoundary';
 import ErrorState from '@/components/states/ErrorState';
@@ -52,54 +51,13 @@ const App = () => {
   const fetchUsageReport = useUsageStore((s) => s.fetchUsageReport);
 
   // These hooks establish the long-lived runtime behavior for the desktop app:
-  // hydrate usage data, poll provider status, and apply the current theme.
+  // hydrate usage data, poll provider status, apply theme, sync OS-level
+  // settings, and resize the window when widget mode toggles.
   useUsageData();
   useProviderStatus();
   useGlassTheme(theme);
-
-  useEffect(() => {
-    if (!settingsHydrated || !isTauriRuntime()) return;
-
-    // Keep the OS startup entry aligned with the persisted toggle once the
-    // settings store has finished hydrating from local storage.
-    const syncLaunchAtStartup = async () => {
-      try {
-        const current = await invoke<boolean>('get_launch_at_startup');
-        if (current !== launchAtStartup) {
-          await invoke<boolean>('set_launch_at_startup', { enabled: launchAtStartup });
-        }
-      } catch (err) {
-        console.error('launch at startup sync failed', err);
-      }
-    };
-
-    syncLaunchAtStartup().catch(() => undefined);
-  }, [launchAtStartup, settingsHydrated]);
-
-  // Resize window when toggling widget mode
-  useEffect(() => {
-    if (!isTauriRuntime()) return;
-    const currentWindow = getCurrentWindow();
-    const targetHeight = widgetMode ? 274 : 390;
-    (async () => {
-      try {
-        await currentWindow.setResizable(true);
-        // Temporarily relax constraints so the window can animate to the new mode height.
-        await currentWindow.setSizeConstraints({
-          minWidth: 360, maxWidth: 360,
-          minHeight: 100, maxHeight: 600,
-        });
-        await currentWindow.setSize(new LogicalSize(360, targetHeight));
-        await currentWindow.setSizeConstraints({
-          minWidth: 360, maxWidth: 360,
-          minHeight: targetHeight, maxHeight: targetHeight,
-        });
-        await currentWindow.setResizable(false);
-      } catch (err) {
-        console.error('resize failed', err);
-      }
-    })();
-  }, [widgetMode]);
+  useLaunchAtStartupSync(launchAtStartup, settingsHydrated);
+  useWidgetResize(widgetMode);
 
   const activeProviders = useMemo(
     () => (['claude', 'codex', 'gemini'] as ProviderId[]).filter((p) => enabledProviders[p]),
@@ -152,39 +110,6 @@ const App = () => {
     setPage(activeProviders.length > 0 ? activeProviders[0] : 'overview');
   }, [page, enabledProviders, activeProviders]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement;
-      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
-
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'r') {
-        event.preventDefault();
-        refreshEverything();
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key === ',') {
-        event.preventDefault();
-        setPage('settings');
-        return;
-      }
-      if (event.key === 'Escape') {
-        setPage('overview');
-        return;
-      }
-
-      // Single-key shortcuts suppressed when input is focused
-      if (isInput) return;
-      if (event.key === '1') setPage('claude');
-      if (event.key === '2') setPage('codex');
-      if (event.key === '3') setPage('gemini');
-      if (event.key === '4') setPage('projects');
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
   const refreshEverything = async () => {
     if (refreshBusy) return;
     setRefreshBusy(true);
@@ -206,6 +131,8 @@ const App = () => {
       setRefreshBusy(false);
     }
   };
+
+  useKeyboardShortcuts(setPage, refreshEverything);
 
   // Keep the render branching in one place so widget mode, settings, overview,
   // and provider detail screens all share the same loading/error rules.

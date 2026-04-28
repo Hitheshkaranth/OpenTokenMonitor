@@ -761,9 +761,21 @@
     var ctx = canvas.getContext('2d');
     var mouse = { x: -1000, y: -1000 };
     var particles = [];
-    var particleCount = 80;
+    // Honor the OS "reduced motion" pref and trim work on small / low-power
+    // devices. The full effect renders ~3,160 particle-pair distance checks per
+    // frame at 80 particles, which dominated GPU usage on integrated displays.
+    var prefersReduced = window.matchMedia
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var isSmallScreen = window.innerWidth < 900;
+    var particleCount = prefersReduced ? 0 : (isSmallScreen ? 35 : 60);
     var connectionDist = 140;
     var mouseRadius = 200;
+    // Cap frame rate to ~30 FPS — visually smooth for ambient background, but
+    // halves the per-second work compared to vsync-locked 60 FPS.
+    var FRAME_INTERVAL_MS = 1000 / 30;
+    var lastFrame = 0;
+    var rafId = 0;
+    var running = false;
     var w, h, dpr;
 
     function resize() {
@@ -794,7 +806,13 @@
       }
     }
 
-    function animate() {
+    function animate(ts) {
+      if (!running) return;
+      rafId = requestAnimationFrame(animate);
+      // Throttle to FRAME_INTERVAL_MS so the canvas isn't redrawn 60+ times/sec.
+      if (ts - lastFrame < FRAME_INTERVAL_MS) return;
+      lastFrame = ts;
+
       ctx.clearRect(0, 0, w, h);
 
       for (var i = 0; i < particles.length; i++) {
@@ -850,8 +868,24 @@
         }
       }
 
-      requestAnimationFrame(animate);
     }
+
+    function start() {
+      if (running || particleCount === 0) return;
+      running = true;
+      lastFrame = 0;
+      rafId = requestAnimationFrame(animate);
+    }
+
+    function stop() {
+      running = false;
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) stop(); else start();
+    });
 
     document.addEventListener('mousemove', function(e) {
       mouse.x = e.clientX;
@@ -868,7 +902,7 @@
     });
 
     init();
-    animate();
+    start();
 
     // ─── 3D Tilt on Preview Cards ───
     var tiltCards = document.querySelectorAll('[data-tilt]');

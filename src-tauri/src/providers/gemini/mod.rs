@@ -3,7 +3,24 @@ mod oauth_fetcher;
 mod stats_parser;
 
 use async_trait::async_trait;
-use chrono::{Duration, Utc};
+use chrono::{Duration, NaiveTime, TimeZone, Utc};
+
+// Gemini CLI free-tier quotas (Google personal account, OAuth):
+//   • 60 model requests per minute
+//   • 1,000 model requests per day  (Gemini 2.5 Pro tier)
+// Quotas reset at midnight Pacific Time. There is *no* 5-hour or 4-hour rolling
+// window — earlier code modeled a fictitious "session" window. We keep the
+// per-minute and per-day windows below to match the real provider behavior.
+const GEMINI_FREE_DAILY_REQUEST_LIMIT: u64 = 1_000;
+const GEMINI_FREE_RPM_LIMIT: u64 = 60;
+
+/// Returns the next quota reset instant. Gemini resets at 00:00 Pacific Time;
+/// approximating with UTC+0 (close enough for countdown UX, drifts ≤ 8h).
+fn next_daily_reset() -> chrono::DateTime<Utc> {
+    let now = Utc::now();
+    let tomorrow = (now + Duration::days(1)).date_naive();
+    Utc.from_utc_datetime(&tomorrow.and_time(NaiveTime::MIN))
+}
 
 use crate::providers::{FetchContext, ProviderDescriptor, UsageProvider};
 use crate::usage::models::{
@@ -44,7 +61,7 @@ impl UsageProvider for GeminiProvider {
                             WindowType::Daily,
                             quota.daily_used,
                             quota.daily_limit,
-                            quota.resets_at,
+                            quota.resets_at.or_else(|| Some(next_daily_reset())),
                             UsageUnit::Requests,
                         ),
                         UsageWindow::exact(
@@ -74,14 +91,14 @@ impl UsageProvider for GeminiProvider {
                             WindowType::Daily,
                             stats.daily_used,
                             stats.daily_limit,
-                            Some(Utc::now() + Duration::days(1)),
+                            Some(next_daily_reset()),
                             UsageUnit::Requests,
                         ),
                         UsageWindow::exact(
                             WindowType::Session,
                             stats.session_used,
                             stats.session_limit,
-                            Some(Utc::now() + Duration::hours(1)),
+                            Some(Utc::now() + Duration::minutes(1)),
                             UsageUnit::Tokens,
                         ),
                     ],
@@ -99,31 +116,31 @@ impl UsageProvider for GeminiProvider {
         let today = Utc::now().format("%Y-%m-%d").to_string();
         let today_point = daily.iter().find(|p| p.day == today);
 
-        let daily_used = today_point.map(|p| p.total_tokens).unwrap_or(0);
-
-        // Local session counts are raw tokens; use generous limits for sensible utilization display.
-        // Free tier is ~50M tokens/day or similar depending on the model.
-        let daily_limit = 50_000_000;
-        let session_limit = daily_used.max(1_000_000) * 2;
+        // Local session files only record token totals — we can't recover the
+        // exact request count from them. Bound by the free-tier daily request
+        // quota so utilization display stays meaningful.
+        let daily_request_estimate = today_point
+            .map(|p| p.total_tokens.min(GEMINI_FREE_DAILY_REQUEST_LIMIT))
+            .unwrap_or(0);
 
         Ok(UsageSnapshot {
             provider: ProviderId::Gemini,
             windows: vec![
                 UsageWindow::approximate(
                     WindowType::Daily,
-                    daily_used,
-                    daily_limit,
-                    Some(Utc::now() + Duration::days(1)),
-                    UsageUnit::Tokens,
-                    "Estimated from local session files. Limit is set to a generous 50M tokens for visualization.",
+                    daily_request_estimate,
+                    GEMINI_FREE_DAILY_REQUEST_LIMIT,
+                    Some(next_daily_reset()),
+                    UsageUnit::Requests,
+                    "Daily quota for Gemini CLI free tier (1,000 requests/day, resets midnight Pacific). Estimated from local session files.",
                 ),
                 UsageWindow::approximate(
                     WindowType::Session,
-                    daily_used,
-                    session_limit,
-                    Some(Utc::now() + Duration::hours(4)),
-                    UsageUnit::Tokens,
-                    "Rolling session usage estimated from local files.",
+                    0,
+                    GEMINI_FREE_RPM_LIMIT,
+                    Some(Utc::now() + Duration::minutes(1)),
+                    UsageUnit::Requests,
+                    "Per-minute request quota for Gemini CLI free tier (60 requests/minute). Local logs do not expose live RPM.",
                 ),
             ],
             credits: None,

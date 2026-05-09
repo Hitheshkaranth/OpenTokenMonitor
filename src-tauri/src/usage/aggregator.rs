@@ -1,7 +1,8 @@
 use crate::providers::registry::ProviderRegistry;
 use crate::providers::FetchContext;
-use crate::usage::models::{ProviderId, UsageSnapshot};
+use crate::usage::models::{DataProvenance, DataSource, ProviderId, UsageSnapshot};
 use crate::usage::store::UsageStore;
+use chrono::{Duration, Utc};
 
 // Refresh one provider end-to-end: fetch current usage, persist it, then persist
 // optional cost history if the provider exposes any.
@@ -16,6 +17,18 @@ pub async fn refresh_provider(
         .ok_or_else(|| format!("Provider {provider:?} not registered"))?;
 
     let snapshot = provider_impl.fetch_usage(ctx).await?;
+    if matches!(snapshot.source, DataSource::LocalLog)
+        && matches!(snapshot.provenance, DataProvenance::DerivedLocal)
+    {
+        if let Some(mut previous) = store.get_snapshot(provider)? {
+            let has_recent_live_snapshot = !matches!(previous.source, DataSource::LocalLog)
+                && (Utc::now() - previous.fetched_at) < Duration::hours(24);
+            if has_recent_live_snapshot {
+                previous.stale = true;
+                return Ok(previous);
+            }
+        }
+    }
     store.save_snapshot(&snapshot)?;
 
     let history = provider_impl.fetch_cost_history(30).await?;

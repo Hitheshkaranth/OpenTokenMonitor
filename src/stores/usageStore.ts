@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { create } from 'zustand';
 import {
+  AuthState,
   CostEntry,
   ModelBreakdownEntry,
   ProviderId,
@@ -25,6 +26,7 @@ type UsageState = {
   recentActivity: Record<ProviderId, RecentActivityEntry[]>;
   statuses: Record<ProviderId, ProviderStatus | undefined>;
   alerts: Record<ProviderId, UsageAlert[]>;
+  authStates: Record<ProviderId, AuthState | undefined>;
   latestReport?: UsageReport;
   loading: boolean;
   error?: string;
@@ -38,7 +40,10 @@ type UsageState = {
   fetchRecentActivity: (provider: ProviderId, limit?: number) => Promise<void>;
   fetchUsageReport: (days?: number) => Promise<void>;
   fetchStatus: (provider: ProviderId) => Promise<void>;
+  fetchAuthState: (provider: ProviderId) => Promise<void>;
+  fetchAllAuthStates: () => Promise<void>;
   setApiKey: (provider: ProviderId, key: string) => Promise<void>;
+  clearApiKey: (provider: ProviderId) => Promise<void>;
   setCadence: (cadence: RefreshCadence) => Promise<void>;
   upsertSnapshot: (snapshot: UsageSnapshot) => void;
 };
@@ -57,6 +62,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   recentActivity: { claude: [], codex: [], gemini: [] },
   statuses: { claude: undefined, codex: undefined, gemini: undefined },
   alerts: { claude: [], codex: [], gemini: [] },
+  authStates: { claude: undefined, codex: undefined, gemini: undefined },
   latestReport: undefined,
   loading: false,
   error: undefined,
@@ -160,9 +166,26 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     set((state) => ({ statuses: { ...state.statuses, [provider]: status } }));
   },
 
+  fetchAuthState: async (provider) => {
+    if (!isTauriRuntime()) return;
+    const authState = await invoke<AuthState>('get_auth_state', { provider });
+    set((state) => ({ authStates: { ...state.authStates, [provider]: authState } }));
+  },
+
+  fetchAllAuthStates: async () => {
+    const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
+    await Promise.all(providers.map((provider) => get().fetchAuthState(provider)));
+  },
+
   setApiKey: async (provider, key) => {
     if (!isTauriRuntime()) return;
     await invoke('set_api_key', { provider, key });
+    await get().refreshProvider(provider);
+  },
+
+  clearApiKey: async (provider) => {
+    if (!isTauriRuntime()) return;
+    await invoke('clear_api_key', { provider });
     await get().refreshProvider(provider);
   },
 

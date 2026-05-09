@@ -22,6 +22,7 @@ fn next_daily_reset() -> chrono::DateTime<Utc> {
     Utc.from_utc_datetime(&tomorrow.and_time(NaiveTime::MIN))
 }
 
+use crate::providers::auth::{AuthKind, AuthState};
 use crate::providers::{FetchContext, ProviderDescriptor, UsageProvider};
 use crate::usage::models::{
     CostEntry, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus,
@@ -196,6 +197,21 @@ impl UsageProvider for GeminiProvider {
             },
             checked_at: Utc::now(),
         }
+    }
+
+    fn compute_auth_state(&self, ctx: &FetchContext) -> AuthState {
+        if ctx.api_key_for(ProviderId::Gemini).is_some() {
+            return AuthState {
+                provider: ProviderId::Gemini,
+                kind: AuthKind::ApiKey,
+                source_path: "runtime api_keys map".to_string(),
+                expires_at_unix_secs: None,
+                last_refresh_iso: None,
+                has_refresh_token: false,
+                last_error: None,
+            };
+        }
+        AuthState::none(ProviderId::Gemini)
     }
 }
 

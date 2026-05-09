@@ -121,6 +121,17 @@ export interface UsageReport {
 }
 
 export type ProviderHealth = 'active' | 'waiting' | 'error';
+export type AuthKind = 'oauth' | 'api_key' | 'cookie' | 'cli' | 'none';
+
+export type AuthState = {
+  provider: ProviderId;
+  kind: AuthKind;
+  source_path: string;
+  expires_at_unix_secs: number | null;
+  last_refresh_iso: string | null;
+  has_refresh_token: boolean;
+  last_error: string | null;
+};
 
 export interface ProviderStatus {
   provider: ProviderId;

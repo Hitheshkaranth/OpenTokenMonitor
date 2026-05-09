@@ -9,42 +9,48 @@ use std::time::Instant;
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 
+use crate::providers::auth::{AuthKind, AuthState};
 use crate::providers::{FetchContext, ProviderDescriptor, UsageProvider};
 use crate::usage::models::{
     CostEntry, CreditsInfo, DataProvenance, DataSource, ProviderHealth, ProviderId, ProviderStatus,
     UsageSnapshot, UsageUnit, UsageWindow, WindowType,
 };
-use crate::usage_scanners::read_claude_oauth_credentials;
+use tracing::{info, warn};
 
-/// Minimum seconds between *successful* OAuth API calls — avoids hammering the
-/// rate-limited usage endpoint when we already have fresh data.
-const OAUTH_COOLDOWN_SECS: u64 = 120;
-/// Minimum seconds between OAuth retries after a *failure*. Short enough that a
-/// transient 429/network blip doesn't lock the UI into local-log mode for 2
-/// minutes, long enough that we don't spam the endpoint.
-const OAUTH_FAILURE_BACKOFF_SECS: u64 = 25;
+const BACKOFF_STEPS_SECS: [u64; 4] = [30, 60, 120, 300];
+const BACKOFF_MAX_SECS: u64 = 600;
+
+#[derive(Debug, Clone, Default)]
+struct BackoffState {
+    last_attempt_at: Option<Instant>,
+    consecutive_failures: u32,
+    cached_success_snapshot: Option<UsageSnapshot>,
+}
+
+impl BackoffState {
+    fn backoff_secs(&self) -> u64 {
+        if self.consecutive_failures == 0 {
+            return 0;
+        }
+        let idx = (self.consecutive_failures as usize).saturating_sub(1);
+        let base = BACKOFF_STEPS_SECS
+            .get(idx)
+            .copied()
+            .unwrap_or(BACKOFF_MAX_SECS);
+        base.min(BACKOFF_MAX_SECS)
+    }
+}
 
 pub struct ClaudeProvider {
     descriptor: ProviderDescriptor,
-    /// Cached state for the OAuth path. `last_success` paces the success
-    /// cooldown; `last_failure` paces the (much shorter) failure backoff;
-    /// `cached_snapshot` is the most recent good response we can reuse while
-    /// throttled or to mark stale on consecutive failures.
-    oauth_cache: Mutex<OauthCache>,
-}
-
-#[derive(Default)]
-struct OauthCache {
-    last_success: Option<Instant>,
-    last_failure: Option<Instant>,
-    cached_snapshot: Option<UsageSnapshot>,
+    backoff: Mutex<BackoffState>,
 }
 
 impl ClaudeProvider {
     pub fn new() -> Self {
         Self {
             descriptor: descriptor::descriptor(),
-            oauth_cache: Mutex::new(OauthCache::default()),
+            backoff: Mutex::new(BackoffState::default()),
         }
     }
 }
@@ -85,6 +91,34 @@ impl ClaudeProvider {
             stale: false,
         })
     }
+
+    fn auth_message(state: &AuthState) -> String {
+        if state.kind == AuthKind::None {
+            return "Waiting for Claude credentials/session files".to_string();
+        }
+        if state.is_expired_with_skew(60) {
+            if state.has_refresh_token {
+                return format!(
+                    "Claude OAuth loaded from {} (token expired, refresh available)",
+                    state.source_path
+                );
+            }
+            return format!(
+                "Claude OAuth loaded from {} (token expired, no refresh token)",
+                state.source_path
+            );
+        }
+        if let Some(exp) = state.expires_at_unix_secs {
+            let now = Utc::now().timestamp().max(0) as u64;
+            let remaining = exp.saturating_sub(now);
+            return format!(
+                "Claude OAuth loaded from {} (expires in {}m)",
+                state.source_path,
+                remaining / 60
+            );
+        }
+        format!("Claude OAuth loaded from {}", state.source_path)
+    }
 }
 
 #[async_trait]
@@ -98,47 +132,48 @@ impl UsageProvider for ClaudeProvider {
     }
 
     async fn fetch_usage(&self, ctx: &FetchContext) -> Result<UsageSnapshot, String> {
-        // Cooldown logic:
-        //   - If we have a fresh cached snapshot from the last *successful* call
-        //     within OAUTH_COOLDOWN_SECS, return it (avoids hammering the API).
-        //   - If the last call FAILED, only skip OAuth for OAUTH_FAILURE_BACKOFF_SECS
-        //     so transient blips don't pin the UI to local-log mode for 2 minutes.
-        //   - Otherwise fall through and retry OAuth.
-        if let Ok(guard) = self.oauth_cache.lock() {
-            if let Some(last_success) = guard.last_success {
-                if last_success.elapsed().as_secs() < OAUTH_COOLDOWN_SECS {
-                    if let Some(ref snap) = guard.cached_snapshot {
-                        return Ok(snap.clone());
+        if let Ok(guard) = self.backoff.lock() {
+            let backoff_secs = guard.backoff_secs();
+            if backoff_secs > 0 {
+                if let Some(last_attempt_at) = guard.last_attempt_at {
+                    if last_attempt_at.elapsed().as_secs() < backoff_secs {
+                        if let Some(ref cached) = guard.cached_success_snapshot {
+                            let mut stale = cached.clone();
+                            stale.stale = true;
+                            info!("[claude] within backoff window, returning stale cached OAuth data");
+                            return Ok(stale);
+                        }
+                        info!("[claude] within backoff window, falling back to local logs");
+                        return self.local_log_snapshot();
                     }
-                }
-            }
-            if let Some(last_failure) = guard.last_failure {
-                if last_failure.elapsed().as_secs() < OAUTH_FAILURE_BACKOFF_SECS {
-                    // Recent failure: prefer stale cache over yet another API hit.
-                    if let Some(ref cached) = guard.cached_snapshot {
-                        let mut stale = cached.clone();
-                        stale.stale = true;
-                        return Ok(stale);
-                    }
-                    drop(guard);
-                    return self.local_log_snapshot();
                 }
             }
         }
 
-        let token = ctx
-            .api_key_for(ProviderId::Claude)
-            .map(ToOwned::to_owned)
-            .or_else(keychain::read_access_token);
+        let supplied_token = ctx.api_key_for(ProviderId::Claude).map(ToOwned::to_owned);
+        let using_supplied_token = supplied_token.is_some();
+        let auth_state = self.compute_auth_state(ctx);
+        let token = supplied_token.or_else(keychain::read_access_token);
 
         if let Some(token) = token {
+            if !using_supplied_token {
+                if auth_state.is_expired_with_skew(60) && !auth_state.has_refresh_token {
+                    warn!(
+                        "[claude] OAuth token from {} is expired and has no refresh token; using local logs",
+                        auth_state.source_path
+                    );
+                    return self.local_log_snapshot();
+                }
+            }
+
             match oauth_fetcher::fetch_usage(&token).await {
                 Err(e) => {
-                    eprintln!("[claude] OAuth failed: {e}");
-                    if let Ok(mut guard) = self.oauth_cache.lock() {
-                        guard.last_failure = Some(Instant::now());
-                        if let Some(ref cached) = guard.cached_snapshot {
-                            eprintln!("[claude] returning stale cached OAuth data");
+                    warn!("[claude] OAuth failed: {e}");
+                    if let Ok(mut guard) = self.backoff.lock() {
+                        guard.last_attempt_at = Some(Instant::now());
+                        guard.consecutive_failures = guard.consecutive_failures.saturating_add(1);
+                        if let Some(ref cached) = guard.cached_success_snapshot {
+                            info!("[claude] returning stale cached OAuth data");
                             let mut stale = cached.clone();
                             stale.stale = true;
                             return Ok(stale);
@@ -185,16 +220,16 @@ impl UsageProvider for ClaudeProvider {
                         provenance: DataProvenance::Internal,
                         stale: false,
                     };
-                    if let Ok(mut guard) = self.oauth_cache.lock() {
-                        guard.last_success = Some(Instant::now());
-                        guard.last_failure = None;
-                        guard.cached_snapshot = Some(snapshot.clone());
+                    if let Ok(mut guard) = self.backoff.lock() {
+                        guard.last_attempt_at = Some(Instant::now());
+                        guard.consecutive_failures = 0;
+                        guard.cached_success_snapshot = Some(snapshot.clone());
                     }
                     return Ok(snapshot);
                 }
             }
         } else {
-            eprintln!("[claude] no OAuth token found, using local logs");
+            info!("[claude] no OAuth token found, using local logs");
         }
 
         self.local_log_snapshot()
@@ -205,11 +240,11 @@ impl UsageProvider for ClaudeProvider {
     }
 
     async fn check_status(&self) -> ProviderStatus {
-        let creds = read_claude_oauth_credentials();
-        let has_token = !creds.access_token.trim().is_empty();
+        let auth = self.compute_auth_state(&FetchContext::default());
         let has_dir = dirs::home_dir()
             .map(|h| h.join(".claude").exists() || h.join(".config").join("claude").exists())
             .unwrap_or(false);
+        let has_token = auth.kind != AuthKind::None;
         ProviderStatus {
             provider: ProviderId::Claude,
             health: if has_token || has_dir {
@@ -218,13 +253,33 @@ impl UsageProvider for ClaudeProvider {
                 ProviderHealth::Waiting
             },
             message: if has_token {
-                format!("Claude auth loaded from {}", creds.source_path)
+                Self::auth_message(&auth)
             } else if has_dir {
                 "Claude logs detected".to_string()
             } else {
                 "Waiting for Claude credentials/session files".to_string()
             },
             checked_at: Utc::now(),
+        }
+    }
+
+    fn compute_auth_state(&self, _ctx: &FetchContext) -> AuthState {
+        let Some(creds) = keychain::read_credentials() else {
+            return AuthState::none(ProviderId::Claude);
+        };
+        let expires_at_unix_secs = creds.expires_at.map(|ms| ms / 1000);
+        AuthState {
+            provider: ProviderId::Claude,
+            kind: AuthKind::Oauth,
+            source_path: creds.source_path,
+            expires_at_unix_secs,
+            last_refresh_iso: None,
+            has_refresh_token: creds
+                .refresh_token
+                .as_ref()
+                .map(|v| !v.trim().is_empty())
+                .unwrap_or(false),
+            last_error: None,
         }
     }
 }

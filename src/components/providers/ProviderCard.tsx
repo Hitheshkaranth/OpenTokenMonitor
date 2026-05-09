@@ -8,6 +8,7 @@ import ResetCountdown from '@/components/meters/ResetCountdown';
 import UsageBar from '@/components/meters/UsageBar';
 import {
   CostEntry,
+  AuthState,
   ModelBreakdownEntry,
   ProviderId,
   ProviderStatus,
@@ -59,6 +60,7 @@ type ProviderCardProps = {
   costHistory: Record<ProviderId, CostEntry[]>;
   alerts?: UsageAlert[];
   status?: ProviderStatus;
+  authState?: AuthState;
   onRefresh: () => void;
 };
 
@@ -71,10 +73,11 @@ const ProviderCard = ({
   costHistory,
   alerts = [],
   status,
+  authState,
   onRefresh,
 }: ProviderCardProps) => {
   const [showRecent, setShowRecent] = useState(false);
-  const access = getProviderAccessState(status, snapshot);
+  const access = getProviderAccessState(status, snapshot, authState);
 
   const providerId = snapshot?.provider;
 
@@ -141,6 +144,7 @@ const ProviderCard = ({
           <span
             className="pcard-status-badge"
             style={{ color: access.color, borderColor: access.color }}
+            title={access.detail}
           >
             {access.label}
           </span>

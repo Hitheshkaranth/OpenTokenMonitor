@@ -1,6 +1,7 @@
 use chrono::{DateTime, TimeZone, Utc};
 use reqwest::header::{ACCEPT, AUTHORIZATION, ORIGIN, USER_AGENT};
 use serde::Deserialize;
+use tracing::warn;
 
 #[derive(Debug, Clone)]
 pub struct CodexBearerWindow {
@@ -57,7 +58,7 @@ pub async fn fetch_usage(access_token: &str) -> Result<CodexBearerWindow, String
             Ok(r) => r,
             Err(e) => {
                 last_err = format!("request failed: {e}");
-                eprintln!("[codex] bearer attempt {}: {last_err}", attempt + 1);
+                warn!("[codex] bearer attempt {}: {last_err}", attempt + 1);
                 continue;
             }
         };
@@ -65,7 +66,7 @@ pub async fn fetch_usage(access_token: &str) -> Result<CodexBearerWindow, String
         let status = res.status();
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
             last_err = format!("429 rate limited (attempt {})", attempt + 1);
-            eprintln!("[codex] bearer: {last_err}");
+            warn!("[codex] bearer: {last_err}");
             continue;
         }
 

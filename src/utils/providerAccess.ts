@@ -1,10 +1,18 @@
-import { ProviderStatus, UsageSnapshot } from '@/types';
+import { AuthState, ProviderStatus, UsageSnapshot } from '@/types';
 
 export type ProviderAccessHealth = ProviderStatus['health'] | 'unknown';
 
 export type ProviderAccessState = {
   health: ProviderAccessHealth;
-  label: 'Live' | 'Local' | 'Retrying' | 'No access' | 'Checking';
+  label:
+    | 'Live'
+    | 'Local'
+    | 'Retrying'
+    | 'No access'
+    | 'Checking'
+    | 'Local — no auth'
+    | 'Local — auth expired'
+    | 'Local — fetch failed';
   detail: string;
   color: string;
 };
@@ -24,7 +32,8 @@ export const providerAccessDotClass = (health: ProviderAccessHealth) =>
 // "Can the app access live provider usage right now?"
 export const getProviderAccessState = (
   status?: ProviderStatus,
-  snapshot?: UsageSnapshot
+  snapshot?: UsageSnapshot,
+  authState?: AuthState
 ): ProviderAccessState => {
   if (snapshot?.stale) {
     return {
@@ -36,11 +45,34 @@ export const getProviderAccessState = (
   }
 
   if (snapshot && (snapshot.provenance === 'derived_local' || snapshot.source === 'local_log')) {
+    if (authState?.kind === 'none') {
+      return {
+        health: 'waiting',
+        label: 'Local — no auth',
+        detail: 'No provider auth was detected; showing usage derived from local session logs.',
+        color: providerAccessColor('waiting'),
+      };
+    }
+
+    if (authState?.kind === 'oauth') {
+      const nowUnix = Math.floor(Date.now() / 1000);
+      const expired =
+        authState.expires_at_unix_secs != null && authState.expires_at_unix_secs <= nowUnix;
+      if (expired) {
+        return {
+          health: 'waiting',
+          label: 'Local — auth expired',
+          detail: 'OAuth is expired; click to refresh.',
+          color: providerAccessColor('waiting'),
+        };
+      }
+    }
+
     return {
       health: 'active',
-      label: 'Local',
-      detail: 'Showing usage data derived from local session logs.',
-      color: providerAccessColor('active'),
+      label: 'Local — fetch failed',
+      detail: authState?.last_error || 'live fetch unavailable, retrying',
+      color: providerAccessColor('waiting'),
     };
   }
 

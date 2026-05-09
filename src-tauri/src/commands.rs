@@ -11,9 +11,11 @@
 
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, State};
+use tracing::warn;
 
 use crate::alerts::build_alerts;
 use crate::autostart::{launch_at_startup_enabled, set_launch_at_startup_enabled};
+use crate::providers::auth::AuthState;
 use crate::tray::update_tray_tooltip;
 use crate::usage::aggregator;
 use crate::usage::models::{
@@ -21,7 +23,9 @@ use crate::usage::models::{
     RefreshCadence, TrendData, UsageReport, UsageSnapshot,
 };
 use crate::usage_scanners;
-use crate::{restart_scheduler, AppState};
+use crate::{
+    clear_persisted_api_key, persist_api_key, resolve_log_dir, restart_scheduler, AppState,
+};
 
 // ───────────────────────── Snapshot reads ─────────────────────────
 
@@ -155,13 +159,51 @@ pub async fn refresh_all(
 pub async fn set_api_key(
     provider: ProviderId,
     key: String,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let mut keys = state
         .api_keys
         .lock()
         .map_err(|_| "api key lock poisoned".to_string())?;
-    keys.insert(provider, key);
+    if key.trim().is_empty() {
+        keys.remove(&provider);
+        if let Err(err) = clear_persisted_api_key(&app, provider) {
+            warn!(
+                "failed to clear persisted api key for {}: {err}",
+                provider.as_str()
+            );
+        }
+        return Ok(());
+    }
+
+    keys.insert(provider, key.clone());
+    if let Err(err) = persist_api_key(&app, provider, &key) {
+        warn!(
+            "failed to persist api key for {}: {err}",
+            provider.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn clear_api_key(
+    provider: ProviderId,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut keys = state
+        .api_keys
+        .lock()
+        .map_err(|_| "api key lock poisoned".to_string())?;
+    keys.remove(&provider);
+    if let Err(err) = clear_persisted_api_key(&app, provider) {
+        warn!(
+            "failed to clear persisted api key for {}: {err}",
+            provider.as_str()
+        );
+    }
     Ok(())
 }
 
@@ -175,6 +217,23 @@ pub async fn get_provider_status(
         .get(provider)
         .ok_or_else(|| format!("Provider {provider:?} not found"))?;
     Ok(p.check_status().await)
+}
+
+#[tauri::command]
+pub async fn get_auth_state(
+    provider: ProviderId,
+    state: State<'_, AppState>,
+) -> Result<AuthState, String> {
+    let p = state
+        .registry
+        .get(provider)
+        .ok_or_else(|| format!("Provider {provider:?} not found"))?;
+    Ok(p.compute_auth_state(&state.fetch_context()))
+}
+
+#[tauri::command]
+pub fn get_log_directory(app: AppHandle) -> Result<String, String> {
+    Ok(resolve_log_dir(Some(&app)).to_string_lossy().to_string())
 }
 
 #[tauri::command]

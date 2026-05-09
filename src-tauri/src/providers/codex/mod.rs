@@ -112,29 +112,30 @@ impl UsageProvider for CodexProvider {
         let mut local_log_reason: Option<String> = None;
         let mut bearer_token = auth.access_token.clone();
 
-        if !bearer_token.is_empty() {
-            if auth_state.kind == AuthKind::Oauth && auth_state.is_expired_with_skew(60) {
-                if let Some(refresh_token) = auth.refresh_token.as_deref() {
-                    match oauth_refresh::refresh_access_token(refresh_token).await {
-                        Ok(refreshed) => {
-                            if let Some(expires_in) = refreshed.expires_in_secs {
-                                info!("[codex] token refresh OK, expires_in={expires_in}s");
-                            }
-                            if let Err(e) = oauth_refresh::persist_refreshed_tokens(&refreshed) {
-                                warn!("[codex] token refresh persist FAILED: {e}");
-                            }
-                            bearer_token = refreshed.access_token;
+        if !bearer_token.is_empty()
+            && auth_state.kind == AuthKind::Oauth
+            && auth_state.is_expired_with_skew(60)
+        {
+            if let Some(refresh_token) = auth.refresh_token.as_deref() {
+                match oauth_refresh::refresh_access_token(refresh_token).await {
+                    Ok(refreshed) => {
+                        if let Some(expires_in) = refreshed.expires_in_secs {
+                            info!("[codex] token refresh OK, expires_in={expires_in}s");
                         }
-                        Err(e) => {
-                            let reason = format!("Codex token expired and refresh failed: {e}");
-                            warn!("[codex] {reason}");
-                            local_log_reason = Some(reason);
+                        if let Err(e) = oauth_refresh::persist_refreshed_tokens(&refreshed) {
+                            warn!("[codex] token refresh persist FAILED: {e}");
                         }
+                        bearer_token = refreshed.access_token;
                     }
-                } else {
-                    local_log_reason =
-                        Some("Codex token expired and no refresh token was available".to_string());
+                    Err(e) => {
+                        let reason = format!("Codex token expired and refresh failed: {e}");
+                        warn!("[codex] {reason}");
+                        local_log_reason = Some(reason);
+                    }
                 }
+            } else {
+                local_log_reason =
+                    Some("Codex token expired and no refresh token was available".to_string());
             }
         }
 

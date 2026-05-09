@@ -1105,7 +1105,7 @@ fn sort_and_limit_recent(
     }
 
     let mut entries: Vec<RecentActivityEntry> = deduped.into_values().collect();
-    entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    entries.sort_by_key(|entry| std::cmp::Reverse(entry.timestamp));
     entries.truncate(limit.max(1));
     entries
 }

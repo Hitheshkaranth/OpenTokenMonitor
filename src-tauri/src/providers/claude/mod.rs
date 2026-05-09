@@ -158,14 +158,15 @@ impl UsageProvider for ClaudeProvider {
         let token = supplied_token.or_else(keychain::read_access_token);
 
         if let Some(token) = token {
-            if !using_supplied_token {
-                if auth_state.is_expired_with_skew(60) && !auth_state.has_refresh_token {
-                    warn!(
-                        "[claude] OAuth token from {} is expired and has no refresh token; using local logs",
-                        auth_state.source_path
-                    );
-                    return self.local_log_snapshot();
-                }
+            if !using_supplied_token
+                && auth_state.is_expired_with_skew(60)
+                && !auth_state.has_refresh_token
+            {
+                warn!(
+                    "[claude] OAuth token from {} is expired and has no refresh token; using local logs",
+                    auth_state.source_path
+                );
+                return self.local_log_snapshot();
             }
 
             match oauth_fetcher::fetch_usage(&token).await {

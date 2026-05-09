@@ -32,9 +32,14 @@ pub fn invalidate_activity_cache() {
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct CodexAuthBridge {
     pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub id_token: Option<String>,
     pub token_type: Option<String>,
     pub account_id: Option<String>,
+    pub auth_mode: Option<String>,
+    pub openai_api_key: Option<String>,
     pub expires_at: Option<u64>,
+    pub last_refresh: Option<String>,
     pub source_path: String,
 }
 
@@ -276,15 +281,27 @@ pub fn read_codex_auth_bridge() -> CodexAuthBridge {
             ],
         )
         .unwrap_or_default(),
+        refresh_token: pick_first_str(&json, &[&["tokens", "refresh_token"], &["refresh_token"]]),
+        id_token: pick_first_str(&json, &[&["tokens", "id_token"], &["id_token"]]),
         token_type: pick_first_str(&json, &[&["tokens", "token_type"], &["token_type"]]),
         account_id: pick_first_str(
             &json,
             &[&["account_id"], &["user", "id"], &["tokens", "account_id"]],
         ),
+        auth_mode: pick_first_str(&json, &[&["auth_mode"], &["auth", "mode"], &["mode"]]),
+        openai_api_key: pick_first_str(
+            &json,
+            &[
+                &["OPENAI_API_KEY"],
+                &["openai_api_key"],
+                &["auth", "OPENAI_API_KEY"],
+            ],
+        ),
         expires_at: pick_first_u64(
             &json,
             &[&["tokens", "expires_at"], &["expires_at"], &["exp"]],
         ),
+        last_refresh: pick_first_str(&json, &[&["last_refresh"], &["auth", "last_refresh"]]),
         source_path: path.display().to_string(),
     }
 }

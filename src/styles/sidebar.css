@@ -5,6 +5,36 @@
   width: 100%;
 }
 
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 10px 0;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--widget-card-panel-border);
+  background: var(--widget-card-panel-bg);
+  color: var(--text-secondary);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.update-banner button {
+  border: 1px solid rgba(16, 163, 127, 0.45);
+  background: rgba(16, 163, 127, 0.2);
+  color: var(--text-primary);
+  border-radius: 7px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.update-banner button:hover {
+  background: rgba(16, 163, 127, 0.32);
+}
+
 /* ── Top navigation bar (unified single-row) ── */
 .nav-bar {
   display: flex;

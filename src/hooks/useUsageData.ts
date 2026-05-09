@@ -11,6 +11,7 @@ export const useUsageData = () => {
   const fetchAll = useUsageStore((s) => s.fetchAll);
   const refreshAll = useUsageStore((s) => s.refreshAll);
   const fetchRecentActivity = useUsageStore((s) => s.fetchRecentActivity);
+  const fetchAllAuthStates = useUsageStore((s) => s.fetchAllAuthStates);
   const upsertSnapshot = useUsageStore((s) => s.upsertSnapshot);
   const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
 
@@ -28,6 +29,7 @@ export const useUsageData = () => {
         providers.forEach((provider) => {
           fetchRecentActivity(provider, 120).catch(() => undefined);
         });
+        fetchAllAuthStates().catch(() => undefined);
       }
     };
 
@@ -44,14 +46,16 @@ export const useUsageData = () => {
           upsertSnapshot(snapshot);
           fetchRecentActivity(snapshot.provider, 120).catch(() => undefined);
         });
+        fetchAllAuthStates().catch(() => undefined);
         return;
       }
       upsertSnapshot(payload);
       fetchRecentActivity(payload.provider, 120).catch(() => undefined);
+      fetchAllAuthStates().catch(() => undefined);
     });
 
     return () => {
       unlistenPromise.then((off) => off());
     };
-  }, [fetchAll, fetchRecentActivity, refreshAll, upsertSnapshot]);
+  }, [fetchAll, fetchAllAuthStates, fetchRecentActivity, refreshAll, upsertSnapshot]);
 };

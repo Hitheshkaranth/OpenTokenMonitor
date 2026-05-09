@@ -19,6 +19,7 @@ import EmptyState from '@/components/states/EmptyState';
 import ErrorBoundary from '@/components/states/ErrorBoundary';
 import ErrorState from '@/components/states/ErrorState';
 import LoadingState from '@/components/states/LoadingState';
+import { UpdateChecker } from '@/components/system/UpdateChecker';
 
 // App is the frontend orchestration layer. It does not own provider-specific
 // parsing logic; instead it coordinates Zustand stores, startup hooks, window
@@ -40,6 +41,7 @@ const App = () => {
   const modelBreakdowns = useUsageStore((s) => s.modelBreakdowns);
   const recentActivity = useUsageStore((s) => s.recentActivity);
   const statuses = useUsageStore((s) => s.statuses);
+  const authStates = useUsageStore((s) => s.authStates);
   const alerts = useUsageStore((s) => s.alerts);
   const loading = useUsageStore((s) => s.loading);
   const error = useUsageStore((s) => s.error);
@@ -266,6 +268,7 @@ const App = () => {
           costHistory={costHistory}
           alerts={alerts[currentProvider]}
           status={statuses[currentProvider]}
+          authState={authStates[currentProvider]}
           onRefresh={() => {
             refreshProvider(currentProvider);
             fetchCostHistory(currentProvider);
@@ -296,6 +299,7 @@ const App = () => {
   return (
     <ErrorBoundary onRetry={refreshEverything}>
       <div className="app-layout">
+        <UpdateChecker />
         <NavBar
           activePage={page}
           onNavigate={setPage}

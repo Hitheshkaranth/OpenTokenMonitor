@@ -1,6 +1,6 @@
 [package]
 name = "open-token-monitor"
-version = "0.3.2"
+version = "0.3.4"
 description = "Local-first desktop monitor for Claude, Codex, and Gemini usage."
 authors = ["Side Quests"]
 license = "MIT"
@@ -29,6 +29,8 @@ tauri-plugin-notification = "2.3.3"
 tauri-plugin-http = "2.5.7"
 tauri-plugin-shell = "2.3.5"
 tauri-plugin-fs = "2.4.5"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 notify = "6.1.1"
 tokio = { version = "1.49.0", features = ["full"] }
 futures-util = "0.3.32"
@@ -38,6 +40,11 @@ async-trait = "0.1.89"
 chrono = { version = "0.4.42", features = ["serde"] }
 reqwest = { version = "0.12.23", default-features = false, features = ["json", "rustls-tls"] }
 rusqlite = { version = "0.37.0", features = ["bundled"] }
+keyring = "3"
+base64 = "0.22"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
+tracing-appender = "0.2"
 
 [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
 tauri-plugin-autostart = "2"

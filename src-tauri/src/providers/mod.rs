@@ -5,6 +5,7 @@ use async_trait::async_trait;
 
 use crate::usage::models::{CostEntry, ProviderId, ProviderStatus, UsageSnapshot};
 
+pub mod auth;
 pub mod claude;
 pub mod codex;
 pub mod gemini;
@@ -45,6 +46,7 @@ pub trait UsageProvider: Send + Sync {
     async fn fetch_usage(&self, ctx: &FetchContext) -> Result<UsageSnapshot, String>;
     async fn fetch_cost_history(&self, days: u32) -> Result<Vec<CostEntry>, String>;
     async fn check_status(&self) -> ProviderStatus;
+    fn compute_auth_state(&self, ctx: &FetchContext) -> auth::AuthState;
 }
 
 pub type DynProvider = Arc<dyn UsageProvider>;

@@ -42,7 +42,15 @@ docs/superpowers/
 
 # Dev output captures
 tauri_dev_output.txt
+tauri_dev.log
+
+# App-runtime artifacts
+last_panic.log
+**/auth.json.tmp
 
 # Rust / Tauri build output
 src-tauri/target/
 src-tauri/gen/
+
+# OS / dev screenshots
+screenshot.png

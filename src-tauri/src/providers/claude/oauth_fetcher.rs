@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use reqwest::header::{AUTHORIZATION, USER_AGENT};
 use serde_json::Value;
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone)]
 pub struct ClaudeOauthWindow {
@@ -37,11 +38,11 @@ pub async fn fetch_usage(token: &str) -> Result<ClaudeOauthWindow, String> {
     let mut last_err = String::new();
 
     for endpoint in ENDPOINTS {
-        eprintln!("[claude] trying endpoint: {endpoint}");
+        debug!("[claude] trying endpoint: {endpoint}");
         match try_endpoint(&client, endpoint, token).await {
             Ok(window) => return Ok(window),
             Err(e) => {
-                eprintln!("[claude] endpoint {endpoint} failed: {e}");
+                warn!("[claude] endpoint {endpoint} failed: {e}");
                 last_err = e;
             }
         }
@@ -74,7 +75,7 @@ async fn try_endpoint(
             Ok(r) => r,
             Err(e) => {
                 last_err = format!("request failed: {e}");
-                eprintln!("[claude] OAuth attempt {}: {last_err}", attempt + 1);
+                warn!("[claude] OAuth attempt {}: {last_err}", attempt + 1);
                 continue;
             }
         };
@@ -83,7 +84,7 @@ async fn try_endpoint(
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
             let body = res.text().await.unwrap_or_default();
             last_err = format!("429 rate limited (attempt {}): {body}", attempt + 1);
-            eprintln!("[claude] OAuth: {last_err}");
+            warn!("[claude] OAuth: {last_err}");
             continue;
         }
 
@@ -142,7 +143,7 @@ fn parse_usage_response(payload: Value) -> Result<ClaudeOauthWindow, String> {
         seven_day_resets_at: parse_dt(s.get("resets_at").and_then(Value::as_str)),
         extra_usage,
     };
-    eprintln!(
+    info!(
         "[claude] OAuth OK: 5h={:.1}% 7d={:.1}% opus={:.1}%{}",
         window.five_hour_utilization,
         window.seven_day_utilization,

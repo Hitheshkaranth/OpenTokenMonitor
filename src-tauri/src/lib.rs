@@ -1,10 +1,18 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 use chrono::Utc;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItemBuilder};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_store::StoreExt;
+use tracing::{error, info, warn};
+use tracing_appender::non_blocking::WorkerGuard;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{fmt, EnvFilter, Registry};
 
 mod providers;
 mod usage;
@@ -12,6 +20,7 @@ mod usage_scanners;
 mod watchers;
 
 use providers::registry::ProviderRegistry;
+use providers::auth::AuthState;
 use providers::FetchContext;
 use usage::aggregator;
 use usage::models::{
@@ -26,6 +35,8 @@ use watchers::poll_scheduler::PollScheduler;
 struct TrayState {
     _icon: Mutex<Option<tauri::tray::TrayIcon>>,
 }
+
+static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 
 // AppState is the backend composition root: registered providers, persisted
 // store, transient auth, and the active poll scheduler all live here.
@@ -42,6 +53,7 @@ impl AppState {
         let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
         let db_path = data_dir.join("usage.db");
         let store = UsageStore::open(&db_path)?;
+        let initial_keys = load_persisted_api_keys(app);
         let registry = ProviderRegistry::new();
         let provider_banner = registry
             .descriptors()
@@ -54,7 +66,7 @@ impl AppState {
         Ok(Self {
             registry,
             store,
-            api_keys: Mutex::new(HashMap::new()),
+            api_keys: Mutex::new(initial_keys),
             cadence: Mutex::new(RefreshCadence::Every1m),
             scheduler: PollScheduler::new(),
         })
@@ -77,6 +89,96 @@ impl AppState {
             allow_cli_strategy,
         }
     }
+}
+
+fn api_key_store_key(provider: ProviderId) -> String {
+    format!("api_key.{}", provider.as_str())
+}
+
+fn resolve_log_dir(app: Option<&AppHandle>) -> PathBuf {
+    if let Some(app) = app {
+        if let Ok(path) = app.path().app_data_dir() {
+            return path.join("logs");
+        }
+    }
+    if let Some(path) = dirs::data_dir() {
+        return path.join("OpenTokenMonitor").join("logs");
+    }
+    std::env::temp_dir().join("OpenTokenMonitor").join("logs")
+}
+
+fn init_tracing() {
+    let log_dir = resolve_log_dir(None);
+    if let Err(err) = fs::create_dir_all(&log_dir) {
+        let _ = writeln!(
+            std::io::stderr(),
+            "failed to create log dir {}: {err}",
+            log_dir.display()
+        );
+        return;
+    }
+
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "otm.log");
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+    let _ = LOG_GUARD.set(guard);
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("warn,open_token_monitor=info"));
+    let console_layer = fmt::layer()
+        .compact()
+        .with_writer(std::io::stderr)
+        .with_target(true);
+    let file_layer = fmt::layer()
+        .compact()
+        .with_ansi(false)
+        .with_writer(non_blocking);
+    let subscriber = Registry::default()
+        .with(env_filter)
+        .with(console_layer)
+        .with(file_layer);
+    let _ = tracing::subscriber::set_global_default(subscriber);
+    info!("tracing initialized; log_dir={}", log_dir.display());
+}
+
+fn secrets_store_path(app: &AppHandle) -> std::path::PathBuf {
+    app.path()
+        .app_data_dir()
+        .unwrap_or_default()
+        .join("secrets.json")
+}
+
+fn load_persisted_api_keys(app: &AppHandle) -> HashMap<ProviderId, String> {
+    let mut out = HashMap::new();
+    let store_path = secrets_store_path(app);
+    let Ok(store) = app.store(store_path) else {
+        return out;
+    };
+
+    for provider in ProviderId::all() {
+        let key = api_key_store_key(provider);
+        if let Some(value) = store.get(&key).and_then(|v| v.as_str().map(str::to_string)) {
+            if !value.trim().is_empty() {
+                out.insert(provider, value);
+            }
+        }
+    }
+    out
+}
+
+fn persist_api_key(app: &AppHandle, provider: ProviderId, key: &str) -> Result<(), String> {
+    let store = app
+        .store(secrets_store_path(app))
+        .map_err(|e| e.to_string())?;
+    store.set(api_key_store_key(provider), serde_json::Value::String(key.to_string()));
+    store.save().map_err(|e| e.to_string())
+}
+
+fn clear_persisted_api_key(app: &AppHandle, provider: ProviderId) -> Result<(), String> {
+    let store = app
+        .store(secrets_store_path(app))
+        .map_err(|e| e.to_string())?;
+    store.delete(api_key_store_key(provider));
+    store.save().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -200,13 +302,51 @@ async fn refresh_all(
 async fn set_api_key(
     provider: ProviderId,
     key: String,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let mut keys = state
         .api_keys
         .lock()
         .map_err(|_| "api key lock poisoned".to_string())?;
-    keys.insert(provider, key);
+    if key.trim().is_empty() {
+        keys.remove(&provider);
+        if let Err(err) = clear_persisted_api_key(&app, provider) {
+            warn!(
+                "failed to clear persisted api key for {}: {err}",
+                provider.as_str()
+            );
+        }
+        return Ok(());
+    }
+
+    keys.insert(provider, key.clone());
+    if let Err(err) = persist_api_key(&app, provider, &key) {
+        warn!(
+            "failed to persist api key for {}: {err}",
+            provider.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn clear_api_key(
+    provider: ProviderId,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut keys = state
+        .api_keys
+        .lock()
+        .map_err(|_| "api key lock poisoned".to_string())?;
+    keys.remove(&provider);
+    if let Err(err) = clear_persisted_api_key(&app, provider) {
+        warn!(
+            "failed to clear persisted api key for {}: {err}",
+            provider.as_str()
+        );
+    }
     Ok(())
 }
 
@@ -220,6 +360,23 @@ async fn get_provider_status(
         .get(provider)
         .ok_or_else(|| format!("Provider {provider:?} not found"))?;
     Ok(p.check_status().await)
+}
+
+#[tauri::command]
+async fn get_auth_state(
+    provider: ProviderId,
+    state: State<'_, AppState>,
+) -> Result<AuthState, String> {
+    let p = state
+        .registry
+        .get(provider)
+        .ok_or_else(|| format!("Provider {provider:?} not found"))?;
+    Ok(p.compute_auth_state(&state.fetch_context()))
+}
+
+#[tauri::command]
+fn get_log_directory(app: AppHandle) -> Result<String, String> {
+    Ok(resolve_log_dir(Some(&app)).to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -293,6 +450,30 @@ fn set_launch_at_startup_enabled(app: &AppHandle, enabled: bool) -> Result<bool,
 
 fn is_autostart_launch() -> bool {
     std::env::args().any(|arg| arg == "--autostart")
+}
+
+fn panic_log_path() -> PathBuf {
+    if let Some(dir) = dirs::data_local_dir() {
+        return dir.join("OpenTokenMonitor").join("last_panic.log");
+    }
+    if let Some(home) = dirs::home_dir() {
+        return home
+            .join(".local")
+            .join("share")
+            .join("OpenTokenMonitor")
+            .join("last_panic.log");
+    }
+    std::env::temp_dir().join("OpenTokenMonitor_last_panic.log")
+}
+
+fn append_panic_log(message: &str) {
+    let path = panic_log_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(file, "{message}");
+    }
 }
 
 fn restart_scheduler(app: &AppHandle, state: &AppState, cadence: RefreshCadence) {
@@ -553,13 +734,42 @@ mod tests {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    std::panic::set_hook(Box::new(|panic_info| {
+        let now = chrono::Utc::now().to_rfc3339();
+        let thread = std::thread::current()
+            .name()
+            .map(str::to_string)
+            .unwrap_or_else(|| "unnamed".to_string());
+        let payload = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "non-string panic payload".to_string()
+        };
+        let location = panic_info
+            .location()
+            .map(|loc| format!("{}:{}", loc.file(), loc.line()))
+            .unwrap_or_else(|| "unknown location".to_string());
+        let backtrace = std::backtrace::Backtrace::force_capture();
+        let log_line = format!(
+            "[{now}] panic thread={thread} location={location} payload={payload}\nbacktrace:\n{backtrace}\n"
+        );
+        append_panic_log(&log_line);
+        eprintln!("{log_line}");
+    }));
+
+    init_tracing();
+
+    let run_result = tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
             {
@@ -628,12 +838,21 @@ pub fn run() {
             refresh_provider,
             refresh_all,
             set_api_key,
+            clear_api_key,
             get_provider_status,
+            get_auth_state,
+            get_log_directory,
             set_refresh_cadence,
             get_launch_at_startup,
             set_launch_at_startup,
             quit_app,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+
+    if let Err(err) = run_result {
+        let now = chrono::Utc::now().to_rfc3339();
+        let log_line = format!("[{now}] tauri runtime error: {err}");
+        append_panic_log(&log_line);
+        error!("{log_line}");
+    }
 }

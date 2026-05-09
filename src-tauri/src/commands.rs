@@ -179,10 +179,7 @@ pub async fn set_api_key(
 
     keys.insert(provider, key.clone());
     if let Err(err) = persist_api_key(&app, provider, &key) {
-        warn!(
-            "failed to persist api key for {}: {err}",
-            provider.as_str()
-        );
+        warn!("failed to persist api key for {}: {err}", provider.as_str());
     }
     Ok(())
 }

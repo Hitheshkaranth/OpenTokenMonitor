@@ -140,7 +140,9 @@ impl UsageProvider for ClaudeProvider {
                         if let Some(ref cached) = guard.cached_success_snapshot {
                             let mut stale = cached.clone();
                             stale.stale = true;
-                            info!("[claude] within backoff window, returning stale cached OAuth data");
+                            info!(
+                                "[claude] within backoff window, returning stale cached OAuth data"
+                            );
                             return Ok(stale);
                         }
                         info!("[claude] within backoff window, falling back to local logs");

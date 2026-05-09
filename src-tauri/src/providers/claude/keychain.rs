@@ -95,9 +95,11 @@ fn parse_secret_to_creds(secret: &str, source_path: String) -> Option<ClaudeKeyc
 }
 
 fn pick_str(json: &Value, paths: &[&[&str]]) -> Option<String> {
-    paths
-        .iter()
-        .find_map(|path| traverse_path(json, path).and_then(|v| v.as_str()).map(str::to_string))
+    paths.iter().find_map(|path| {
+        traverse_path(json, path)
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    })
 }
 
 fn pick_u64(json: &Value, paths: &[&[&str]]) -> Option<u64> {
@@ -145,10 +147,7 @@ fn read_from_os_keychain() -> Option<ClaudeKeychainCreds> {
 fn read_from_keyring_account(account: &str, os_label: &str) -> Option<ClaudeKeychainCreds> {
     let entry = keyring::Entry::new(CLAUDE_KEYCHAIN_SERVICE, account).ok()?;
     let secret = entry.get_password().ok()?;
-    parse_secret_to_creds(
-        &secret,
-        format!("{os_label}: {CLAUDE_KEYCHAIN_SERVICE}"),
-    )
+    parse_secret_to_creds(&secret, format!("{os_label}: {CLAUDE_KEYCHAIN_SERVICE}"))
 }
 
 #[cfg(target_os = "macos")]
@@ -167,12 +166,7 @@ fn read_from_macos_keychain() -> Option<ClaudeKeychainCreds> {
     }
 
     let output = Command::new("security")
-        .args([
-            "find-generic-password",
-            "-s",
-            CLAUDE_KEYCHAIN_SERVICE,
-            "-w",
-        ])
+        .args(["find-generic-password", "-s", CLAUDE_KEYCHAIN_SERVICE, "-w"])
         .output()
         .ok()?;
 

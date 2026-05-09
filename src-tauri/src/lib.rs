@@ -156,10 +156,7 @@ pub(crate) fn persist_api_key(
     store.save().map_err(|e| e.to_string())
 }
 
-pub(crate) fn clear_persisted_api_key(
-    app: &AppHandle,
-    provider: ProviderId,
-) -> Result<(), String> {
+pub(crate) fn clear_persisted_api_key(app: &AppHandle, provider: ProviderId) -> Result<(), String> {
     let store = app
         .store(secrets_store_path(app))
         .map_err(|e| e.to_string())?;

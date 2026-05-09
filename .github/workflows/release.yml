@@ -36,7 +36,7 @@ jobs:
           - os: macos-14
             target: aarch64-apple-darwin
             bundle_cmd: npm run tauri:build:mac
-          - os: macos-13
+          - os: macos-15-intel
             target: x86_64-apple-darwin
             bundle_cmd: npm run tauri:build:mac
           - os: windows-latest
@@ -90,7 +90,6 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
             src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe.sig
-          if-no-files-found: ignore
 
   publish-release:
     runs-on: ubuntu-latest

@@ -79,17 +79,36 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
+      - name: Collect release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "release-assets/${{ matrix.target }}"
+          shopt -s nullglob
+
+          artifacts=(
+            src-tauri/target/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.sig
+          )
+
+          if [ ${#artifacts[@]} -eq 0 ]; then
+            echo "No release artifacts found" >&2
+            find src-tauri/target/release/bundle -maxdepth 3 -type f 2>/dev/null || true
+            exit 1
+          fi
+
+          cp "${artifacts[@]}" "release-assets/${{ matrix.target }}/"
+          ls -la "release-assets/${{ matrix.target }}"
+
       - name: Upload build artifacts to draft release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
-          files: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
-            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
-            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe.sig
+          files: release-assets/${{ matrix.target }}/*
 
   publish-release:
     runs-on: ubuntu-latest

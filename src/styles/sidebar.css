@@ -507,6 +507,7 @@
 
 .widget-provider-card:hover {
   transform: translateY(-1px);
+  border-color: var(--glass-border); /* fallback for engines without color-mix() */
   border-color: color-mix(in srgb, rgba(var(--widget-accent), 0.42) 42%, var(--glass-border) 58%);
   box-shadow: var(--widget-card-shadow-hover);
 }
@@ -936,6 +937,7 @@
 
 .overview-card-v2:hover {
   transform: translateY(-1px);
+  border-color: var(--glass-border); /* fallback for engines without color-mix() */
   border-color: color-mix(in srgb, rgba(var(--widget-accent), 0.42) 42%, var(--glass-border) 58%);
   box-shadow: var(--widget-card-shadow-hover);
 }
@@ -1742,9 +1744,11 @@
 
 @media (prefers-reduced-transparency: reduce) {
   .nav-bar {
+    background: #2e3b42; /* fallback for engines without color-mix() */
     background: color-mix(in srgb, #112028 88%, white 12%);
   }
   .nav-pill-bar {
+    background: #58636a; /* fallback for engines without color-mix() */
     background: color-mix(in srgb, #112028 70%, white 30%);
   }
 }

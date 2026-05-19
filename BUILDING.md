@@ -105,7 +105,7 @@ Generate an updater signing keypair (Tauri v2 CLI):
 
 This writes a private key (`~/.tauri/otm-updater.key`) and public key (`~/.tauri/otm-updater.key.pub`).
 
-Update `src-tauri/tauri.conf.json` and replace `"PUBKEY_PLACEHOLDER"` with the contents of the public key file.
+In `src-tauri/tauri.conf.json`, under `plugins.updater`: replace `"PUBKEY_PLACEHOLDER"` with the contents of the public key file, and set `"active": true`. The updater ships with `"active": false` on purpose — a placeholder public key can never verify an update signature, so the feature stays disabled until a real keypair is wired up.
 
 Set GitHub Actions secrets for release signing:
 

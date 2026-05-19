@@ -53,7 +53,7 @@
       "tsp": false,
       "wix": null,
       "webviewInstallMode": {
-        "type": "embedBootstrapper",
+        "type": "offlineInstaller",
         "silent": true
       },
       "nsis": {
@@ -71,7 +71,7 @@
       "requireLiteralLeadingDot": false
     },
     "updater": {
-      "active": true,
+      "active": false,
       "endpoints": [
         "https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest/download/latest.json"
       ],

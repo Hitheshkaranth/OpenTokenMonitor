@@ -29,6 +29,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       HAS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+      HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -73,11 +74,26 @@ jobs:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
 
+      # macOS Gatekeeper: for a release other Macs can open without the
+      # "app is damaged / unidentified developer" prompt, the build must be
+      # Developer ID signed AND notarized. Provide these repository secrets to
+      # enable it. All are optional — when absent the build still succeeds with
+      # the current ad-hoc / unsigned output, exactly as before:
+      #   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD
+      #     - Developer ID Application cert exported as base64-encoded .p12
+      #   APPLE_SIGNING_IDENTITY
+      #     - e.g. "Developer ID Application: Your Name (TEAMID)"
+      #   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
+      #     - notarization: Apple ID, an app-specific password, and the team ID
       - name: Build Tauri bundle
         run: ${{ matrix.bundle_cmd }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Collect release artifacts
         shell: bash

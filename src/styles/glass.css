@@ -1,13 +1,16 @@
 :root {
   --bg-base: linear-gradient(160deg, #070d12 0%, #0c1b23 45%, #0d1726 100%);
-  --glass-bg: color-mix(in srgb, white 10%, transparent);
-  --glass-border: color-mix(in srgb, white 26%, transparent);
+  /* Precomputed sRGB values (no color-mix()): color-mix is unsupported on
+     older WebKit/WebView2; a custom property holding an unsupported function
+     would make every consumer fall back to its initial value. */
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.26);
   --glass-shadow: 0 24px 56px rgba(0, 0, 0, 0.5);
   --text-primary: #e7f1f8;
   --text-secondary: #a9bccb;
   --text-muted: #7f97a8;
-  --control-bg: color-mix(in srgb, var(--glass-bg) 88%, transparent);
-  --control-border-strong: color-mix(in srgb, white 60%, transparent);
+  --control-bg: rgba(255, 255, 255, 0.088);
+  --control-border-strong: rgba(255, 255, 255, 0.6);
   --tooltip-bg: rgba(12, 24, 33, 0.9);
   --tooltip-border: rgba(255, 255, 255, 0.24);
   --meter-track: rgba(255, 255, 255, 0.14);
@@ -56,14 +59,14 @@
 
 html[data-theme='light'] {
   --bg-base: linear-gradient(165deg, #ddebf2 0%, #edf6ff 46%, #f4f8ff 100%);
-  --glass-bg: color-mix(in srgb, white 72%, transparent);
-  --glass-border: color-mix(in srgb, white 90%, #9ab0be 10%);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: #f5f7f9;
   --glass-shadow: 0 18px 42px rgba(56, 77, 94, 0.2);
   --text-primary: #0f2029;
   --text-secondary: #2b4453;
   --text-muted: #496577;
-  --control-bg: color-mix(in srgb, var(--glass-bg) 78%, #f7fbff 22%);
-  --control-border-strong: color-mix(in srgb, #5f7482 30%, #ffffff 70%);
+  --control-bg: rgba(253, 254, 255, 0.78);
+  --control-border-strong: #cfd5da;
   --tooltip-bg: rgba(247, 251, 255, 0.96);
   --tooltip-border: rgba(53, 77, 92, 0.25);
   --meter-track: rgba(53, 77, 92, 0.2);
@@ -119,6 +122,7 @@ body {
   overflow: hidden;
   border-radius: var(--radius-lg);
   border: 1px solid var(--glass-border);
+  background: var(--glass-bg); /* fallback for engines without color-mix() */
   background: linear-gradient(160deg, var(--glass-bg), color-mix(in srgb, var(--glass-bg) 60%, transparent));
   backdrop-filter: blur(24px) saturate(145%);
   -webkit-backdrop-filter: blur(24px) saturate(145%);
@@ -150,6 +154,7 @@ body {
 }
 
 .glass-pill:focus-visible {
+  outline: 2px solid var(--text-secondary); /* fallback for engines without color-mix() */
   outline: 2px solid color-mix(in srgb, var(--text-secondary) 55%, transparent);
   outline-offset: 2px;
 }
@@ -158,9 +163,11 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr 1.15fr;
   gap: 0;
+  border: 1px solid var(--glass-border); /* fallback for engines without color-mix() */
   border: 1px solid color-mix(in srgb, #ffffff 36%, var(--glass-border) 64%);
   border-radius: 999px;
   overflow: hidden;
+  background: var(--glass-bg); /* fallback for engines without color-mix() */
   background: linear-gradient(
     180deg,
     color-mix(in srgb, var(--glass-bg) 78%, rgba(255, 255, 255, 0.08) 22%) 0%,
@@ -173,6 +180,7 @@ body {
 
 .segment-btn {
   border: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.16); /* fallback for engines without color-mix() */
   border-right: 1px solid color-mix(in srgb, rgba(255, 255, 255, 0.35) 45%, transparent);
   background: transparent;
   color: var(--text-secondary);
@@ -192,6 +200,8 @@ body {
 
 .segment-btn-active {
   color: var(--text-primary);
+  /* fallback for engines without color-mix() */
+  background: linear-gradient(180deg, rgba(183, 193, 205, 0.3) 0%, rgba(142, 153, 165, 0.3) 100%);
   background: linear-gradient(
     180deg,
     color-mix(in srgb, rgba(183, 193, 205, 0.5) 60%, transparent) 0%,
@@ -233,16 +243,19 @@ select.glass-pill {
 
 select.glass-pill option {
   color: var(--text-primary);
+  background: var(--tooltip-bg); /* fallback for engines without color-mix() */
   background: color-mix(in srgb, var(--tooltip-bg) 96%, white 4%);
 }
 
 .soft-scroll {
   scrollbar-width: thin;
+  scrollbar-color: var(--text-muted) transparent; /* fallback for engines without color-mix() */
   scrollbar-color: color-mix(in srgb, var(--text-muted) 40%, transparent) transparent;
 }
 
 @media (prefers-reduced-transparency: reduce) {
   .glass-panel {
+    background: #2e3b42; /* fallback for engines without color-mix() */
     background: color-mix(in srgb, #112028 88%, white 12%);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;

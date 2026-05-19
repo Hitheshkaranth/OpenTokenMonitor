@@ -58,4 +58,7 @@ strip = true          # Strip debug symbols → smaller binary
 lto = true            # Link-time optimization → smaller + faster
 codegen-units = 1     # Max optimization (slower compile, smaller output)
 opt-level = "s"       # Optimize for size
-panic = "abort"       # Smaller binary, no unwinding overhead
+# `unwind` (not `abort`): a panic in a background task — provider fetch, log
+# parser, file watcher, poll scheduler — is then isolated by the tokio runtime
+# instead of aborting the entire process.
+panic = "unwind"

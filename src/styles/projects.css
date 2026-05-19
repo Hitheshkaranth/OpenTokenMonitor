@@ -117,6 +117,7 @@
 
 .proj-card:hover {
   transform: translateY(-1px);
+  border-color: var(--glass-border); /* fallback for engines without color-mix() */
   border-color: color-mix(in srgb, rgba(var(--widget-accent), 0.36) 40%, var(--glass-border) 60%);
   box-shadow: var(--widget-card-shadow-hover);
 }

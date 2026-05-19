@@ -7,6 +7,10 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  // Relative base so built asset URLs are `./assets/...`. Absolute `/assets/...`
+  // URLs can fail to resolve under Tauri's custom protocol on some platforms,
+  // producing a blank white window. Relative paths are robust everywhere.
+  base: "./",
   plugins: [react()],
   resolve: {
     alias: {

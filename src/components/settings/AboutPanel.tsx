@@ -1,5 +1,7 @@
-import { Activity, Cpu, Github, LayoutDashboard, Package } from 'lucide-react';
+import { Activity, Cpu, FolderOpen, Github, LayoutDashboard, Package } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { open as openWithShell } from '@tauri-apps/plugin-shell';
+import { invoke } from '@tauri-apps/api/core';
 import GlassButton from '@/components/glass/GlassButton';
 import { APP_NAME, APP_REPO_URL, APP_VERSION } from '@/constants/appMeta';
 import { isTauriRuntime } from '@/utils/runtime';
@@ -21,6 +23,19 @@ const openRepo = async () => {
     console.error('failed to open repo url', error);
   }
   window.open(APP_REPO_URL, '_blank', 'noopener,noreferrer');
+};
+
+// Reveals the rolling log directory so users can attach logs to a bug report
+// without hunting through app-data paths — the key diagnostic for a blank
+// window or a startup crash.
+const openLogFolder = async () => {
+  if (!isTauriRuntime()) return;
+  try {
+    const dir = await invoke<string>('get_log_directory');
+    await openWithShell(dir);
+  } catch (error) {
+    console.error('failed to open log directory', error);
+  }
 };
 
 const AboutPanel = () => (
@@ -79,6 +94,10 @@ const AboutPanel = () => (
       <GlassButton variant="primary" size="sm" onClick={openRepo} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'center' }}>
         <Github size={12} />
         GitHub Repo
+      </GlassButton>
+      <GlassButton variant="default" size="sm" onClick={openLogFolder} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'center' }}>
+        <FolderOpen size={12} />
+        Open log folder
       </GlassButton>
     </div>
   </div>

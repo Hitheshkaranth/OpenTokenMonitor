@@ -9,9 +9,14 @@ use tauri::AppHandle;
 /// Detects whether the current process was launched by the OS autostart entry.
 ///
 /// We pass `--autostart` as a launch argument when registering the autostart
-/// shortcut (see `lib.rs::run`), so checking argv is sufficient.
+/// shortcut (see `lib.rs::run`). Some launch contexts (certain LaunchAgent or
+/// shortcut configurations) strip process arguments, so `OTM_AUTOSTART=1` in
+/// the environment is accepted as an equivalent autostart signal.
 pub fn is_autostart_launch() -> bool {
     std::env::args().any(|arg| arg == "--autostart")
+        || std::env::var("OTM_AUTOSTART")
+            .map(|v| v == "1")
+            .unwrap_or(false)
 }
 
 /// Returns whether the OS autostart entry is currently enabled.

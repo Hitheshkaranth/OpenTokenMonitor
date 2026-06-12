@@ -35,12 +35,21 @@ where
                 ProviderId::Codex,
                 home.join(".codex").join("archived_sessions"),
             ));
-            
+
             // VERIFY: Antigravity session/log directory
             #[cfg(target_os = "macos")]
-            out.push((ProviderId::Antigravity, home.join("Library").join("Application Support").join("Antigravity").join("logs")));
+            out.push((
+                ProviderId::Antigravity,
+                home.join("Library")
+                    .join("Application Support")
+                    .join("Antigravity")
+                    .join("logs"),
+            ));
             #[cfg(not(target_os = "macos"))]
-            out.push((ProviderId::Antigravity, home.join(".antigravity").join("logs")));
+            out.push((
+                ProviderId::Antigravity,
+                home.join(".antigravity").join("logs"),
+            ));
         }
         out
     };

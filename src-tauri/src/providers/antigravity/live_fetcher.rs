@@ -116,7 +116,9 @@ fn parse_models(resp: &Value) -> Vec<ModelQuota> {
         let Some(name) = model.get("displayName").and_then(Value::as_str) else {
             continue;
         };
-        let Some(qi) = model.get("quotaInfo") else { continue };
+        let Some(qi) = model.get("quotaInfo") else {
+            continue;
+        };
         let Some(frac) = qi.get("remainingFraction").and_then(Value::as_f64) else {
             continue;
         };

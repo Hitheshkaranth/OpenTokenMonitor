@@ -19,7 +19,11 @@ impl ProviderId {
     }
 
     pub fn all() -> [ProviderId; 3] {
-        [ProviderId::Claude, ProviderId::Codex, ProviderId::Antigravity]
+        [
+            ProviderId::Claude,
+            ProviderId::Codex,
+            ProviderId::Antigravity,
+        ]
     }
 }
 

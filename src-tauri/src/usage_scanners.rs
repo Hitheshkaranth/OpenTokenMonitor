@@ -417,14 +417,18 @@ pub fn scan_claude_model_daily_usage() -> Vec<ClaudeModelDailyUsagePoint> {
 
 pub fn scan_antigravity_daily_usage() -> Vec<AntigravityDailyUsagePoint> {
     let cache = ANTIGRAVITY_CACHE.get_or_init(|| Mutex::new(AntigravityScannerCache::default()));
-    let mut guard = cache.lock().expect("antigravity scanner cache lock poisoned");
+    let mut guard = cache
+        .lock()
+        .expect("antigravity scanner cache lock poisoned");
     guard.refresh_antigravity();
     guard.antigravity_daily()
 }
 
 pub fn scan_antigravity_model_daily_usage() -> Vec<AntigravityModelDailyUsagePoint> {
     let cache = ANTIGRAVITY_CACHE.get_or_init(|| Mutex::new(AntigravityScannerCache::default()));
-    let mut guard = cache.lock().expect("antigravity scanner cache lock poisoned");
+    let mut guard = cache
+        .lock()
+        .expect("antigravity scanner cache lock poisoned");
     guard.refresh_antigravity();
     guard.antigravity_model_daily()
 }
@@ -638,7 +642,8 @@ fn scan_antigravity_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
                     continue;
                 }
 
-                let Some(prompt) = pick_first_str(item, &[&["message"], &["prompt"], &["input"]]) else {
+                let Some(prompt) = pick_first_str(item, &[&["message"], &["prompt"], &["input"]])
+                else {
                     continue;
                 };
                 let prompt = normalize_recent_prompt(&prompt);
@@ -680,7 +685,11 @@ fn discover_antigravity_log_files() -> Vec<AntigravityLogFile> {
     // Update discovery paths (VERIFY)
     // New: ~/Library/Application Support/Antigravity/logs/
     #[cfg(target_os = "macos")]
-    let root = home.join("Library").join("Application Support").join("Antigravity").join("logs");
+    let root = home
+        .join("Library")
+        .join("Application Support")
+        .join("Antigravity")
+        .join("logs");
     #[cfg(not(target_os = "macos"))]
     let root = home.join(".antigravity").join("logs"); // Fallback for other OS
 
@@ -1421,12 +1430,13 @@ impl AntigravityScannerCache {
         let mut merged = HashMap::<String, AntigravityDailyUsagePoint>::new();
         for file in self.files.values() {
             for (day, point) in &file.contribution.daily {
-                let slot = merged
-                    .entry(day.clone())
-                    .or_insert_with(|| AntigravityDailyUsagePoint {
-                        day: day.clone(),
-                        ..AntigravityDailyUsagePoint::default()
-                    });
+                let slot =
+                    merged
+                        .entry(day.clone())
+                        .or_insert_with(|| AntigravityDailyUsagePoint {
+                            day: day.clone(),
+                            ..AntigravityDailyUsagePoint::default()
+                        });
                 slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
                 slot.cache_read_tokens = slot
                     .cache_read_tokens
@@ -1828,8 +1838,9 @@ fn parse_antigravity_file_incremental(path: &Path, cache: &mut AntigravityFileCa
                 continue;
             };
             if first_day.is_none() {
-                first_day = pick_first_str(&json, &[&["startTime"], &["timestamp"], &["created_at"]])
-                    .and_then(|s| try_iso_to_day(&s));
+                first_day =
+                    pick_first_str(&json, &[&["startTime"], &["timestamp"], &["created_at"]])
+                        .and_then(|s| try_iso_to_day(&s));
             }
 
             if let Some(set) = json.get("$set") {
@@ -1856,10 +1867,24 @@ fn process_antigravity_message(
     // VERIFY: Generic parsing for Antigravity tokens/usage
     let usage = msg.get("tokens").or_else(|| msg.get("usage"));
     if let Some(tokens) = usage {
-        let input = pick_first_u64(tokens, &[&["input"], &["prompt_tokens"], &["input_tokens"]]).unwrap_or(0);
-        let output = pick_first_u64(tokens, &[&["output"], &["completion_tokens"], &["output_tokens"]]).unwrap_or(0);
-        let cached = pick_first_u64(tokens, &[&["cached"], &["cache_read_tokens"], &["cache_read_input_tokens"]]).unwrap_or(0);
-        let total = pick_first_u64(tokens, &[&["total"], &["total_tokens"]]).unwrap_or(input + output);
+        let input = pick_first_u64(tokens, &[&["input"], &["prompt_tokens"], &["input_tokens"]])
+            .unwrap_or(0);
+        let output = pick_first_u64(
+            tokens,
+            &[&["output"], &["completion_tokens"], &["output_tokens"]],
+        )
+        .unwrap_or(0);
+        let cached = pick_first_u64(
+            tokens,
+            &[
+                &["cached"],
+                &["cache_read_tokens"],
+                &["cache_read_input_tokens"],
+            ],
+        )
+        .unwrap_or(0);
+        let total =
+            pick_first_u64(tokens, &[&["total"], &["total_tokens"]]).unwrap_or(input + output);
 
         let model = msg
             .get("model")
@@ -1880,12 +1905,14 @@ fn process_antigravity_message(
         contribution.total = contribution.total.saturating_add(total);
         contribution.cost += cost;
 
-        let daily = contribution.daily.entry(day.clone()).or_insert_with(|| {
-            AntigravityDailyUsagePoint {
-                day: day.clone(),
-                ..AntigravityDailyUsagePoint::default()
-            }
-        });
+        let daily =
+            contribution
+                .daily
+                .entry(day.clone())
+                .or_insert_with(|| AntigravityDailyUsagePoint {
+                    day: day.clone(),
+                    ..AntigravityDailyUsagePoint::default()
+                });
         daily.input_tokens = daily.input_tokens.saturating_add(input);
         daily.cache_read_tokens = daily.cache_read_tokens.saturating_add(cached);
         daily.output_tokens = daily.output_tokens.saturating_add(output);
@@ -1893,15 +1920,14 @@ fn process_antigravity_message(
         daily.cost_usd += cost;
 
         let model_key = format!("{day}|{model_norm}");
-        let model_daily =
-            contribution
-                .daily_by_model
-                .entry(model_key)
-                .or_insert_with(|| AntigravityModelDailyUsagePoint {
-                    day: day.clone(),
-                    model: model_norm.clone(),
-                    ..AntigravityModelDailyUsagePoint::default()
-                });
+        let model_daily = contribution
+            .daily_by_model
+            .entry(model_key)
+            .or_insert_with(|| AntigravityModelDailyUsagePoint {
+                day: day.clone(),
+                model: model_norm.clone(),
+                ..AntigravityModelDailyUsagePoint::default()
+            });
         model_daily.input_tokens = model_daily.input_tokens.saturating_add(input);
         model_daily.cache_read_tokens = model_daily.cache_read_tokens.saturating_add(cached);
         model_daily.output_tokens = model_daily.output_tokens.saturating_add(output);
@@ -2049,7 +2075,10 @@ fn normalize_claude_model(model: &str) -> String {
 
 fn normalize_antigravity_model(model: &str) -> String {
     // Map legacy branding to new provider name
-    model.trim().to_ascii_lowercase().replace(&format!("{}mini", "ge"), "antigravity")
+    model
+        .trim()
+        .to_ascii_lowercase()
+        .replace(&format!("{}mini", "ge"), "antigravity")
 }
 
 fn pick_first_str(value: &Value, candidates: &[&[&str]]) -> Option<String> {
@@ -2565,7 +2594,10 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].prompt, "first prompt");
         assert_eq!(entries[0].response.as_deref(), Some("final reply"));
-        assert_eq!(entries[0].model.as_deref(), Some("antigravity-3-flash-preview"));
+        assert_eq!(
+            entries[0].model.as_deref(),
+            Some("antigravity-3-flash-preview")
+        );
     }
 
     #[test]

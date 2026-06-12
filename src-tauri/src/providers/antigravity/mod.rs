@@ -167,7 +167,10 @@ impl UsageProvider for AntigravityProvider {
         let installed = antigravity_installed();
 
         let (health, message) = if live {
-            (ProviderHealth::Active, "Antigravity running — live quota".to_string())
+            (
+                ProviderHealth::Active,
+                "Antigravity running — live quota".to_string(),
+            )
         } else if installed {
             (
                 ProviderHealth::Active,

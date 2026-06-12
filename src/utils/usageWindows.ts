@@ -30,7 +30,7 @@ export const displayWindows = (snapshot?: UsageSnapshot): [UsageWindow | undefin
   if (!snapshot) return [undefined, undefined];
 
   const [first, second] = snapshot.windows;
-  if (!first || !second || snapshot.provider !== 'gemini') {
+  if (!first || !second || snapshot.provider !== 'antigravity') {
     return [first, second];
   }
 

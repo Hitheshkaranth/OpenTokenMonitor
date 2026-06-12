@@ -10,24 +10,24 @@ import { ProviderId, ProviderStatus, RefreshCadence } from '@/types';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUsageStore } from '@/stores/usageStore';
 
-const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
+const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
 const providerLabels: Record<ProviderId, string> = {
   claude: 'Claude',
   codex: 'Codex',
-  gemini: 'Gemini',
+  antigravity: 'Antigravity',
 };
 
 const placeholders: Record<ProviderId, string> = {
   claude: 'Auto-detected from ~/.claude',
   codex: 'Auto-detected from ~/.codex',
-  gemini: 'Gemini API key',
+  antigravity: 'Antigravity API key (for OAuth)',
 };
 
 const providerAccents: Record<ProviderId, string> = {
   claude: '217 119 87',
   codex: '16 163 127',
-  gemini: '66 133 244',
+  antigravity: '79 107 237',
 };
 
 const themeOptions = [

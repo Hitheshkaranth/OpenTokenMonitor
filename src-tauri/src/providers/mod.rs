@@ -8,7 +8,7 @@ use crate::usage::models::{CostEntry, ProviderId, ProviderStatus, UsageSnapshot}
 pub mod auth;
 pub mod claude;
 pub mod codex;
-pub mod gemini;
+pub mod antigravity;
 pub mod registry;
 
 #[derive(Debug, Clone)]

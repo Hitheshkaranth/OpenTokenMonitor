@@ -13,7 +13,7 @@ export const useUsageData = () => {
   const fetchRecentActivity = useUsageStore((s) => s.fetchRecentActivity);
   const fetchAllAuthStates = useUsageStore((s) => s.fetchAllAuthStates);
   const upsertSnapshot = useUsageStore((s) => s.upsertSnapshot);
-  const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
+  const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
   useEffect(() => {
     const bootstrap = async () => {

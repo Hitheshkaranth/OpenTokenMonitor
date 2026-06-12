@@ -63,7 +63,7 @@ const Hero = ({ os }) => {
             </h1>
             <p className="hero-sub">
               OpenTokenMonitor is a local-first desktop app that reads the session
-              data your AI CLIs already write — Claude Code, Codex, Gemini — and
+              data your AI CLIs already write — Claude Code, Codex, Antigravity — and
               shows you tokens, costs, and reset timers in one window.
             </p>
             <div className="hero-cta">
@@ -74,7 +74,7 @@ const Hero = ({ os }) => {
               <a className="btn btn-ghost" href={REPO} target="_blank" rel="noreferrer">View source ↗</a>
             </div>
             <div className="hero-fineprint">
-              ~12 MB · No account · No telemetry · Reads <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/.claude</code> <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/.codex</code> <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/.gemini</code>
+              ~12 MB · No account · No telemetry · Reads <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/.claude</code> <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/.codex</code> <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/Library/Application Support/Antigravity/logs</code>
             </div>
           </div>
           <div className="hero-shot">
@@ -87,7 +87,7 @@ const Hero = ({ os }) => {
       </div>
       <div className="wrap">
         <div className="hero-meter">
-          <div className="cell"><div className="k">Providers</div><div className="v">Claude · Codex · Gemini</div></div>
+          <div className="cell"><div className="k">Providers</div><div className="v">Claude · Codex · Antigravity</div></div>
           <div className="cell"><div className="k">Runs on</div><div className="v">macOS · Windows · Linux</div></div>
           <div className="cell"><div className="k">Data</div><div className="v"><span className="acc">●</span> 100% local</div></div>
           <div className="cell"><div className="k">License</div><div className="v">MIT</div></div>
@@ -226,7 +226,7 @@ const Features = () => (
 const PROVS = [
   { id: "claude", name: "Claude",  cli: "Claude Code",      path: "~/.claude",  status: "Auto-detect" },
   { id: "codex",  name: "Codex",   cli: "OpenAI Codex CLI", path: "~/.codex",   status: "Auto-detect" },
-  { id: "gemini", name: "Gemini",  cli: "Gemini CLI",       path: "~/.gemini",  status: "Auto-detect" },
+  { id: "antigravity", name: "Antigravity",  cli: "Antigravity CLI",       path: "~/Library/Application Support/Antigravity/logs",  status: "Auto-detect" },
 ];
 
 const Providers = () => (
@@ -346,7 +346,7 @@ const Steps = () => (
       <div className="step-cell">
         <span className="step-num">ii</span>
         <h3>Open</h3>
-        <p>The app auto-detects Claude, Codex, and Gemini CLI artifacts on first launch. Nothing else to configure.</p>
+        <p>The app auto-detects Claude, Codex, and Antigravity CLI artifacts on first launch. Nothing else to configure.</p>
       </div>
       <div className="step-cell">
         <span className="step-num">iii</span>
@@ -392,7 +392,7 @@ const Privacy = () => (
 const FAQS = [
   {
     q: "Do I need API keys to use it?",
-    a: <>No. The default mode reads the session files your CLIs already write to <code>~/.claude</code>, <code>~/.codex</code>, and <code>~/.gemini</code>. API keys are only needed if you want provider-side data that isn't in local logs.</>,
+    a: <>No. The default mode reads the session files your CLIs already write to <code>~/.claude</code>, <code>~/.codex</code>, and <code>~/Library/Application Support/Antigravity/logs</code>. API keys are only needed if you want provider-side data that isn't in local logs.</>,
   },
   {
     q: "Is my data sent anywhere?",
@@ -408,7 +408,7 @@ const FAQS = [
   },
   {
     q: "What about other AI tools — Cursor, Aider, etc.?",
-    a: <>v0.3.3 supports Claude Code, OpenAI Codex CLI, and Gemini CLI. Other tools are on the roadmap; the parser is provider-pluggable, so PRs are welcome.</>,
+    a: <>v0.3.3 supports Claude Code, OpenAI Codex CLI, and Antigravity CLI. Other tools are on the roadmap; the parser is provider-pluggable, so PRs are welcome.</>,,
   },
   {
     q: "Why a desktop app and not a CLI?",
@@ -460,7 +460,7 @@ const Footer = () => (
             <span><b>OpenTokenMonitor</b></span>
           </div>
           <p>
-            A local-first token + cost monitor for Claude Code, Codex, and Gemini.
+            A local-first token + cost monitor for Claude Code, Codex, and Antigravity.
             Built by Hithesh Karanth. MIT licensed.
           </p>
         </div>
@@ -493,7 +493,7 @@ const Footer = () => (
       </div>
       <div className="footer-bottom">
         <div><span className="pip"/>v0.3.3 · MIT · © 2026 Hithesh Karanth</div>
-        <div>Not affiliated with Anthropic, OpenAI, or Google.</div>
+        <div>Not affiliated with Anthropic, OpenAI, or Google (Google Cloud).</div>
       </div>
     </div>
   </footer>

@@ -8,8 +8,8 @@
 use crate::usage::models::{AlertSeverity, UsageAlert, UsageSnapshot, WindowType};
 
 /// First-window utilization for tray summaries. Each provider's "primary"
-/// window is its first one (by convention 5-hour for Claude, daily for
-/// Codex/Gemini), so we surface that for the at-a-glance tray tooltip.
+/// window is its first one (by convention 5-hour for Claude/Antigravity, daily for
+/// Codex), so we surface that for the at-a-glance tray tooltip.
 pub fn snapshot_percent(snapshot: &UsageSnapshot) -> f64 {
     snapshot
         .windows
@@ -106,7 +106,7 @@ mod tests {
         let alerts = build_alerts(&[
             snapshot_with_utilization(ProviderId::Claude, 76.0),
             snapshot_with_utilization(ProviderId::Codex, 91.0),
-            snapshot_with_utilization(ProviderId::Gemini, 96.0),
+            snapshot_with_utilization(ProviderId::Antigravity, 96.0),
         ]);
 
         assert_eq!(alerts.len(), 3);

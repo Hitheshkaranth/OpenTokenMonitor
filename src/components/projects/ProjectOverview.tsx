@@ -39,13 +39,13 @@ const commandLabel = (prompt: string) => {
 const providerColors: Record<ProviderId, string> = {
   claude: '#d97757',
   codex: '#10a37f',
-  gemini: '#4285f4',
+  antigravity: '#4f6bed',
 };
 
-const providerAccent: Record<ProviderId, string> = {
+const providerAccents: Record<ProviderId, string> = {
   claude: '217 119 87',
   codex: '16 163 127',
-  gemini: '66 133 244',
+  antigravity: '79 107 237',
 };
 
 const ProjectCard = ({ project }: { project: ProjectSummary }) => {
@@ -54,7 +54,7 @@ const ProjectCard = ({ project }: { project: ProjectSummary }) => {
   return (
     <div
       className="proj-card"
-      style={{ '--widget-accent': providerAccent[primaryProvider] ?? '148 163 184' } as React.CSSProperties}
+      style={{ '--widget-accent': providerAccents[primaryProvider] ?? '148 163 184' } as React.CSSProperties}
     >
       {/* Header: title + cost */}
       <div className="proj-card-header">

@@ -11,13 +11,13 @@ import { getProviderAccessState, providerAccessDotClass } from '@/utils/provider
 import { isTauriRuntime } from '@/utils/runtime';
 import { displayWindows } from '@/utils/usageWindows';
 
-const meta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemini' }> = {
+const meta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'antigravity' }> = {
   claude: { name: 'Claude', tint: 'claude' },
   codex: { name: 'Codex', tint: 'codex' },
-  gemini: { name: 'Gemini', tint: 'gemini' },
+  antigravity: { name: 'Antigravity', tint: 'antigravity' },
 };
 
-const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
+const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
 const widgetWindowLabel = (windowType?: WindowType) => {
   switch (windowType) {

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub enum ProviderId {
     Claude,
     Codex,
-    Gemini,
+    Antigravity,
 }
 
 impl ProviderId {
@@ -14,12 +14,12 @@ impl ProviderId {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
-            Self::Gemini => "gemini",
+            Self::Antigravity => "antigravity",
         }
     }
 
     pub fn all() -> [ProviderId; 3] {
-        [ProviderId::Claude, ProviderId::Codex, ProviderId::Gemini]
+        [ProviderId::Claude, ProviderId::Codex, ProviderId::Antigravity]
     }
 }
 

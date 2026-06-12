@@ -6,7 +6,7 @@ type UsageMeterProps = {
   detail?: string;
   note?: string;
   resetsAt?: string;
-  providerTint: 'claude' | 'codex' | 'gemini';
+  providerTint: 'claude' | 'codex' | 'antigravity';
   size?: number;
 };
 

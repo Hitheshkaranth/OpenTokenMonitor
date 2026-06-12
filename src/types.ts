@@ -1,4 +1,4 @@
-export type ProviderId = 'claude' | 'codex' | 'gemini';
+export type ProviderId = 'claude' | 'codex' | 'antigravity';
 export type ProviderTab = ProviderId | 'overview' | 'projects';
 export type PageId = 'overview' | 'projects' | ProviderId | 'settings';
 

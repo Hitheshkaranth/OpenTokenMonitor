@@ -17,7 +17,7 @@ type ProviderOverviewProps = {
   onNavigate: (provider: ProviderId) => void;
 };
 
-const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
+const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
 const ProviderOverview = ({
   snapshots,

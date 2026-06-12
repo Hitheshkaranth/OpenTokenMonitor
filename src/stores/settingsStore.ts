@@ -28,9 +28,9 @@ type SettingsState = {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      enabledProviders: { claude: true, codex: true, gemini: true },
+      enabledProviders: { claude: true, codex: true, antigravity: true },
       refreshCadence: 'every1m',
-      apiKeys: { claude: '', codex: '', gemini: '' },
+      apiKeys: { claude: '', codex: '', antigravity: '' },
       theme: 'system',
       widgetMode: false,
       sidebarCollapsed: false,
@@ -48,6 +48,36 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'otm-settings-v2',
+      // Bump when the persisted shape changes so `migrate` can run against
+      // older stored payloads. v1 renamed the `gemini` provider to `antigravity`.
+      version: 1,
+      // Old payloads keyed provider maps by `gemini`. Carry the user's saved
+      // enabled/api-key prefs over to `antigravity` and drop the stale key so a
+      // returning user doesn't land on an undefined provider tab.
+      migrate: (persisted: unknown, fromVersion: number) => {
+        const state = (persisted ?? {}) as Record<string, any>;
+        if (fromVersion < 1) {
+          for (const key of ['enabledProviders', 'apiKeys'] as const) {
+            const map = state[key];
+            if (map && typeof map === 'object' && 'gemini' in map) {
+              if (!('antigravity' in map)) map.antigravity = map.gemini;
+              delete map.gemini;
+            }
+          }
+        }
+        return state;
+      },
+      // Backfill any provider keys missing from persisted maps (e.g. a brand-new
+      // provider) so lookups like enabledProviders[id] are never undefined.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<SettingsState>;
+        return {
+          ...current,
+          ...p,
+          enabledProviders: { ...current.enabledProviders, ...(p.enabledProviders ?? {}) },
+          apiKeys: { ...current.apiKeys, ...(p.apiKeys ?? {}) },
+        };
+      },
       // Only persist user-controlled preferences. Runtime bookkeeping like
       // `hydrated` is intentionally excluded.
       partialize: (state) => ({

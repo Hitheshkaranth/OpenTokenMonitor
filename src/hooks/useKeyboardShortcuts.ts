@@ -6,7 +6,7 @@ import { PageId } from '@/types';
  *   Ctrl/Cmd + R   refresh everything
  *   Ctrl/Cmd + ,   open settings
  *   Esc            return to overview
- *   1 / 2 / 3      jump to Claude / Codex / Gemini
+ *   1 / 2 / 3      jump to Claude / Codex / Antigravity
  *   4              jump to Projects
  *
  * Single-character shortcuts are suppressed while an input/textarea/select is
@@ -42,7 +42,7 @@ export const useKeyboardShortcuts = (
       if (isInput) return;
       if (event.key === '1') setPage('claude');
       if (event.key === '2') setPage('codex');
-      if (event.key === '3') setPage('gemini');
+      if (event.key === '3') setPage('antigravity');
       if (event.key === '4') setPage('projects');
     };
 

@@ -7,7 +7,7 @@ import { APP_NAME, APP_REPO_URL, APP_VERSION } from '@/constants/appMeta';
 import { isTauriRuntime } from '@/utils/runtime';
 
 const signalCards = [
-  { label: 'Providers', value: 'Claude, Codex, Gemini', icon: Cpu },
+  { label: 'Providers', value: 'Claude, Codex, Antigravity', icon: Cpu },
   { label: 'Surfaces', value: 'Widget + Dashboard', icon: LayoutDashboard },
   { label: 'Coverage', value: 'Usage, prompts, health', icon: Activity },
   { label: 'Version', value: `v${APP_VERSION}`, icon: Package },
@@ -50,7 +50,7 @@ const AboutPanel = () => (
         <span className="stg-badge">v{APP_VERSION}</span>
       </div>
       <p className="abt-desc">
-        Local-first desktop monitor for Claude, Codex, and Gemini usage.
+        Local-first desktop monitor for Claude, Codex, and Antigravity usage.
         Quota windows, model activity, prompts, and provider health in one surface.
       </p>
       <div className="abt-tags">

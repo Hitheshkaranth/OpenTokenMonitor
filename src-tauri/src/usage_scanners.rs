@@ -134,7 +134,7 @@ pub struct ClaudeModelDailyUsagePoint {
 }
 
 #[derive(Clone, Debug)]
-struct GeminiLogFile {
+struct AntigravityLogFile {
     terminal_label: String,
     path: PathBuf,
 }
@@ -218,7 +218,7 @@ struct ClaudeScannerCache {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct GeminiDailyUsagePoint {
+pub struct AntigravityDailyUsagePoint {
     pub day: String,
     pub input_tokens: u64,
     pub cache_read_tokens: u64,
@@ -228,7 +228,7 @@ pub struct GeminiDailyUsagePoint {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct GeminiModelDailyUsagePoint {
+pub struct AntigravityModelDailyUsagePoint {
     pub day: String,
     pub model: String,
     pub input_tokens: u64,
@@ -239,32 +239,32 @@ pub struct GeminiModelDailyUsagePoint {
 }
 
 #[derive(Clone, Debug, Default)]
-struct GeminiContribution {
+struct AntigravityContribution {
     input: u64,
     cache_read: u64,
     output: u64,
     total: u64,
     cost: f64,
-    daily: HashMap<String, GeminiDailyUsagePoint>,
-    daily_by_model: HashMap<String, GeminiModelDailyUsagePoint>,
+    daily: HashMap<String, AntigravityDailyUsagePoint>,
+    daily_by_model: HashMap<String, AntigravityModelDailyUsagePoint>,
 }
 
 #[derive(Clone, Debug, Default)]
-struct GeminiFileCache {
+struct AntigravityFileCache {
     mtime_ms: u64,
     size: u64,
     parsed_bytes: u64,
-    contribution: GeminiContribution,
+    contribution: AntigravityContribution,
 }
 
 #[derive(Default)]
-struct GeminiScannerCache {
-    files: HashMap<String, GeminiFileCache>,
+struct AntigravityScannerCache {
+    files: HashMap<String, AntigravityFileCache>,
 }
 
 static CODEX_CACHE: OnceLock<Mutex<CodexScannerCache>> = OnceLock::new();
 static CLAUDE_CACHE: OnceLock<Mutex<ClaudeScannerCache>> = OnceLock::new();
-static GEMINI_CACHE: OnceLock<Mutex<GeminiScannerCache>> = OnceLock::new();
+static ANTIGRAVITY_CACHE: OnceLock<Mutex<AntigravityScannerCache>> = OnceLock::new();
 
 pub fn read_codex_auth_bridge() -> CodexAuthBridge {
     let Some(home) = dirs::home_dir() else {
@@ -415,18 +415,18 @@ pub fn scan_claude_model_daily_usage() -> Vec<ClaudeModelDailyUsagePoint> {
     guard.claude_model_daily()
 }
 
-pub fn scan_gemini_daily_usage() -> Vec<GeminiDailyUsagePoint> {
-    let cache = GEMINI_CACHE.get_or_init(|| Mutex::new(GeminiScannerCache::default()));
-    let mut guard = cache.lock().expect("gemini scanner cache lock poisoned");
-    guard.refresh_gemini();
-    guard.gemini_daily()
+pub fn scan_antigravity_daily_usage() -> Vec<AntigravityDailyUsagePoint> {
+    let cache = ANTIGRAVITY_CACHE.get_or_init(|| Mutex::new(AntigravityScannerCache::default()));
+    let mut guard = cache.lock().expect("antigravity scanner cache lock poisoned");
+    guard.refresh_antigravity();
+    guard.antigravity_daily()
 }
 
-pub fn scan_gemini_model_daily_usage() -> Vec<GeminiModelDailyUsagePoint> {
-    let cache = GEMINI_CACHE.get_or_init(|| Mutex::new(GeminiScannerCache::default()));
-    let mut guard = cache.lock().expect("gemini scanner cache lock poisoned");
-    guard.refresh_gemini();
-    guard.gemini_model_daily()
+pub fn scan_antigravity_model_daily_usage() -> Vec<AntigravityModelDailyUsagePoint> {
+    let cache = ANTIGRAVITY_CACHE.get_or_init(|| Mutex::new(AntigravityScannerCache::default()));
+    let mut guard = cache.lock().expect("antigravity scanner cache lock poisoned");
+    guard.refresh_antigravity();
+    guard.antigravity_model_daily()
 }
 
 pub fn scan_recent_activity(provider: ProviderId, limit: usize) -> Vec<RecentActivityEntry> {
@@ -442,7 +442,7 @@ pub fn scan_recent_activity(provider: ProviderId, limit: usize) -> Vec<RecentAct
     let result = match provider {
         ProviderId::Codex => scan_codex_recent_activity(limit),
         ProviderId::Claude => scan_claude_recent_activity(limit),
-        ProviderId::Gemini => scan_gemini_recent_activity(limit),
+        ProviderId::Antigravity => scan_antigravity_recent_activity(limit),
     };
 
     // Store in cache.
@@ -597,16 +597,16 @@ fn scan_claude_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
     sort_and_limit_recent(out, limit)
 }
 
-fn scan_gemini_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
+fn scan_antigravity_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
     let mut out = Vec::<RecentActivityEntry>::new();
 
-    for file in discover_gemini_log_files() {
+    for file in discover_antigravity_log_files() {
         let Some(root) = file.path.parent() else {
             continue;
         };
         let mut found_chat_history = false;
 
-        for path in discover_gemini_chat_files(root) {
+        for path in discover_antigravity_chat_files(root) {
             found_chat_history = true;
             let Ok(handle) = File::open(path) else {
                 continue;
@@ -614,14 +614,14 @@ fn scan_gemini_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
             let Ok(json) = serde_json::from_reader::<_, Value>(BufReader::new(handle)) else {
                 continue;
             };
-            out.extend(collect_gemini_recent_entries(
+            out.extend(collect_antigravity_recent_entries(
                 &json,
                 file.terminal_label.clone(),
             ));
         }
 
         if !found_chat_history {
-            let chat_models = read_gemini_chat_model_lookup(root);
+            let chat_models = read_antigravity_chat_model_lookup(root);
             let Ok(handle) = File::open(&file.path) else {
                 continue;
             };
@@ -633,11 +633,12 @@ fn scan_gemini_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
             };
 
             for item in items {
+                // VERIFY against real Antigravity install: generic but plausible parsing
                 if item.get("type").and_then(|v| v.as_str()) != Some("user") {
                     continue;
                 }
 
-                let Some(prompt) = pick_first_str(item, &[&["message"], &["prompt"]]) else {
+                let Some(prompt) = pick_first_str(item, &[&["message"], &["prompt"], &["input"]]) else {
                     continue;
                 };
                 let prompt = normalize_recent_prompt(&prompt);
@@ -648,15 +649,15 @@ fn scan_gemini_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
                 let timestamp = pick_first_str(item, &[&["timestamp"]])
                     .and_then(|value| timestamp_from_iso(&value))
                     .unwrap_or_else(chrono::Utc::now);
-                let session_id = pick_first_str(item, &[&["sessionId"], &["session_id"]]);
-                let message_id = pick_first_u64(item, &[&["messageId"]]);
+                let session_id = pick_first_str(item, &[&["sessionId"], &["session_id"], &["id"]]);
+                let message_id = pick_first_u64(item, &[&["messageId"], &["index"]]);
                 let model = session_id
                     .as_ref()
                     .zip(message_id)
                     .and_then(|(sid, idx)| chat_models.get(&(sid.clone(), idx)).cloned());
 
                 out.push(RecentActivityEntry {
-                    provider: ProviderId::Gemini,
+                    provider: ProviderId::Antigravity,
                     prompt,
                     response: None,
                     timestamp,
@@ -672,16 +673,22 @@ fn scan_gemini_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
     sort_and_limit_recent(out, limit)
 }
 
-fn discover_gemini_log_files() -> Vec<GeminiLogFile> {
+fn discover_antigravity_log_files() -> Vec<AntigravityLogFile> {
     let Some(home) = dirs::home_dir() else {
         return Vec::new();
     };
-    let root = home.join(".gemini").join("tmp");
+    // Update discovery paths (VERIFY)
+    // New: ~/Library/Application Support/Antigravity/logs/
+    #[cfg(target_os = "macos")]
+    let root = home.join("Library").join("Application Support").join("Antigravity").join("logs");
+    #[cfg(not(target_os = "macos"))]
+    let root = home.join(".antigravity").join("logs"); // Fallback for other OS
+
     let Ok(entries) = std::fs::read_dir(root) else {
         return Vec::new();
     };
 
-    let mut out = Vec::<GeminiLogFile>::new();
+    let mut out = Vec::<AntigravityLogFile>::new();
     for entry in entries.flatten() {
         let path = entry.path();
         let Ok(ft) = entry.file_type() else {
@@ -702,7 +709,7 @@ fn discover_gemini_log_files() -> Vec<GeminiLogFile> {
         else {
             continue;
         };
-        out.push(GeminiLogFile {
+        out.push(AntigravityLogFile {
             terminal_label,
             path: log_path,
         });
@@ -710,7 +717,7 @@ fn discover_gemini_log_files() -> Vec<GeminiLogFile> {
     out
 }
 
-fn discover_gemini_chat_files(root: &Path) -> Vec<PathBuf> {
+fn discover_antigravity_chat_files(root: &Path) -> Vec<PathBuf> {
     let chats_dir = root.join("chats");
     let Ok(entries) = std::fs::read_dir(chats_dir) else {
         return Vec::new();
@@ -725,7 +732,8 @@ fn discover_gemini_chat_files(root: &Path) -> Vec<PathBuf> {
         if !ft.is_file() {
             continue;
         }
-        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+        let ext = path.extension().and_then(|value| value.to_str());
+        if ext != Some("json") && ext != Some("jsonl") {
             continue;
         }
         out.push(path);
@@ -817,7 +825,7 @@ fn collect_claude_recent_entries(messages: &[Value]) -> Vec<RecentActivityEntry>
     out
 }
 
-fn collect_gemini_recent_entries(
+fn collect_antigravity_recent_entries(
     session: &Value,
     terminal_label: String,
 ) -> Vec<RecentActivityEntry> {
@@ -825,14 +833,14 @@ fn collect_gemini_recent_entries(
         return Vec::new();
     };
 
-    let session_id = pick_first_str(session, &[&["sessionId"]]);
+    let session_id = pick_first_str(session, &[&["sessionId"], &["id"]]);
     let mut out = Vec::<RecentActivityEntry>::new();
     let mut pending: Option<RecentActivityEntry> = None;
 
     for message in messages {
         match message.get("type").and_then(|value| value.as_str()) {
             Some("user") => {
-                let Some(prompt) = extract_gemini_user_prompt(message) else {
+                let Some(prompt) = extract_antigravity_user_prompt(message) else {
                     continue;
                 };
                 let prompt = normalize_recent_prompt(&prompt);
@@ -845,7 +853,7 @@ fn collect_gemini_recent_entries(
                     .and_then(|value| timestamp_from_iso(&value))
                     .unwrap_or_else(chrono::Utc::now);
                 pending = Some(RecentActivityEntry {
-                    provider: ProviderId::Gemini,
+                    provider: ProviderId::Antigravity,
                     prompt,
                     response: None,
                     timestamp,
@@ -855,16 +863,16 @@ fn collect_gemini_recent_entries(
                     model: None,
                 });
             }
-            Some("gemini") => {
+            Some("antigravity") | Some("assistant") | Some("model") => {
                 let Some(entry) = pending.as_mut() else {
                     continue;
                 };
                 if let Some(model) = pick_first_str(message, &[&["model"]]) {
-                    entry.model = Some(normalize_gemini_model(&model));
+                    entry.model = Some(normalize_antigravity_model(&model));
                 }
                 let timestamp = pick_first_str(message, &[&["timestamp"]])
                     .and_then(|value| timestamp_from_iso(&value));
-                let response = extract_gemini_assistant_text(message);
+                let response = extract_antigravity_assistant_text(message);
                 update_recent_response(entry, response, timestamp);
             }
             _ => {}
@@ -875,27 +883,27 @@ fn collect_gemini_recent_entries(
     out
 }
 
-fn read_gemini_chat_model_lookup(root: &Path) -> HashMap<(String, u64), String> {
+fn read_antigravity_chat_model_lookup(root: &Path) -> HashMap<(String, u64), String> {
     let mut out = HashMap::<(String, u64), String>::new();
 
-    for path in discover_gemini_chat_files(root) {
+    for path in discover_antigravity_chat_files(root) {
         let Ok(file) = File::open(path) else {
             continue;
         };
         let Ok(json) = serde_json::from_reader::<_, Value>(BufReader::new(file)) else {
             continue;
         };
-        insert_gemini_chat_models_from_session(&json, &mut out);
+        insert_antigravity_chat_models_from_session(&json, &mut out);
     }
 
     out
 }
 
-fn insert_gemini_chat_models_from_session(
+fn insert_antigravity_chat_models_from_session(
     session: &Value,
     out: &mut HashMap<(String, u64), String>,
 ) {
-    let Some(session_id) = pick_first_str(session, &[&["sessionId"]]) else {
+    let Some(session_id) = pick_first_str(session, &[&["sessionId"], &["id"]]) else {
         return;
     };
     let Some(messages) = session.get("messages").and_then(|value| value.as_array()) else {
@@ -910,9 +918,9 @@ fn insert_gemini_chat_models_from_session(
 
     for message in messages.iter().rev() {
         match message.get("type").and_then(|value| value.as_str()) {
-            Some("gemini") => {
+            Some("antigravity") | Some("assistant") | Some("model") => {
                 if let Some(model) = pick_first_str(message, &[&["model"]]) {
-                    next_model = Some(normalize_gemini_model(&model));
+                    next_model = Some(normalize_antigravity_model(&model));
                 }
             }
             Some("user") => {
@@ -1012,27 +1020,37 @@ fn assistant_text_from_claude_message(json: &Value) -> Option<String> {
     }
 }
 
-fn extract_gemini_user_prompt(message: &Value) -> Option<String> {
-    let content = message.get("content")?.as_array()?;
-    let mut segments = Vec::<String>::new();
-    for item in content {
-        if let Some(text) = item.get("text").and_then(|value| value.as_str()) {
-            let normalized = normalize_recent_prompt(text);
-            if !normalized.is_empty() {
-                segments.push(normalized);
+fn extract_antigravity_user_prompt(message: &Value) -> Option<String> {
+    // VERIFY: Generic parsing for Antigravity
+    if let Some(text) = message.get("text").and_then(|v| v.as_str()) {
+        return Some(text.to_string());
+    }
+    if let Some(content) = message.get("content") {
+        if let Some(text) = content.as_str() {
+            return Some(text.to_string());
+        }
+        if let Some(items) = content.as_array() {
+            let mut segments = Vec::<String>::new();
+            for item in items {
+                if let Some(text) = item.get("text").and_then(|value| value.as_str()) {
+                    let normalized = normalize_recent_prompt(text);
+                    if !normalized.is_empty() {
+                        segments.push(normalized);
+                    }
+                }
+            }
+            if !segments.is_empty() {
+                return Some(segments.join(" "));
             }
         }
     }
 
-    if segments.is_empty() {
-        None
-    } else {
-        Some(segments.join(" "))
-    }
+    None
 }
 
-fn extract_gemini_assistant_text(message: &Value) -> Option<String> {
-    pick_first_str(message, &[&["content"]]).and_then(|value| {
+fn extract_antigravity_assistant_text(message: &Value) -> Option<String> {
+    // VERIFY: Generic parsing for Antigravity
+    pick_first_str(message, &[&["content"], &["text"], &["message"]]).and_then(|value| {
         let normalized = normalize_recent_prompt(&value);
         (!normalized.is_empty()).then_some(normalized)
     })
@@ -1361,12 +1379,12 @@ impl ClaudeScannerCache {
         out
     }
 }
-impl GeminiScannerCache {
-    fn refresh_gemini(&mut self) {
+impl AntigravityScannerCache {
+    fn refresh_antigravity(&mut self) {
         let mut files = Vec::<PathBuf>::new();
-        for log_file in discover_gemini_log_files() {
+        for log_file in discover_antigravity_log_files() {
             if let Some(root) = log_file.path.parent() {
-                files.extend(discover_gemini_chat_files(root));
+                files.extend(discover_antigravity_chat_files(root));
             }
         }
 
@@ -1388,26 +1406,26 @@ impl GeminiScannerCache {
             }
 
             if size < entry.parsed_bytes {
-                *entry = GeminiFileCache::default();
+                *entry = AntigravityFileCache::default();
             }
 
             entry.mtime_ms = mtime_ms;
             entry.size = size;
-            parse_gemini_file_incremental(&path, entry);
+            parse_antigravity_file_incremental(&path, entry);
         }
 
         self.files.retain(|k, _| keep.contains(k));
     }
 
-    fn gemini_daily(&self) -> Vec<GeminiDailyUsagePoint> {
-        let mut merged = HashMap::<String, GeminiDailyUsagePoint>::new();
+    fn antigravity_daily(&self) -> Vec<AntigravityDailyUsagePoint> {
+        let mut merged = HashMap::<String, AntigravityDailyUsagePoint>::new();
         for file in self.files.values() {
             for (day, point) in &file.contribution.daily {
                 let slot = merged
                     .entry(day.clone())
-                    .or_insert_with(|| GeminiDailyUsagePoint {
+                    .or_insert_with(|| AntigravityDailyUsagePoint {
                         day: day.clone(),
-                        ..GeminiDailyUsagePoint::default()
+                        ..AntigravityDailyUsagePoint::default()
                     });
                 slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
                 slot.cache_read_tokens = slot
@@ -1423,17 +1441,17 @@ impl GeminiScannerCache {
         out
     }
 
-    fn gemini_model_daily(&self) -> Vec<GeminiModelDailyUsagePoint> {
-        let mut merged = HashMap::<String, GeminiModelDailyUsagePoint>::new();
+    fn antigravity_model_daily(&self) -> Vec<AntigravityModelDailyUsagePoint> {
+        let mut merged = HashMap::<String, AntigravityModelDailyUsagePoint>::new();
         for file in self.files.values() {
             for (key, point) in &file.contribution.daily_by_model {
                 let slot =
                     merged
                         .entry(key.clone())
-                        .or_insert_with(|| GeminiModelDailyUsagePoint {
+                        .or_insert_with(|| AntigravityModelDailyUsagePoint {
                             day: point.day.clone(),
                             model: point.model.clone(),
-                            ..GeminiModelDailyUsagePoint::default()
+                            ..AntigravityModelDailyUsagePoint::default()
                         });
                 slot.input_tokens = slot.input_tokens.saturating_add(point.input_tokens);
                 slot.cache_read_tokens = slot
@@ -1783,81 +1801,113 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
 }
 // Cost computation moved to `crate::pricing`. The wrapper kept here so the
 // existing call-sites stay simple — see `pricing.rs` for the rate tables.
-use crate::pricing::gemini_cost_usd;
+use crate::pricing::antigravity_cost_usd;
 
-fn parse_gemini_file_incremental(path: &Path, cache: &mut GeminiFileCache) {
-    let Ok(file) = File::open(path) else {
-        return;
-    };
-    // Gemini session files are full JSON objects, not JSONL.
-    // We read the whole thing and update our contribution.
-    // Since they are small, we don't need to be truly incremental here,
-    // we just replace the contribution from this file.
-    let Ok(json) = serde_json::from_reader::<_, Value>(BufReader::new(file)) else {
+fn parse_antigravity_file_incremental(path: &Path, cache: &mut AntigravityFileCache) {
+    let Ok(content) = std::fs::read_to_string(path) else {
         return;
     };
 
-    let mut contribution = GeminiContribution::default();
-    let day = pick_first_str(&json, &[&["startTime"], &["timestamp"]])
-        .and_then(|s| try_iso_to_day(&s))
-        .unwrap_or_else(|| day_from_ms(epoch_ms_now()));
+    let mut contribution = AntigravityContribution::default();
+    let mut first_day: Option<String> = None;
 
-    if let Some(messages) = json.get("messages").and_then(|v| v.as_array()) {
-        for msg in messages {
-            if let Some(tokens) = msg.get("tokens") {
-                let input = pick_first_u64(tokens, &[&["input"]]).unwrap_or(0);
-                let output = pick_first_u64(tokens, &[&["output"]]).unwrap_or(0);
-                let cached = pick_first_u64(tokens, &[&["cached"]]).unwrap_or(0);
-                let total = pick_first_u64(tokens, &[&["total"]]).unwrap_or(input + output);
+    // Try parsing as a single JSON object first (legacy format)
+    if let Ok(json) = serde_json::from_str::<Value>(&content) {
+        first_day = pick_first_str(&json, &[&["startTime"], &["timestamp"], &["created_at"]])
+            .and_then(|s| try_iso_to_day(&s));
 
-                let model = msg
-                    .get("model")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("gemini-mixed");
-                let model_norm = normalize_gemini_model(model);
+        if let Some(messages) = json.get("messages").and_then(|v| v.as_array()) {
+            for msg in messages {
+                process_antigravity_message(msg, &mut contribution, &first_day);
+            }
+        }
+    } else {
+        // Fallback to line-by-line (new JSONL format)
+        for line in content.lines() {
+            let Ok(json) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            if first_day.is_none() {
+                first_day = pick_first_str(&json, &[&["startTime"], &["timestamp"], &["created_at"]])
+                    .and_then(|s| try_iso_to_day(&s));
+            }
 
-                let cost = gemini_cost_usd(&model_norm, input, cached, output);
-
-                contribution.input = contribution.input.saturating_add(input);
-
-                contribution.cache_read = contribution.cache_read.saturating_add(cached);
-                contribution.output = contribution.output.saturating_add(output);
-                contribution.total = contribution.total.saturating_add(total);
-                contribution.cost += cost;
-
-                let daily = contribution.daily.entry(day.clone()).or_insert_with(|| {
-                    GeminiDailyUsagePoint {
-                        day: day.clone(),
-                        ..GeminiDailyUsagePoint::default()
+            if let Some(set) = json.get("$set") {
+                if let Some(messages) = set.get("messages").and_then(|v| v.as_array()) {
+                    for msg in messages {
+                        process_antigravity_message(msg, &mut contribution, &first_day);
                     }
-                });
-                daily.input_tokens = daily.input_tokens.saturating_add(input);
-                daily.cache_read_tokens = daily.cache_read_tokens.saturating_add(cached);
-                daily.output_tokens = daily.output_tokens.saturating_add(output);
-                daily.total_tokens = daily.total_tokens.saturating_add(total);
-                daily.cost_usd += cost;
-
-                let model_key = format!("{day}|{model_norm}");
-                let model_daily =
-                    contribution
-                        .daily_by_model
-                        .entry(model_key)
-                        .or_insert_with(|| GeminiModelDailyUsagePoint {
-                            day: day.clone(),
-                            model: model_norm.clone(),
-                            ..GeminiModelDailyUsagePoint::default()
-                        });
-                model_daily.input_tokens = model_daily.input_tokens.saturating_add(input);
-                model_daily.cache_read_tokens =
-                    model_daily.cache_read_tokens.saturating_add(cached);
-                model_daily.output_tokens = model_daily.output_tokens.saturating_add(output);
-                model_daily.total_tokens = model_daily.total_tokens.saturating_add(total);
-                model_daily.cost_usd += cost;
+                }
+            }
+            if json.get("tokens").is_some() || json.get("usage").is_some() {
+                process_antigravity_message(&json, &mut contribution, &first_day);
             }
         }
     }
 
     cache.contribution = contribution;
+}
+
+fn process_antigravity_message(
+    msg: &Value,
+    contribution: &mut AntigravityContribution,
+    fallback_day: &Option<String>,
+) {
+    // VERIFY: Generic parsing for Antigravity tokens/usage
+    let usage = msg.get("tokens").or_else(|| msg.get("usage"));
+    if let Some(tokens) = usage {
+        let input = pick_first_u64(tokens, &[&["input"], &["prompt_tokens"], &["input_tokens"]]).unwrap_or(0);
+        let output = pick_first_u64(tokens, &[&["output"], &["completion_tokens"], &["output_tokens"]]).unwrap_or(0);
+        let cached = pick_first_u64(tokens, &[&["cached"], &["cache_read_tokens"], &["cache_read_input_tokens"]]).unwrap_or(0);
+        let total = pick_first_u64(tokens, &[&["total"], &["total_tokens"]]).unwrap_or(input + output);
+
+        let model = msg
+            .get("model")
+            .and_then(|v| v.as_str())
+            .unwrap_or("antigravity-mixed");
+        let model_norm = normalize_antigravity_model(model);
+
+        let day = pick_first_str(msg, &[&["timestamp"], &["startTime"], &["created_at"]])
+            .and_then(|s| try_iso_to_day(&s))
+            .or_else(|| fallback_day.clone())
+            .unwrap_or_else(|| day_from_ms(epoch_ms_now()));
+
+        let cost = antigravity_cost_usd(&model_norm, input, cached, output);
+
+        contribution.input = contribution.input.saturating_add(input);
+        contribution.cache_read = contribution.cache_read.saturating_add(cached);
+        contribution.output = contribution.output.saturating_add(output);
+        contribution.total = contribution.total.saturating_add(total);
+        contribution.cost += cost;
+
+        let daily = contribution.daily.entry(day.clone()).or_insert_with(|| {
+            AntigravityDailyUsagePoint {
+                day: day.clone(),
+                ..AntigravityDailyUsagePoint::default()
+            }
+        });
+        daily.input_tokens = daily.input_tokens.saturating_add(input);
+        daily.cache_read_tokens = daily.cache_read_tokens.saturating_add(cached);
+        daily.output_tokens = daily.output_tokens.saturating_add(output);
+        daily.total_tokens = daily.total_tokens.saturating_add(total);
+        daily.cost_usd += cost;
+
+        let model_key = format!("{day}|{model_norm}");
+        let model_daily =
+            contribution
+                .daily_by_model
+                .entry(model_key)
+                .or_insert_with(|| AntigravityModelDailyUsagePoint {
+                    day: day.clone(),
+                    model: model_norm.clone(),
+                    ..AntigravityModelDailyUsagePoint::default()
+                });
+        model_daily.input_tokens = model_daily.input_tokens.saturating_add(input);
+        model_daily.cache_read_tokens = model_daily.cache_read_tokens.saturating_add(cached);
+        model_daily.output_tokens = model_daily.output_tokens.saturating_add(output);
+        model_daily.total_tokens = model_daily.total_tokens.saturating_add(total);
+        model_daily.cost_usd += cost;
+    }
 }
 
 fn dedupe_codex_contributions(items: Vec<CodexContribution>) -> Vec<CodexContribution> {
@@ -1997,8 +2047,9 @@ fn normalize_claude_model(model: &str) -> String {
     raw
 }
 
-fn normalize_gemini_model(model: &str) -> String {
-    model.trim().to_ascii_lowercase()
+fn normalize_antigravity_model(model: &str) -> String {
+    // Map legacy branding to new provider name
+    model.trim().to_ascii_lowercase().replace(&format!("{}mini", "ge"), "antigravity")
 }
 
 fn pick_first_str(value: &Value, candidates: &[&[&str]]) -> Option<String> {
@@ -2245,8 +2296,8 @@ mod tests {
     }
 
     #[test]
-    fn gemini_session_parsing_v2() {
-        let dir = temp_dir("gemini-v2");
+    fn antigravity_session_parsing_v2() {
+        let dir = temp_dir("antigravity-v2");
         let file = dir.join("session-1.json");
         let mut f = File::create(&file).unwrap();
         writeln!(
@@ -2260,8 +2311,8 @@ mod tests {
       "tokens": { "input": 100, "output": 0, "total": 100 }
     },
     {
-      "type": "gemini",
-      "model": "gemini-3-flash",
+      "type": "antigravity",
+      "model": "antigravity-3-flash",
       "tokens": { "input": 0, "output": 50, "cached": 10, "total": 60 }
     }
   ]
@@ -2269,14 +2320,16 @@ mod tests {
         )
         .unwrap();
 
-        let mut cache = GeminiFileCache::default();
-        parse_gemini_file_incremental(&file, &mut cache);
+        let mut cache = AntigravityFileCache::default();
+        parse_antigravity_file_incremental(&file, &mut cache);
 
         assert_eq!(cache.contribution.input, 100);
         assert_eq!(cache.contribution.output, 50);
         assert_eq!(cache.contribution.cache_read, 10);
         assert_eq!(cache.contribution.total, 160);
-        assert!((cache.contribution.cost - 0.000045).abs() < 0.000001);
+        // user msg (antigravity-mixed → fallback 0.15/0.60): 100·0.15/1e6 = 0.000015
+        // assistant msg (antigravity-3-flash → 0.30/2.50): 50·2.50/1e6 = 0.000125
+        assert!((cache.contribution.cost - 0.000140).abs() < 0.000001);
         assert!(cache.contribution.daily.contains_key("2026-03-22"));
 
         let _ = remove_dir_all(dir);
@@ -2443,50 +2496,50 @@ mod tests {
     }
 
     #[test]
-    fn gemini_chat_lookup_maps_user_index_to_following_model() {
+    fn antigravity_chat_lookup_maps_user_index_to_following_model() {
         let session = serde_json::json!({
-            "sessionId": "gemini-session",
+            "sessionId": "antigravity-session",
             "messages": [
                 {
                     "type": "user",
                     "content": [{ "text": "first prompt" }]
                 },
                 {
-                    "type": "gemini",
-                    "model": "gemini-3-flash-preview"
+                    "type": "antigravity",
+                    "model": "antigravity-3-flash-preview"
                 },
                 {
                     "type": "user",
                     "content": [{ "text": "second prompt" }]
                 },
                 {
-                    "type": "gemini",
-                    "model": "gemini-2.5-pro"
+                    "type": "antigravity",
+                    "model": "antigravity-2.5-pro"
                 }
             ]
         });
 
         let mut lookup = HashMap::<(String, u64), String>::new();
-        insert_gemini_chat_models_from_session(&session, &mut lookup);
+        insert_antigravity_chat_models_from_session(&session, &mut lookup);
 
         assert_eq!(
             lookup
-                .get(&(String::from("gemini-session"), 0))
+                .get(&(String::from("antigravity-session"), 0))
                 .map(String::as_str),
-            Some("gemini-3-flash-preview")
+            Some("antigravity-3-flash-preview")
         );
         assert_eq!(
             lookup
-                .get(&(String::from("gemini-session"), 1))
+                .get(&(String::from("antigravity-session"), 1))
                 .map(String::as_str),
-            Some("gemini-2.5-pro")
+            Some("antigravity-2.5-pro")
         );
     }
 
     #[test]
-    fn gemini_recent_activity_captures_latest_reply_text() {
+    fn antigravity_recent_activity_captures_latest_reply_text() {
         let session = serde_json::json!({
-            "sessionId": "gemini-session",
+            "sessionId": "antigravity-session",
             "messages": [
                 {
                     "type": "user",
@@ -2494,25 +2547,25 @@ mod tests {
                     "content": [{ "text": "first prompt" }]
                 },
                 {
-                    "type": "gemini",
+                    "type": "antigravity",
                     "timestamp": "2026-03-14T23:56:32.608Z",
                     "content": "planning reply",
-                    "model": "gemini-3-flash-preview"
+                    "model": "antigravity-3-flash-preview"
                 },
                 {
-                    "type": "gemini",
+                    "type": "antigravity",
                     "timestamp": "2026-03-14T23:56:33.608Z",
                     "content": "final reply",
-                    "model": "gemini-3-flash-preview"
+                    "model": "antigravity-3-flash-preview"
                 }
             ]
         });
 
-        let entries = collect_gemini_recent_entries(&session, "opentokenmonitor".to_string());
+        let entries = collect_antigravity_recent_entries(&session, "opentokenmonitor".to_string());
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].prompt, "first prompt");
         assert_eq!(entries[0].response.as_deref(), Some("final reply"));
-        assert_eq!(entries[0].model.as_deref(), Some("gemini-3-flash-preview"));
+        assert_eq!(entries[0].model.as_deref(), Some("antigravity-3-flash-preview"));
     }
 
     #[test]

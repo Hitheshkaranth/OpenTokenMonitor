@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::providers::antigravity::AntigravityProvider;
 use crate::providers::claude::ClaudeProvider;
 use crate::providers::codex::CodexProvider;
-use crate::providers::gemini::GeminiProvider;
 use crate::providers::DynProvider;
 use crate::providers::ProviderDescriptor;
 use crate::usage::models::ProviderId;
@@ -21,11 +21,11 @@ impl ProviderRegistry {
         // provider means implementing the trait and inserting it here.
         let claude: DynProvider = Arc::new(ClaudeProvider::new());
         let codex: DynProvider = Arc::new(CodexProvider::new());
-        let gemini: DynProvider = Arc::new(GeminiProvider::new());
+        let antigravity: DynProvider = Arc::new(AntigravityProvider::new());
 
         providers.insert(claude.id(), claude);
         providers.insert(codex.id(), codex);
-        providers.insert(gemini.id(), gemini);
+        providers.insert(antigravity.id(), antigravity);
 
         Self { providers }
     }

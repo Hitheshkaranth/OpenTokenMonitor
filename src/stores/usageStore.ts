@@ -51,18 +51,18 @@ type UsageState = {
 const EMPTY_SNAPSHOTS: Record<ProviderId, UsageSnapshot | undefined> = {
   claude: undefined,
   codex: undefined,
-  gemini: undefined,
+  antigravity: undefined,
 };
 
 export const useUsageStore = create<UsageState>((set, get) => ({
   snapshots: EMPTY_SNAPSHOTS,
-  costHistory: { claude: [], codex: [], gemini: [] },
-  trends: { claude: undefined, codex: undefined, gemini: undefined },
-  modelBreakdowns: { claude: [], codex: [], gemini: [] },
-  recentActivity: { claude: [], codex: [], gemini: [] },
-  statuses: { claude: undefined, codex: undefined, gemini: undefined },
-  alerts: { claude: [], codex: [], gemini: [] },
-  authStates: { claude: undefined, codex: undefined, gemini: undefined },
+  costHistory: { claude: [], codex: [], antigravity: [] },
+  trends: { claude: undefined, codex: undefined, antigravity: undefined },
+  modelBreakdowns: { claude: [], codex: [], antigravity: [] },
+  recentActivity: { claude: [], codex: [], antigravity: [] },
+  statuses: { claude: undefined, codex: undefined, antigravity: undefined },
+  alerts: { claude: [], codex: [], antigravity: [] },
+  authStates: { claude: undefined, codex: undefined, antigravity: undefined },
   latestReport: undefined,
   loading: false,
   error: undefined,
@@ -150,12 +150,12 @@ export const useUsageStore = create<UsageState>((set, get) => ({
       alerts: {
         claude: report.alerts.filter((alert) => alert.provider === 'claude'),
         codex: report.alerts.filter((alert) => alert.provider === 'codex'),
-        gemini: report.alerts.filter((alert) => alert.provider === 'gemini'),
+        antigravity: report.alerts.filter((alert) => alert.provider === 'antigravity'),
       },
       modelBreakdowns: {
         claude: report.model_breakdowns.filter((entry) => entry.provider === 'claude'),
         codex: report.model_breakdowns.filter((entry) => entry.provider === 'codex'),
-        gemini: report.model_breakdowns.filter((entry) => entry.provider === 'gemini'),
+        antigravity: report.model_breakdowns.filter((entry) => entry.provider === 'antigravity'),
       },
     });
   },
@@ -173,7 +173,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   },
 
   fetchAllAuthStates: async () => {
-    const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
+    const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
     await Promise.all(providers.map((provider) => get().fetchAuthState(provider)));
   },
 

@@ -220,7 +220,7 @@ The backend is authoritative for persisted usage data.
 
 - Frontend state is a projection for rendering and interaction.
 - Backend SQLite is the durable store.
-- Provider modules are the only layer that should know how Claude, Codex, or Gemini are fetched.
+- Provider modules are the only layer that should know how Claude, Codex, or Antigravity are fetched.
 
 This separation matters because it keeps provider quirks out of the React tree.
 
@@ -254,10 +254,10 @@ This separation matters because it keeps provider quirks out of the React tree.
 All per-model pricing lives in `src-tauri/src/pricing.rs`. When a provider
 publishes new rates:
 
-1. Edit the matching tuple inside `claude_rates` / `codex_rates` / `gemini_rates`.
+1. Edit the matching tuple inside `claude_rates` / `codex_rates` / `antigravity_rates`.
 2. If a brand-new model alias appears in user logs, add a normalization branch
    in `usage_scanners.rs` (`normalize_codex_model`, `normalize_claude_model`,
-   `normalize_gemini_model`) so the alias maps to a known table key.
+   `normalize_antigravity_model`) so the alias maps to a known table key.
 3. Update the rate-review date in the module-level doc comment.
 4. Run `cargo test --lib` — the `pricing::tests` unit tests guard the most
    common ordering / fallback mistakes.

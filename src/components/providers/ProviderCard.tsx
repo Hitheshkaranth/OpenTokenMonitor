@@ -21,10 +21,10 @@ import { getProviderAccessState, providerAccessDotClass } from '@/utils/provider
 import { displayWindows, windowLabel, windowValueLabel } from '@/utils/usageWindows';
 import { buildProjectSummaries } from '@/utils/projectActivity';
 
-const providerMeta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'gemini'; color: string; accent: string }> = {
+const providerMeta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'antigravity'; color: string; accent: string }> = {
   claude: { name: 'Claude', tint: 'claude', color: '#d97757', accent: '217 119 87' },
   codex: { name: 'Codex', tint: 'codex', color: '#10a37f', accent: '16 163 127' },
-  gemini: { name: 'Gemini', tint: 'gemini', color: '#4285f4', accent: '66 133 244' },
+  antigravity: { name: 'Antigravity', tint: 'antigravity', color: '#4f6bed', accent: '79 107 237' },
 };
 
 const severityColor: Record<UsageAlert['severity'], string> = {
@@ -87,12 +87,12 @@ const ProviderCard = ({
     const providerOnlyActivity: Record<ProviderId, RecentActivityEntry[]> = {
       claude: providerId === 'claude' ? allRecentActivity.claude ?? [] : [],
       codex: providerId === 'codex' ? allRecentActivity.codex ?? [] : [],
-      gemini: providerId === 'gemini' ? allRecentActivity.gemini ?? [] : [],
+      antigravity: providerId === 'antigravity' ? allRecentActivity.antigravity ?? [] : [],
     };
     const providerOnlyCostHistory: Record<ProviderId, CostEntry[]> = {
       claude: providerId === 'claude' ? costHistory.claude ?? [] : [],
       codex: providerId === 'codex' ? costHistory.codex ?? [] : [],
-      gemini: providerId === 'gemini' ? costHistory.gemini ?? [] : [],
+      antigravity: providerId === 'antigravity' ? costHistory.antigravity ?? [] : [],
     };
     return buildProjectSummaries(providerOnlyActivity, providerOnlyCostHistory, {
       maxProjects: 12,

@@ -19,13 +19,14 @@ type NavBarProps = {
 const providers: { id: ProviderId; label: string; tint: string }[] = [
   { id: 'claude', label: 'Claude', tint: 'claude' },
   { id: 'codex', label: 'Codex', tint: 'codex' },
-  { id: 'gemini', label: 'Gemini', tint: 'gemini' },
+  { id: 'antigravity', label: 'Antigravity', tint: 'antigravity' },
 ];
 
 const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy, onWidget }: NavBarProps) => {
   const enabledProviders = useSettingsStore((s) => s.enabledProviders);
   const statuses = useUsageStore((s) => s.statuses);
   const snapshots = useUsageStore((s) => s.snapshots);
+  const authStates = useUsageStore((s) => s.authStates);
 
   return (
     <div className="nav-bar" data-tauri-drag-region>
@@ -87,7 +88,7 @@ const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy, onWidget }: Na
         <div className="nav-pill-group">
           {providers.map(({ id, label, tint }) => {
             if (!enabledProviders[id]) return null;
-            const access = getProviderAccessState(statuses[id], snapshots[id]);
+            const access = getProviderAccessState(statuses[id], snapshots[id], authStates[id]);
             const healthClass = providerAccessDotClass(access.health);
             return (
               <button

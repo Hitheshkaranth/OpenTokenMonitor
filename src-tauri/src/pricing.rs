@@ -17,13 +17,13 @@
 //!
 //! - Claude rate tuple: `(input, cache_read, cache_write, output)`
 //! - Codex rate tuple:  `(input, cached_input, output)`
-//! - Gemini rate tuple: `(input, output)` — caching surfaced separately when
-//!   needed; today we don't subtract cached portions for Gemini because the
+//! - Antigravity rate tuple: `(input, output)` — caching surfaced separately when
+//!   needed; today we don't subtract cached portions for Antigravity because the
 //!   local session files don't always tag cached tokens reliably.
 //!
 //! ### Adding a new model
 //!
-//! 1. Add a row to the matching table (Claude / Codex / Gemini).
+//! 1. Add a row to the matching table (Claude / Codex / Antigravity).
 //! 2. Add a normalization branch to the matching `normalize_*_model` function
 //!    in `usage_scanners.rs` so log entries map onto the table key.
 //! 3. Update the model picker in any UI that shows per-model breakdowns.
@@ -148,28 +148,38 @@ pub fn codex_cost_usd(model: &str, input: u64, cached_input: u64, output: u64) -
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Google — Gemini
+// Google — Antigravity (runs Antigravity 3 Pro / Flash)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Per-1M-token rates for Gemini models, in USD.
+/// Per-1M-token rates for Antigravity models, in USD.
 ///
 /// Returned tuple: `(input, output)`. Cached-token discounts exist on
-/// Gemini's API but local session files don't reliably distinguish cached
+/// Antigravity's API but local session files don't reliably distinguish cached
 /// reads, so we don't apply them here.
 ///
-/// Tiers (Q1 2026, Google AI public list, ≤128K-context tier):
-/// - gemini-2.5-pro       →  $1.25 / $10.00
-/// - gemini-2.5-flash     →  $0.30 / $2.50
-/// - gemini-2.5-flash-lite→  $0.10 / $0.40
-/// - gemini-2.0-flash     →  $0.10 / $0.40
-/// - gemini-2.0-flash-lite→  $0.075/ $0.30
-/// - gemini-1.5-pro       →  $1.25 / $5.00
-/// - gemini-1.5-flash     →  $0.075/ $0.30
+/// Tiers (Q1 2026, Google AI / Antigravity public list, ≤128K-context tier):
+/// - antigravity-3-pro         →  $1.25 / $10.00 (Antigravity default)
+/// - antigravity-3.5-flash     →  $0.30 / $2.50
+/// - antigravity-2.5-pro       →  $1.25 / $10.00
+/// - antigravity-2.5-flash     →  $0.30 / $2.50
+/// - antigravity-2.5-flash-lite→  $0.10 / $0.40
+/// - antigravity-2.0-flash     →  $0.10 / $0.40
+/// - antigravity-2.0-flash-lite→  $0.075/ $0.30
+/// - antigravity-1.5-pro       →  $1.25 / $5.00
+/// - antigravity-1.5-flash     →  $0.075/ $0.30
 ///
 /// Unknown models fall back to a Flash-tier estimate so we don't silently
 /// undercount usage for newly-released models.
-pub fn gemini_rates(model: &str) -> (f64, f64) {
+pub fn antigravity_rates(model: &str) -> (f64, f64) {
     let m = model.to_ascii_lowercase();
+
+    // 3.x family (Antigravity era).
+    if m.contains("antigravity-3") && m.contains("pro") {
+        return (1.25, 10.00);
+    }
+    if m.contains("antigravity-3") && m.contains("flash") {
+        return (0.30, 2.50);
+    }
 
     // 2.5 family.
     if m.contains("2.5") && m.contains("pro") {
@@ -203,10 +213,10 @@ pub fn gemini_rates(model: &str) -> (f64, f64) {
     (0.15, 0.60)
 }
 
-/// Compute Gemini cost in USD. The `_cached` argument is accepted but
-/// currently ignored — see [`gemini_rates`] for rationale.
-pub fn gemini_cost_usd(model: &str, input: u64, _cached: u64, output: u64) -> f64 {
-    let (in_per_m, out_per_m) = gemini_rates(model);
+/// Compute Antigravity cost in USD. The `_cached` argument is accepted but
+/// currently ignored — see [`antigravity_rates`] for rationale.
+pub fn antigravity_cost_usd(model: &str, input: u64, _cached: u64, output: u64) -> f64 {
+    let (in_per_m, out_per_m) = antigravity_rates(model);
     per_million(input, in_per_m) + per_million(output, out_per_m)
 }
 
@@ -259,16 +269,16 @@ mod tests {
     }
 
     #[test]
-    fn gemini_unknown_falls_back_to_flash_estimate() {
-        let (i, o) = gemini_rates("gemini-9000-mystery");
+    fn antigravity_unknown_falls_back_to_flash_estimate() {
+        let (i, o) = antigravity_rates("antigravity-9000-mystery");
         assert_eq!(i, 0.15);
         assert_eq!(o, 0.60);
     }
 
     #[test]
-    fn gemini_25_flash_lite_beats_pro_match() {
+    fn antigravity_25_flash_lite_beats_pro_match() {
         // "flash-lite" must take precedence over the generic "flash" branch.
-        let (i, o) = gemini_rates("gemini-2.5-flash-lite");
+        let (i, o) = antigravity_rates("antigravity-2.5-flash-lite");
         assert_eq!(i, 0.10);
         assert_eq!(o, 0.40);
     }

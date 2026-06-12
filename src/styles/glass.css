@@ -19,7 +19,7 @@
   --toggle-knob: #ffffff;
   --claude-tint: rgba(217, 119, 87, 0.22);
   --codex-tint: rgba(16, 163, 127, 0.22);
-  --gemini-tint: rgba(66, 133, 244, 0.22);
+  --antigravity-tint: rgba(79, 107, 237, 0.22);
   --radius-lg: 18px;
   --radius-md: 13px;
   --widget-card-shell:
@@ -139,7 +139,7 @@ body {
 
 .glass-claude { background-color: var(--claude-tint); }
 .glass-codex { background-color: var(--codex-tint); }
-.glass-gemini { background-color: var(--gemini-tint); }
+.glass-antigravity { background-color: var(--antigravity-tint); }
 
 .glass-pill {
   border: 1px solid var(--glass-border);

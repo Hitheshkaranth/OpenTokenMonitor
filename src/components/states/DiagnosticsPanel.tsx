@@ -2,7 +2,7 @@ import ProviderLogo from '@/components/providers/ProviderLogo';
 import { ProviderId, ProviderStatus, UsageAlert, UsageSnapshot } from '@/types';
 import { getProviderAccessState } from '@/utils/providerAccess';
 
-const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
+const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
 type DiagnosticsPanelProps = {
   statuses: Record<ProviderId, ProviderStatus | undefined>;

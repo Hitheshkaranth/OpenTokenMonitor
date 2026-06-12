@@ -2,7 +2,7 @@
   "name": "open-token-monitor",
   "private": true,
   "version": "0.3.4",
-  "description": "Local-first desktop monitor for Claude, Codex, and Gemini usage.",
+  "description": "Local-first desktop monitor for Claude, Codex, and Antigravity usage.",
   "license": "MIT",
   "repository": {
     "type": "git",

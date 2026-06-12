@@ -32,20 +32,20 @@ pub struct TrayState {
 fn format_tray_tooltip(snapshots: &[UsageSnapshot]) -> String {
     let mut claude = 0.0;
     let mut codex = 0.0;
-    let mut gemini = 0.0;
+    let mut antigravity = 0.0;
 
     for snapshot in snapshots {
         let p = snapshot_percent(snapshot);
         match snapshot.provider {
             ProviderId::Claude => claude = p,
             ProviderId::Codex => codex = p,
-            ProviderId::Gemini => gemini = p,
+            ProviderId::Antigravity => antigravity = p,
         }
     }
 
     format!(
-        "OpenTokenMonitor\nClaude: {:.0}%  Codex: {:.0}%  Gemini: {:.0}%",
-        claude, codex, gemini
+        "OpenTokenMonitor\nClaude: {:.0}%  Codex: {:.0}%  Antigravity: {:.0}%",
+        claude, codex, antigravity
     )
 }
 

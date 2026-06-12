@@ -62,10 +62,21 @@ export const getProviderAccessState = (
         return {
           health: 'waiting',
           label: 'Local — auth expired',
-          detail: 'OAuth is expired; click to refresh.',
+          detail: authState.last_error || 'OAuth is expired; click to refresh.',
           color: providerAccessColor('waiting'),
         };
       }
+    }
+
+    // Auth handled by a local CLI/server (e.g. Antigravity): a local-log snapshot
+    // just means the server isn't running, not that anything failed.
+    if (authState?.kind === 'cli') {
+      return {
+        health: 'waiting',
+        label: 'Local',
+        detail: authState.last_error || 'Showing local data — start the CLI for live quota.',
+        color: providerAccessColor('waiting'),
+      };
     }
 
     return {

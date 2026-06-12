@@ -4,7 +4,7 @@
 
 # OpenToken Monitor
 
-**The unified, local-first desktop monitor for Claude, Codex, and Gemini.**
+**The unified, local-first desktop monitor for Claude, Codex, and Antigravity.**
 
 One window for every usage gauge, cost trend, and recent prompt — without handing your keys to a SaaS dashboard.
 
@@ -32,9 +32,9 @@ One window for every usage gauge, cost trend, and recent prompt — without hand
 
 ## ✨ Why OpenToken Monitor?
 
-You're juggling **three coding agents** at once — Claude, Codex, and Gemini — each with its own dashboard, its own quota window, and its own pricing page. OpenToken Monitor stitches them into a **single tray-resident desktop app** that:
+You're juggling **three coding agents** at once — Claude, Codex, and Antigravity — each with its own dashboard, its own quota window, and its own pricing page. OpenToken Monitor stitches them into a **single tray-resident desktop app** that:
 
-- 📊 reads your **local CLI artifacts first** (`~/.claude`, `~/.codex`, `~/.gemini/tmp`)
+- 📊 reads your **local CLI artifacts first** (`~/.claude`, `~/.codex`, `~/Library/Application Support/Antigravity/logs`)
 - 🔐 augments them with **live OAuth fetches** when credentials are present — never proxied through a third party
 - 💸 computes **accurate per-model cost** using current Q1 2026 published rates
 - 🛟 keeps providers **visible even when offline**, surfacing health status instead of silently dropping them
@@ -47,7 +47,7 @@ Everything stays on your machine. Snapshots persist in a local SQLite store; not
 
 ### 🎯 Core Dashboard
 
-- **Unified overview** — Claude · Codex · Gemini in one glance, with live usage rings, trend sparklines, and provider health badges
+- **Unified overview** — Claude · Codex · Antigravity in one glance, with live usage rings, trend sparklines, and provider health badges
 - **Per-provider detail pages** with cost history, model breakdowns, alert thresholds (75 % / 90 % / 95 %), and recent-prompt activity
 - **Projects view** — recent activity rolled up by workspace with cross-model spend attribution and command summaries
 - **Compact widget mode** — fixed-size always-on-top panel for at-a-glance gauges and reset countdowns
@@ -58,7 +58,7 @@ Everything stays on your machine. Snapshots persist in a local SQLite store; not
 |---|---|---|
 | **Claude** | Anthropic OAuth usage API + `~/.claude/projects` local logs | 5-hour rolling, 7-day, Opus weekly, extra-credits |
 | **Codex (OpenAI)** | Bearer / cookie / RPC fetchers + `~/.codex/sessions` | Daily, model breakdown |
-| **Gemini** | Google OAuth quota API + `~/.gemini/tmp` session files + `gemini --stats` CLI | **60 req/min**, **1000 req/day** (free tier, midnight Pacific reset) |
+| **Antigravity** | Google Cloud Code API (OAuth) + Local Language Server loopback + `~/Library/Application Support/Antigravity/logs` | 5-hour rolling, Daily request cap |
 
 ### 🛡️ Resilience Built-In
 
@@ -80,7 +80,7 @@ All model rates live in a single source-of-truth: [`src-tauri/src/pricing.rs`](.
 | OpenAI | GPT-5 | $1.25 / $10.00 |
 | OpenAI | GPT-5 mini / nano | $0.25 / $2.00 · $0.05 / $0.40 |
 | OpenAI | o3 / o4-mini | $2.00 / $8.00 · $1.10 / $4.40 |
-| Gemini | 2.5 Pro / Flash / Flash-Lite | $1.25 / $10.00 · $0.30 / $2.50 · $0.10 / $0.40 |
+| Antigravity | Gemini 3 Pro / Flash / Flash-Lite | $1.25 / $10.00 · $0.30 / $2.50 · $0.10 / $0.40 |
 
 Caching discounts and cache-write surcharges are applied where each provider exposes them.
 
@@ -88,7 +88,7 @@ Caching discounts and cache-write surcharges are applied where each provider exp
 
 | Shortcut | Action |
 |---|---|
-| <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> | Jump to Claude / Codex / Gemini |
+| <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> | Jump to Claude / Codex / Antigravity |
 | <kbd>4</kbd> | Open Projects |
 | <kbd>Esc</kbd> | Return to overview |
 | <kbd>Ctrl</kbd>+<kbd>R</kbd> / <kbd>⌘</kbd>+<kbd>R</kbd> | Refresh all providers |
@@ -190,7 +190,7 @@ npm run tauri:build:mac          # macOS app bundle + installer
 │  commands.rs  →  aggregator  →  provider registry        │
 │         │                          ├─ Claude  (OAuth + logs)
 │         │                          ├─ Codex   (bearer/cookie/RPC + logs)
-│         │                          └─ Gemini  (OAuth + CLI + logs)
+│         │                          ├─ Antigravity (OAuth + Live Loopback + logs)
 │         ↓                                                │
 │  UsageStore (SQLite)  ·  pricing.rs  ·  alerts.rs        │
 │  tray.rs  ·  watchers (poll + filesystem)                │
@@ -212,7 +212,7 @@ Key entry points:
 ## 🔒 Data & Privacy
 
 - 🏠 **100 % local.** All snapshots, costs, and recent activity are stored in a local SQLite file under your OS app-data directory.
-- 🔑 **Credentials never leave the device.** OAuth tokens are read from the official CLI keychain entries; API requests go directly from your machine to Anthropic / OpenAI / Google.
+- 🔑 **Credentials never leave the device.** OAuth tokens are read from the official CLI keychain entries; API requests go directly from your machine to Anthropic / OpenAI / Antigravity (Google Cloud).
 - 🚫 **No telemetry.** No analytics, no crash reporting, no phone-home.
 - 🧹 **Reset by deleting** the app-data SQLite file (`%APPDATA%\com.opentokenmonitor.desktop\usage.db` on Windows; equivalents on macOS / Linux).
 

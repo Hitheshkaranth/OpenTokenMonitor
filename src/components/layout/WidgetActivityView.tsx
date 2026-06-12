@@ -5,13 +5,13 @@ import ProviderLogo from '@/components/providers/ProviderLogo';
 import { ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry, UsageSnapshot } from '@/types';
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 
-const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'gemini' }> = {
+const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'antigravity' }> = {
   claude: { label: 'Claude', tint: 'claude' },
   codex: { label: 'Codex', tint: 'codex' },
-  gemini: { label: 'Gemini', tint: 'gemini' },
+  antigravity: { label: 'Antigravity', tint: 'antigravity' },
 };
 
-const providers: ProviderId[] = ['claude', 'codex', 'gemini'];
+const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
 const formatTokens = (value: number) => {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;

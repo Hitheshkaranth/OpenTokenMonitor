@@ -62,7 +62,7 @@ const App = () => {
   useWidgetResize(widgetMode);
 
   const activeProviders = useMemo(
-    () => (['claude', 'codex', 'gemini'] as ProviderId[]).filter((p) => enabledProviders[p]),
+    () => (['claude', 'codex', 'antigravity'] as ProviderId[]).filter((p) => enabledProviders[p]),
     [enabledProviders]
   );
 
@@ -75,7 +75,7 @@ const App = () => {
 
   // Eagerly fetch trends for all providers so overview sparklines load fast
   useEffect(() => {
-    (['claude', 'codex', 'gemini'] as ProviderId[]).forEach((p) => {
+    (['claude', 'codex', 'antigravity'] as ProviderId[]).forEach((p) => {
       fetchCostHistory(p);
       fetchTrend(p);
       fetchModelBreakdown(p);
@@ -101,7 +101,7 @@ const App = () => {
     activeProviders,
     snapshots.claude?.fetched_at,
     snapshots.codex?.fetched_at,
-    snapshots.gemini?.fetched_at,
+    snapshots.antigravity?.fetched_at,
     fetchUsageReport,
   ]);
 
@@ -120,7 +120,7 @@ const App = () => {
       // the latest provider state.
       await refreshAll();
       await Promise.all(
-        (['claude', 'codex', 'gemini'] as ProviderId[]).flatMap((p) => [
+        (['claude', 'codex', 'antigravity'] as ProviderId[]).flatMap((p) => [
           fetchCostHistory(p),
           fetchTrend(p),
           fetchRecentActivity(p, 120),
@@ -143,7 +143,7 @@ const App = () => {
       return <SettingsPage />;
     }
 
-    if (loading && !snapshots.claude && !snapshots.codex && !snapshots.gemini) {
+    if (loading && !snapshots.claude && !snapshots.codex && !snapshots.antigravity) {
       return <LoadingState />;
     }
 

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { ProviderId } from '@/types';
 import { useUsageStore } from '@/stores/usageStore';
 
-const PROVIDERS: ProviderId[] = ['claude', 'codex', 'gemini'];
+const PROVIDERS: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
 // Provider health is polled separately from usage snapshots so the UI can
 // distinguish "provider reachable" from "usage snapshot currently unavailable".

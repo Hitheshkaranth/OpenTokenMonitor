@@ -1,7 +1,7 @@
 import { CSSProperties, PropsWithChildren, useRef } from 'react';
 import { useSpecularHighlight } from '@/hooks/useSpecularHighlight';
 
-type Tint = 'claude' | 'codex' | 'gemini' | 'neutral';
+type Tint = 'claude' | 'codex' | 'antigravity' | 'neutral';
 
 type GlassPanelProps = PropsWithChildren<{
   className?: string;
@@ -14,7 +14,7 @@ type GlassPanelProps = PropsWithChildren<{
 const tintClass: Record<Tint, string> = {
   claude: 'glass-claude',
   codex: 'glass-codex',
-  gemini: 'glass-gemini',
+  antigravity: 'glass-antigravity',
   neutral: '',
 };
 

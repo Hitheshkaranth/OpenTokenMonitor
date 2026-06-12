@@ -12,11 +12,12 @@ import {
 } from '@/types';
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { displayWindows } from '@/utils/usageWindows';
+import { useUsageStore } from '@/stores/usageStore';
 
-const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'gemini'; color: string }> = {
+const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'antigravity'; color: string }> = {
   claude: { label: 'Claude', tint: 'claude', color: '#d97757' },
   codex: { label: 'Codex', tint: 'codex', color: '#10a37f' },
-  gemini: { label: 'Gemini', tint: 'gemini', color: '#4285f4' },
+  antigravity: { label: 'Antigravity', tint: 'antigravity', color: '#4f6bed' },
 };
 
 const widgetWindowLabel = (windowType?: string) => {
@@ -59,7 +60,8 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
   const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
   const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
   const costToday = trend?.points[trend.points.length - 1]?.cost_usd ?? 0;
-  const access = getProviderAccessState(status, snapshot);
+  const authState = useUsageStore((s) => s.authStates[provider]);
+  const access = getProviderAccessState(status, snapshot, authState);
   const healthClass = providerAccessDotClass(access.health);
 
   return (

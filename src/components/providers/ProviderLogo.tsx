@@ -9,13 +9,13 @@ type ProviderLogoProps = {
 const srcByProvider: Record<ProviderId, string> = {
   claude: '/providers/claude-ai-icon.png',
   codex: '/providers/chatgpt-icon.png',
-  gemini: '/providers/google-gemini-icon.png',
+  antigravity: '/providers/antigravity-icon.png',
 };
 
 const widgetCoreOptics: Record<ProviderId, { scale: number; x: number; y: number }> = {
   claude: { scale: 0.9, x: 0, y: -0.2 },
   codex: { scale: 0.92, x: 0, y: 0 },
-  gemini: { scale: 1.08, x: 0, y: -0.1 },
+  antigravity: { scale: 1.08, x: 0, y: -0.1 },
 };
 
 const ProviderLogo = ({ provider, size = 18, variant = 'default' }: ProviderLogoProps) => {

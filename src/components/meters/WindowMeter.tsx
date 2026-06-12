@@ -5,7 +5,7 @@ import { windowLabel, windowValueLabel } from '@/utils/usageWindows';
 type WindowMeterProps = {
   primary?: UsageWindow;
   secondary?: UsageWindow;
-  providerTint: 'claude' | 'codex' | 'gemini';
+  providerTint: 'claude' | 'codex' | 'antigravity';
 };
 
 const WindowMeter = ({ primary, secondary, providerTint }: WindowMeterProps) => {

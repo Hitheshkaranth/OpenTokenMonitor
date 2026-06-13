@@ -37,19 +37,45 @@ where
             ));
 
             // VERIFY: Antigravity session/log directory
-            #[cfg(target_os = "macos")]
-            out.push((
-                ProviderId::Antigravity,
-                home.join("Library")
-                    .join("Application Support")
-                    .join("Antigravity")
-                    .join("logs"),
-            ));
-            #[cfg(not(target_os = "macos"))]
+            if let Some(data_dir) = dirs::data_dir() {
+                out.push((
+                    ProviderId::Antigravity,
+                    data_dir.join("Antigravity").join("logs"),
+                ));
+                out.push((
+                    ProviderId::Antigravity,
+                    data_dir.join("Antigravity IDE").join("logs"),
+                ));
+            }
             out.push((
                 ProviderId::Antigravity,
                 home.join(".antigravity").join("logs"),
             ));
+            out.push((
+                ProviderId::Antigravity,
+                home.join(".gemini").join("antigravity-cli").join("logs"),
+            ));
+            out.push((
+                ProviderId::Antigravity,
+                home.join(".gemini").join("tmp"),
+            ));
+            #[cfg(target_os = "macos")]
+            {
+                out.push((
+                    ProviderId::Antigravity,
+                    home.join("Library")
+                        .join("Application Support")
+                        .join("Antigravity")
+                        .join("logs"),
+                ));
+                out.push((
+                    ProviderId::Antigravity,
+                    home.join("Library")
+                        .join("Application Support")
+                        .join("Antigravity IDE")
+                        .join("logs"),
+                ));
+            }
         }
         out
     };

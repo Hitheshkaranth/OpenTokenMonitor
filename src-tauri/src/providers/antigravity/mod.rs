@@ -30,7 +30,7 @@ impl AntigravityProvider {
 }
 
 fn antigravity_installed() -> bool {
-    dirs::home_dir()
+    let home_installed = dirs::home_dir()
         .map(|h| {
             h.join(".antigravity").exists()
                 || h.join(".gemini").join("antigravity-cli").exists()
@@ -38,8 +38,28 @@ fn antigravity_installed() -> bool {
                     .join("Application Support")
                     .join("Antigravity")
                     .exists()
+                || h.join("Library")
+                    .join("Application Support")
+                    .join("Antigravity IDE")
+                    .exists()
         })
-        .unwrap_or(false)
+        .unwrap_or(false);
+
+    let local_installed = dirs::data_local_dir()
+        .map(|d| {
+            d.join("Programs").join("Antigravity").exists()
+                || d.join("Programs").join("Antigravity IDE").exists()
+        })
+        .unwrap_or(false);
+
+    let roaming_installed = dirs::data_dir()
+        .map(|d| {
+            d.join("Antigravity").exists()
+                || d.join("Antigravity IDE").exists()
+        })
+        .unwrap_or(false);
+
+    home_installed || local_installed || roaming_installed
 }
 
 #[async_trait]
@@ -53,57 +73,74 @@ impl UsageProvider for AntigravityProvider {
     }
 
     async fn fetch_usage(&self, _ctx: &FetchContext) -> Result<UsageSnapshot, String> {
-        // Primary: live quota from the running Antigravity CLI/IDE local server.
-        // Already authenticated — no tokens touched (see live_fetcher).
-        if let Ok(live) = live_fetcher::fetch_quota().await {
-            let mut windows = Vec::new();
+        match live_fetcher::fetch_quota().await {
+            Ok(live) => {
+                tracing::info!(
+                    "[antigravity] live fetch OK: plan={:?}, prompt_credits_available={:?}, monthly_credits={:?}, flow_credits_available={:?}, models_count={}",
+                    live.plan,
+                    live.available_prompt_credits,
+                    live.monthly_prompt_credits,
+                    live.available_flow_credits,
+                    live.models.len()
+                );
+                let mut windows = Vec::new();
 
-            // Headline the most-constrained model's rolling quota — the limit the
-            // user hits first. The API exposes a remaining fraction + reset time.
-            if let Some(model) = live.models.iter().min_by(|a, b| {
-                a.remaining_fraction
-                    .partial_cmp(&b.remaining_fraction)
-                    .unwrap_or(Ordering::Equal)
-            }) {
-                let pct_used = (1.0 - model.remaining_fraction) * 100.0;
-                windows.push(UsageWindow::percent(
-                    WindowType::FiveHour,
-                    pct_used,
-                    model.resets_at,
-                    format!("{} — rolling model quota", model.name),
-                ));
+                // Headline the most-constrained model's rolling quota — the limit the
+                // user hits first. The API exposes a remaining fraction + reset time.
+                if let Some(model) = live.models.iter().min_by(|a, b| {
+                    a.remaining_fraction
+                        .partial_cmp(&b.remaining_fraction)
+                        .unwrap_or(Ordering::Equal)
+                }) {
+                    let pct_used = (1.0 - model.remaining_fraction) * 100.0;
+                    windows.push(UsageWindow::percent(
+                        WindowType::FiveHour,
+                        pct_used,
+                        model.resets_at,
+                        format!("{} — rolling model quota", model.name),
+                    ));
+                }
+
+                // Monthly prompt credits as an exact meter.
+                if let Some(monthly) = live.monthly_prompt_credits {
+                    let available = live.available_prompt_credits.unwrap_or(monthly);
+                    tracing::info!(
+                        "[antigravity] monthly meter details: monthly={}, available={}, used={}",
+                        monthly,
+                        available,
+                        monthly.saturating_sub(available)
+                    );
+                    windows.push(UsageWindow::exact(
+                        WindowType::Monthly,
+                        monthly.saturating_sub(available),
+                        monthly,
+                        None,
+                        UsageUnit::Requests,
+                    ));
+                }
+
+                if !windows.is_empty() {
+                    let note = match (live.available_prompt_credits, live.available_flow_credits) {
+                        (Some(p), Some(f)) => Some(format!("{p} prompt / {f} flow credits left")),
+                        _ => None,
+                    };
+                    return Ok(UsageSnapshot {
+                        provider: ProviderId::Antigravity,
+                        windows,
+                        credits: None,
+                        plan: Some(PlanInfo {
+                            tier: live.plan,
+                            note,
+                        }),
+                        fetched_at: Utc::now(),
+                        source: DataSource::Cli,
+                        provenance: DataProvenance::Official,
+                        stale: false,
+                    });
+                }
             }
-
-            // Monthly prompt credits as an exact meter.
-            if let Some(monthly) = live.monthly_prompt_credits {
-                let available = live.available_prompt_credits.unwrap_or(monthly);
-                windows.push(UsageWindow::exact(
-                    WindowType::Monthly,
-                    monthly.saturating_sub(available),
-                    monthly,
-                    None,
-                    UsageUnit::Requests,
-                ));
-            }
-
-            if !windows.is_empty() {
-                let note = match (live.available_prompt_credits, live.available_flow_credits) {
-                    (Some(p), Some(f)) => Some(format!("{p} prompt / {f} flow credits left")),
-                    _ => None,
-                };
-                return Ok(UsageSnapshot {
-                    provider: ProviderId::Antigravity,
-                    windows,
-                    credits: None,
-                    plan: Some(PlanInfo {
-                        tier: live.plan,
-                        note,
-                    }),
-                    fetched_at: Utc::now(),
-                    source: DataSource::Cli,
-                    provenance: DataProvenance::Official,
-                    stale: false,
-                });
+            Err(e) => {
+                tracing::warn!("[antigravity] live fetch FAILED: {e}. Falling back to local logs.");
             }
         }
 

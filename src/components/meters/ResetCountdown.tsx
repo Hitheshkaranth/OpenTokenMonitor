@@ -34,7 +34,7 @@ const ResetCountdown = ({ resetsAt, className = 'countdown-text' }: ResetCountdo
     return () => window.clearInterval(id);
   }, []);
 
-  if (!target) return <span className={className} data-urgency="none">n/a</span>;
+  if (!target) return null;
   const sec = Math.max(0, Math.floor((target - now) / 1000));
   return (
     <span className={className} data-urgency={countdownUrgency(target, sec)}>

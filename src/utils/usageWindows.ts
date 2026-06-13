@@ -43,7 +43,7 @@ export const displayWindows = (snapshot?: UsageSnapshot): [UsageWindow | undefin
 export const windowValueLabel = (window?: UsageWindow) => {
   if (!window) return 'No data';
   if (window.accuracy === 'percent_only' || window.used == null || window.limit == null) {
-    return 'Percent-based window';
+    return '';
   }
 
   const prefix = window.accuracy === 'approximate' ? '~' : '';

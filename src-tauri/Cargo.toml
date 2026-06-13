@@ -1,6 +1,6 @@
 [package]
 name = "open-token-monitor"
-version = "0.3.4"
+version = "0.3.5"
 description = "Local-first desktop monitor for Claude, Codex, and Antigravity usage."
 authors = ["Side Quests"]
 license = "MIT"

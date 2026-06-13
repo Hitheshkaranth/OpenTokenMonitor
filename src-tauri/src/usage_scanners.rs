@@ -679,49 +679,67 @@ fn scan_antigravity_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
 }
 
 fn discover_antigravity_log_files() -> Vec<AntigravityLogFile> {
-    let Some(home) = dirs::home_dir() else {
-        return Vec::new();
-    };
-    // Update discovery paths (VERIFY)
-    // New: ~/Library/Application Support/Antigravity/logs/
-    #[cfg(target_os = "macos")]
-    let root = home
-        .join("Library")
-        .join("Application Support")
-        .join("Antigravity")
-        .join("logs");
-    #[cfg(not(target_os = "macos"))]
-    let root = home.join(".antigravity").join("logs"); // Fallback for other OS
+    let mut roots = Vec::new();
 
-    let Ok(entries) = std::fs::read_dir(root) else {
-        return Vec::new();
-    };
+    // 1. System-specific AppData / Application Support / config paths
+    if let Some(data_dir) = dirs::data_dir() {
+        roots.push(data_dir.join("Antigravity").join("logs"));
+        roots.push(data_dir.join("Antigravity IDE").join("logs"));
+    }
 
+    // 2. Home directory fallbacks
+    if let Some(home) = dirs::home_dir() {
+        roots.push(home.join(".antigravity").join("logs"));
+        roots.push(home.join(".gemini").join("antigravity-cli").join("logs"));
+        roots.push(home.join(".gemini").join("tmp"));
+        #[cfg(target_os = "macos")]
+        {
+            roots.push(home.join("Library").join("Application Support").join("Antigravity").join("logs"));
+            roots.push(home.join("Library").join("Application Support").join("Antigravity IDE").join("logs"));
+        }
+    }
+
+    // Deduplicate and filter existing directories
+    let mut unique_roots = std::collections::HashSet::new();
     let mut out = Vec::<AntigravityLogFile>::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Ok(ft) = entry.file_type() else {
-            continue;
-        };
-        if !ft.is_dir() {
+
+    for root in roots {
+        if !root.exists() || !root.is_dir() {
             continue;
         }
-        let log_path = path.join("logs.json");
-        if !log_path.exists() {
+        if !unique_roots.insert(root.clone()) {
             continue;
         }
 
-        let Some(terminal_label) = path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .map(ToOwned::to_owned)
-        else {
+        let Ok(entries) = std::fs::read_dir(root) else {
             continue;
         };
-        out.push(AntigravityLogFile {
-            terminal_label,
-            path: log_path,
-        });
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(ft) = entry.file_type() else {
+                continue;
+            };
+            if !ft.is_dir() {
+                continue;
+            }
+            let log_path = path.join("logs.json");
+            if !log_path.exists() {
+                continue;
+            }
+
+            let Some(terminal_label) = path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .map(ToOwned::to_owned)
+            else {
+                continue;
+            };
+            out.push(AntigravityLogFile {
+                terminal_label,
+                path: log_path,
+            });
+        }
     }
     out
 }
@@ -834,6 +852,48 @@ fn collect_claude_recent_entries(messages: &[Value]) -> Vec<RecentActivityEntry>
     out
 }
 
+fn extract_cwd_from_antigravity_session(v: &Value, project_name: &str) -> Option<String> {
+    fn search(val: &Value, proj_name_lower: &str) -> Option<String> {
+        match val {
+            Value::String(s) => {
+                let normalized = s.replace('\\', "/");
+                let norm_lower = normalized.to_lowercase();
+                if let Some(idx) = norm_lower.find(proj_name_lower) {
+                    let before_ok = idx == 0 || normalized.chars().nth(idx - 1) == Some('/');
+                    let is_absolute = normalized.starts_with('/') 
+                        || (normalized.len() >= 3 && normalized.chars().nth(1) == Some(':') && normalized.chars().nth(2) == Some('/'));
+                    
+                    if before_ok && is_absolute {
+                        let end_idx = idx + proj_name_lower.len();
+                        return Some(s[..end_idx].to_string());
+                    }
+                }
+                None
+            }
+            Value::Object(map) => {
+                for value in map.values() {
+                    if let Some(res) = search(value, proj_name_lower) {
+                        return Some(res);
+                    }
+                }
+                None
+            }
+            Value::Array(arr) => {
+                for value in arr {
+                    if let Some(res) = search(value, proj_name_lower) {
+                        return Some(res);
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    let proj_name_lower = project_name.to_lowercase();
+    search(v, &proj_name_lower)
+}
+
 fn collect_antigravity_recent_entries(
     session: &Value,
     terminal_label: String,
@@ -843,6 +903,7 @@ fn collect_antigravity_recent_entries(
     };
 
     let session_id = pick_first_str(session, &[&["sessionId"], &["id"]]);
+    let cwd = extract_cwd_from_antigravity_session(session, &terminal_label);
     let mut out = Vec::<RecentActivityEntry>::new();
     let mut pending: Option<RecentActivityEntry> = None;
 
@@ -868,7 +929,7 @@ fn collect_antigravity_recent_entries(
                     timestamp,
                     session_id: session_id.clone(),
                     terminal_label: Some(terminal_label.clone()),
-                    cwd: None,
+                    cwd: cwd.clone(),
                     model: None,
                 });
             }

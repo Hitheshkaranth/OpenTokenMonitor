@@ -213,11 +213,14 @@ pub fn antigravity_rates(model: &str) -> (f64, f64) {
     (0.15, 0.60)
 }
 
-/// Compute Antigravity cost in USD. The `_cached` argument is accepted but
-/// currently ignored — see [`antigravity_rates`] for rationale.
-pub fn antigravity_cost_usd(model: &str, input: u64, _cached: u64, output: u64) -> f64 {
+/// Compute Antigravity cost in USD, applying the 90% discount for cached input tokens.
+pub fn antigravity_cost_usd(model: &str, input: u64, cached: u64, output: u64) -> f64 {
     let (in_per_m, out_per_m) = antigravity_rates(model);
-    per_million(input, in_per_m) + per_million(output, out_per_m)
+    let non_cached = input.saturating_sub(cached);
+    let cached_rate = in_per_m * 0.10; // 90% discount for cached input tokens
+    per_million(non_cached, in_per_m)
+        + per_million(cached, cached_rate)
+        + per_million(output, out_per_m)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

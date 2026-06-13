@@ -694,8 +694,18 @@ fn discover_antigravity_log_files() -> Vec<AntigravityLogFile> {
         roots.push(home.join(".gemini").join("tmp"));
         #[cfg(target_os = "macos")]
         {
-            roots.push(home.join("Library").join("Application Support").join("Antigravity").join("logs"));
-            roots.push(home.join("Library").join("Application Support").join("Antigravity IDE").join("logs"));
+            roots.push(
+                home.join("Library")
+                    .join("Application Support")
+                    .join("Antigravity")
+                    .join("logs"),
+            );
+            roots.push(
+                home.join("Library")
+                    .join("Application Support")
+                    .join("Antigravity IDE")
+                    .join("logs"),
+            );
         }
     }
 
@@ -860,9 +870,11 @@ fn extract_cwd_from_antigravity_session(v: &Value, project_name: &str) -> Option
                 let norm_lower = normalized.to_lowercase();
                 if let Some(idx) = norm_lower.find(proj_name_lower) {
                     let before_ok = idx == 0 || normalized.chars().nth(idx - 1) == Some('/');
-                    let is_absolute = normalized.starts_with('/') 
-                        || (normalized.len() >= 3 && normalized.chars().nth(1) == Some(':') && normalized.chars().nth(2) == Some('/'));
-                    
+                    let is_absolute = normalized.starts_with('/')
+                        || (normalized.len() >= 3
+                            && normalized.chars().nth(1) == Some(':')
+                            && normalized.chars().nth(2) == Some('/'));
+
                     if before_ok && is_absolute {
                         let end_idx = idx + proj_name_lower.len();
                         return Some(s[..end_idx].to_string());

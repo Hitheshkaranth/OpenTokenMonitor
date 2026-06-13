@@ -55,10 +55,7 @@ where
                 ProviderId::Antigravity,
                 home.join(".gemini").join("antigravity-cli").join("logs"),
             ));
-            out.push((
-                ProviderId::Antigravity,
-                home.join(".gemini").join("tmp"),
-            ));
+            out.push((ProviderId::Antigravity, home.join(".gemini").join("tmp")));
             #[cfg(target_os = "macos")]
             {
                 out.push((

@@ -52,8 +52,16 @@ pub fn discover_port() -> Option<u16> {
         data_roots.push(home.join(".antigravity"));
         #[cfg(target_os = "macos")]
         {
-            data_roots.push(home.join("Library").join("Application Support").join("Antigravity"));
-            data_roots.push(home.join("Library").join("Application Support").join("Antigravity IDE"));
+            data_roots.push(
+                home.join("Library")
+                    .join("Application Support")
+                    .join("Antigravity"),
+            );
+            data_roots.push(
+                home.join("Library")
+                    .join("Application Support")
+                    .join("Antigravity IDE"),
+            );
         }
     }
 
@@ -71,7 +79,10 @@ pub fn discover_port() -> Option<u16> {
             if !session_dir.is_dir() {
                 continue;
             }
-            let ext_dir = session_dir.join("window1").join("exthost").join("google.antigravity");
+            let ext_dir = session_dir
+                .join("window1")
+                .join("exthost")
+                .join("google.antigravity");
             if ext_dir.is_dir() {
                 for file_name in &["Antigravity.log", "Antigravity IDE.log"] {
                     let log_file = ext_dir.join(file_name);
@@ -179,7 +190,8 @@ fn parse_models(resp: &Value) -> Vec<ModelQuota> {
     let mut seen = std::collections::HashSet::new();
     for model in map.values() {
         // Only include models provided by Google (Gemini) for the Antigravity card.
-        let is_google = model.get("modelProvider")
+        let is_google = model
+            .get("modelProvider")
             .and_then(Value::as_str)
             .map(|s| s == "MODEL_PROVIDER_GOOGLE")
             .unwrap_or(false);

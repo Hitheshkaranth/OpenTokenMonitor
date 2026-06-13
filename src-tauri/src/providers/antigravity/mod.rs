@@ -53,10 +53,7 @@ fn antigravity_installed() -> bool {
         .unwrap_or(false);
 
     let roaming_installed = dirs::data_dir()
-        .map(|d| {
-            d.join("Antigravity").exists()
-                || d.join("Antigravity IDE").exists()
-        })
+        .map(|d| d.join("Antigravity").exists() || d.join("Antigravity IDE").exists())
         .unwrap_or(false);
 
     home_installed || local_installed || roaming_installed

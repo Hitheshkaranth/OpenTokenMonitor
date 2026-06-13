@@ -86,14 +86,18 @@ jobs:
       #   APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
       #     - notarization: Apple ID, an app-specific password, and the team ID
       - name: Build Tauri bundle
-        run: ${{ matrix.bundle_cmd }}
+        shell: bash
+        run: |
+          if [ "${{ secrets.APPLE_ID }}" != "" ]; then
+            export APPLE_ID="${{ secrets.APPLE_ID }}"
+            export APPLE_PASSWORD="${{ secrets.APPLE_PASSWORD }}"
+            export APPLE_TEAM_ID="${{ secrets.APPLE_TEAM_ID }}"
+          fi
+          ${{ matrix.bundle_cmd }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Collect release artifacts
         shell: bash

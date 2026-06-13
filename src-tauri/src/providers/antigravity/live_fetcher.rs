@@ -99,7 +99,7 @@ pub fn discover_port() -> Option<u16> {
     }
 
     // Sort candidates by modification time descending (most recent first)
-    candidate_files.sort_by(|a, b| b.1.cmp(&a.1));
+    candidate_files.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     for (file_path, _) in candidate_files {
         if let Some(port) = discover_port_from_file(&file_path) {

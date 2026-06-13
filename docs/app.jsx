@@ -29,7 +29,7 @@ const Nav = ({ onPickOS }) => (
     <div className="wrap nav-row">
       <a href="#top" className="nav-brand" aria-label="OpenTokenMonitor home">
         <img className="nav-mark" src="assets/icon.png" alt="" aria-hidden="true"/>
-        <span><b>OpenTokenMonitor</b><span className="v">v0.3.3</span></span>
+        <span><b>OpenTokenMonitor</b><span className="v">v0.3.5</span></span>
       </a>
       <div className="nav-links">
         <a href="#screens">Product</a>
@@ -55,7 +55,7 @@ const Hero = ({ os }) => {
         <div className="hero-grid">
           <div>
             <div className="hero-meta">
-              <span className="pip"/>v0.3.3 · open source · MIT
+              <span className="pip"/>v0.3.5 · open source · MIT
             </div>
             <h1>
               Stop <span className="strike">guessing</span><br/>
@@ -74,7 +74,7 @@ const Hero = ({ os }) => {
               <a className="btn btn-ghost" href={REPO} target="_blank" rel="noreferrer">View source ↗</a>
             </div>
             <div className="hero-fineprint">
-              ~12 MB · No account · No telemetry · Reads <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/.claude</code> <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/.codex</code> <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/Library/Application Support/Antigravity/logs</code>
+              ~12 MB · No account · No telemetry · Reads <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/.claude</code> <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/.codex</code> <code style={{padding:"1px 5px",fontSize:11,color:"var(--ink-1)",background:"var(--bg-1)",borderRadius:3,border:"1px solid var(--line)"}}>~/.gemini/antigravity-cli</code>
             </div>
           </div>
           <div className="hero-shot">
@@ -163,7 +163,7 @@ const Screens = () => (
         <div className="shot" key={s.id}>
           <div className="shot-head">
             <div className="shot-num"><b>{s.num}</b>{s.kind}</div>
-            <div className="shot-kind">v0.3.3</div>
+            <div className="shot-kind">v0.3.5</div>
           </div>
           <div className="shot-img">
             <img src={s.src} alt={`OpenTokenMonitor ${s.kind} screenshot`} loading="lazy"/>
@@ -226,7 +226,7 @@ const Features = () => (
 const PROVS = [
   { id: "claude", name: "Claude",  cli: "Claude Code",      path: "~/.claude",  status: "Auto-detect" },
   { id: "codex",  name: "Codex",   cli: "OpenAI Codex CLI", path: "~/.codex",   status: "Auto-detect" },
-  { id: "antigravity", name: "Antigravity",  cli: "Antigravity CLI",       path: "~/Library/Application Support/Antigravity/logs",  status: "Auto-detect" },
+  { id: "antigravity", name: "Antigravity", cli: "Antigravity CLI/IDE", path: "~/.gemini/antigravity-cli", status: "Auto-detect" },
 ];
 
 const Providers = () => (
@@ -285,7 +285,7 @@ const Install = ({ os }) => (
     <div className="wrap sec-body">
       <div className="install-grid">
         <div className="install-card">
-          <h3>Releases<span className="meta">v0.3.3</span></h3>
+          <h3>Releases<span className="meta">v0.3.5</span></h3>
           <p>Direct downloads from GitHub Releases. Auto-updating is on the roadmap.</p>
           <ul className="install-list">
             {DOWNLOADS.map(d => (
@@ -346,7 +346,7 @@ const Steps = () => (
       <div className="step-cell">
         <span className="step-num">ii</span>
         <h3>Open</h3>
-        <p>The app auto-detects Claude, Codex, and Antigravity CLI artifacts on first launch. Nothing else to configure.</p>
+        <p>The app auto-detects Claude, Codex, and Antigravity CLI/IDE artifacts on first launch. Nothing else to configure.</p>
       </div>
       <div className="step-cell">
         <span className="step-num">iii</span>
@@ -392,7 +392,7 @@ const Privacy = () => (
 const FAQS = [
   {
     q: "Do I need API keys to use it?",
-    a: <>No. The default mode reads the session files your CLIs already write to <code>~/.claude</code>, <code>~/.codex</code>, and <code>~/Library/Application Support/Antigravity/logs</code>. API keys are only needed if you want provider-side data that isn't in local logs.</>,
+    a: <>No. The default mode reads the session files your CLIs already write to <code>~/.claude</code>, <code>~/.codex</code>, and <code>~/.gemini/antigravity-cli</code>. API keys are only needed if you want provider-side data that isn't in local logs.</>,
   },
   {
     q: "Is my data sent anywhere?",
@@ -408,7 +408,7 @@ const FAQS = [
   },
   {
     q: "What about other AI tools — Cursor, Aider, etc.?",
-    a: <>v0.3.3 supports Claude Code, OpenAI Codex CLI, and Antigravity CLI. Other tools are on the roadmap; the parser is provider-pluggable, so PRs are welcome.</>,
+    a: <>v0.3.5 supports Claude Code, OpenAI Codex CLI, and Antigravity CLI/IDE. Other tools are on the roadmap; the parser is provider-pluggable, so PRs are welcome.</>,
   },
   {
     q: "Why a desktop app and not a CLI?",
@@ -492,8 +492,8 @@ const Footer = () => (
         </div>
       </div>
       <div className="footer-bottom">
-        <div><span className="pip"/>v0.3.3 · MIT · © 2026 Hithesh Karanth</div>
-        <div>Not affiliated with Anthropic, OpenAI, or Google (Google Cloud).</div>
+        <div><span className="pip"/>v0.3.5 · MIT · © 2026 Hithesh Karanth</div>
+        <div>Not affiliated with Anthropic, OpenAI, or Google.</div>
       </div>
     </div>
   </footer>

@@ -408,7 +408,7 @@ const FAQS = [
   },
   {
     q: "What about other AI tools — Cursor, Aider, etc.?",
-    a: <>v0.3.3 supports Claude Code, OpenAI Codex CLI, and Antigravity CLI. Other tools are on the roadmap; the parser is provider-pluggable, so PRs are welcome.</>,,
+    a: <>v0.3.3 supports Claude Code, OpenAI Codex CLI, and Antigravity CLI. Other tools are on the roadmap; the parser is provider-pluggable, so PRs are welcome.</>,
   },
   {
     q: "Why a desktop app and not a CLI?",

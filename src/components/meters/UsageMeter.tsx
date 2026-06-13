@@ -59,6 +59,7 @@ const UsageMeter = ({ utilization, label, detail, note, resetsAt, providerTint, 
         >
           {note}
         </div>
+      ) : null}
       {resetsAt ? (
         <div style={{ marginTop: 8, textAlign: 'center' }} className={`glass-pill glass-${providerTint}`}>
           <ResetCountdown resetsAt={resetsAt} />

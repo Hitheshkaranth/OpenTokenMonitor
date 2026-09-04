@@ -52,6 +52,92 @@ impl UsageStore {
             ",
         )
         .map_err(|e| e.to_string())?;
+        drop(conn);
+        self.migrate()
+    }
+
+    /// Schema/data migrations, tracked with `PRAGMA user_version`.
+    ///
+    /// Each step must be safe to skip on a fresh database and safe to run
+    /// exactly once on an existing one, and **each step stamps its own version
+    /// as soon as it completes**. Bumping the version once at the end instead
+    /// means a build carrying the new version constant but not yet the new step
+    /// marks the work done without doing it, stranding the database.
+    fn migrate(&self) -> Result<(), String> {
+        const LATEST_VERSION: i64 = 2;
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
+
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(|e| e.to_string())?;
+
+        if version >= LATEST_VERSION {
+            return Ok(());
+        }
+
+        if version < 1 {
+            // v1 — drop cost rows keyed on model names the normalizers can no
+            // longer produce.
+            //
+            // `normalize_claude_model` used to collapse every Claude id to a
+            // bare family name, and the normalizers didn't strip vendor
+            // prefixes. Those rows are now orphans: `cost_entries` is keyed
+            // (day, provider, model), so a fresh scan writes `claude-opus-4-5`
+            // alongside the stale `claude-opus` row instead of replacing it,
+            // and the model breakdown counts the same usage twice.
+            //
+            // Deleting is safe — every row here is re-derived from the local
+            // CLI logs on the next refresh.
+            let removed = conn
+                .execute(
+                    "DELETE FROM cost_entries
+                      WHERE model IN ('claude-opus', 'claude-sonnet', 'claude-haiku')
+                         OR model LIKE '%/%'",
+                    [],
+                )
+                .map_err(|e| e.to_string())?;
+            if removed > 0 {
+                tracing::info!(
+                    "[store] migration v1: dropped {removed} cost rows using legacy model keys"
+                );
+            }
+            conn.execute_batch("PRAGMA user_version = 1")
+                .map_err(|e| e.to_string())?;
+        }
+
+        if version < 2 {
+            // v2 — drop rows belonging to provider ids that no longer exist.
+            //
+            // The Gemini provider was renamed to Antigravity, but its rows were
+            // left behind under provider='gemini'. Every read filters on a
+            // current `ProviderId`, so these can never be displayed, refreshed,
+            // or corrected — they just sit in the file forever.
+            let removed = conn
+                .execute(
+                    "DELETE FROM cost_entries
+                      WHERE provider NOT IN ('claude', 'codex', 'antigravity')",
+                    [],
+                )
+                .map_err(|e| e.to_string())?;
+            if removed > 0 {
+                tracing::info!(
+                    "[store] migration v2: dropped {removed} cost rows for retired providers"
+                );
+            }
+            conn.execute_batch("PRAGMA user_version = 2")
+                .map_err(|e| e.to_string())?;
+        }
+
+        debug_assert_eq!(
+            conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                .map_err(|e| e.to_string())?,
+            LATEST_VERSION,
+            "every migration step must stamp its own user_version"
+        );
         Ok(())
     }
 
@@ -293,6 +379,88 @@ mod tests {
                 .as_millis()
         ));
         UsageStore::open(&path).expect("open temp store")
+    }
+
+    #[test]
+    fn migration_v1_drops_legacy_model_keys_and_keeps_versioned_ones() {
+        let store = temp_store("migration-v1");
+
+        let entry = |model: &str| CostEntry {
+            date: "2026-09-04".to_string(),
+            provider: ProviderId::Claude,
+            model: model.to_string(),
+            input_tokens: 10,
+            output_tokens: 5,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            estimated_cost_usd: 1.0,
+        };
+
+        store
+            .save_cost_entries(&[
+                entry("claude-opus"),             // legacy collapsed key
+                entry("anthropic/claude-opus-5"), // legacy un-stripped vendor prefix
+                entry("claude-opus-4-5"),         // current key — must survive
+            ])
+            .expect("seed rows");
+
+        // Re-running migrations is a no-op once user_version is current, so
+        // rewind it to simulate a store written by the previous release.
+        {
+            let conn = store.conn.lock().expect("lock");
+            conn.execute_batch("PRAGMA user_version = 0")
+                .expect("rewind version");
+        }
+        store.migrate().expect("migrate");
+
+        let breakdown = store
+            .get_model_breakdown(ProviderId::Claude, 30)
+            .expect("load breakdown");
+        let models: Vec<&str> = breakdown.iter().map(|b| b.model.as_str()).collect();
+        assert_eq!(models, vec!["claude-opus-4-5"]);
+
+        // And it must not re-run and delete anything on the next open.
+        store.migrate().expect("migrate again");
+        assert_eq!(
+            store
+                .get_model_breakdown(ProviderId::Claude, 30)
+                .expect("reload")
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn migration_v2_drops_rows_for_retired_providers() {
+        let store = temp_store("migration-v2");
+
+        // `gemini` predates the Antigravity rename and is no longer a
+        // ProviderId, so this row is unreachable through every read path.
+        {
+            let conn = store.conn.lock().expect("lock");
+            conn.execute(
+                "INSERT INTO cost_entries(day, provider, model, input_tokens, output_tokens,
+                    cache_read_tokens, cache_write_tokens, estimated_cost_usd)
+                 VALUES ('2026-09-04', 'gemini', 'gemini-2.5-pro', 10, 5, 0, 0, 1.0)",
+                [],
+            )
+            .expect("seed retired-provider row");
+            conn.execute_batch("PRAGMA user_version = 0")
+                .expect("rewind version");
+        }
+
+        store.migrate().expect("migrate");
+
+        let remaining: i64 = {
+            let conn = store.conn.lock().expect("lock");
+            conn.query_row(
+                "SELECT COUNT(*) FROM cost_entries WHERE provider = 'gemini'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count")
+        };
+        assert_eq!(remaining, 0);
     }
 
     fn sample_entry(

@@ -2112,46 +2112,47 @@ fn collect_jsonl_recursive(root: &Path, out: &mut Vec<PathBuf>) {
 // by the scanners above.
 use crate::pricing::{claude_cost_usd, codex_cost_usd};
 
+/// Normalize an OpenAI/Codex model id.
+///
+/// Only the vendor prefix is stripped; the version is deliberately preserved so
+/// `pricing::codex_rates` can tell `gpt-5-mini` from `gpt-5`. The previous
+/// implementation collapsed anything matching `openai/gpt-5` down to `gpt-5`
+/// *before* testing the `-mini` / `-nano` suffixes, which billed
+/// `openai/gpt-5-nano` at 25× its real rate.
 fn normalize_codex_model(model: &str) -> String {
     let raw = model.trim().to_ascii_lowercase();
-    if raw.contains("gpt-5-codex") || raw.contains("openai/gpt-5") || raw == "gpt-5" {
-        return "gpt-5".to_string();
-    }
-    if raw.contains("gpt-5-mini") {
-        return "gpt-5-mini".to_string();
-    }
-    if raw.contains("gpt-5-nano") {
-        return "gpt-5-nano".to_string();
-    }
-    if raw.contains("gpt-4.1-mini") {
-        return "gpt-4.1-mini".to_string();
-    }
-    if raw.contains("gpt-4.1") {
-        return "gpt-4.1".to_string();
-    }
-    raw
+    strip_vendor_prefix(&raw).to_string()
 }
 
+/// Normalize a Claude model id to a stable, **version-preserving** key.
+///
+/// Strips the vendor prefix and the trailing `-YYYYMMDD` snapshot date so
+/// `anthropic/claude-sonnet-4-5-20250929` and `claude-sonnet-4-5` collapse onto
+/// one key. The version digits survive because cost is computed from this
+/// normalized name (see `claude_cost_usd` call below) and `pricing::claude_rates`
+/// prices Opus 4.1 ($15/$75) very differently from Opus 4.5+ ($5/$25).
 fn normalize_claude_model(model: &str) -> String {
     let raw = model.trim().to_ascii_lowercase();
-    if raw.contains("opus") {
-        return "claude-opus".to_string();
-    }
-    if raw.contains("sonnet") {
-        return "claude-sonnet".to_string();
-    }
-    if raw.contains("haiku") {
-        return "claude-haiku".to_string();
-    }
-    raw
+    strip_date_suffix(strip_vendor_prefix(&raw)).to_string()
 }
 
 fn normalize_antigravity_model(model: &str) -> String {
+    let raw = model.trim().to_ascii_lowercase();
     // Map legacy branding to new provider name
-    model
-        .trim()
-        .to_ascii_lowercase()
-        .replace(&format!("{}mini", "ge"), "antigravity")
+    strip_vendor_prefix(&raw).replace(&format!("{}mini", "ge"), "antigravity")
+}
+
+/// Drop a `vendor/` prefix (`openai/gpt-5-mini` → `gpt-5-mini`).
+fn strip_vendor_prefix(model: &str) -> &str {
+    model.rsplit('/').next().unwrap_or(model)
+}
+
+/// Drop a trailing `-YYYYMMDD` snapshot suffix, if present.
+fn strip_date_suffix(model: &str) -> &str {
+    match model.rsplit_once('-') {
+        Some((head, tail)) if tail.len() == 8 && tail.bytes().all(|b| b.is_ascii_digit()) => head,
+        _ => model,
+    }
 }
 
 fn pick_first_str(value: &Value, candidates: &[&[&str]]) -> Option<String> {
@@ -2332,6 +2333,36 @@ mod tests {
     use std::fs::{create_dir_all, remove_dir_all, OpenOptions};
     use std::io::Write;
 
+    #[test]
+    fn codex_vendor_prefix_does_not_shadow_size_suffix() {
+        // Regression: the old implementation matched "openai/gpt-5" first and
+        // returned "gpt-5", billing mini at 5× and nano at 25× their real rate.
+        assert_eq!(normalize_codex_model("openai/gpt-5-mini"), "gpt-5-mini");
+        assert_eq!(normalize_codex_model("openai/gpt-5-nano"), "gpt-5-nano");
+        assert_eq!(normalize_codex_model("gpt-5-codex"), "gpt-5-codex");
+    }
+
+    #[test]
+    fn claude_normalization_keeps_version_drops_date() {
+        assert_eq!(
+            normalize_claude_model("claude-sonnet-4-5-20250929"),
+            "claude-sonnet-4-5"
+        );
+        assert_eq!(
+            normalize_claude_model("anthropic/claude-opus-4-1-20250805"),
+            "claude-opus-4-1"
+        );
+        assert_eq!(normalize_claude_model("claude-opus-5"), "claude-opus-5");
+    }
+
+    #[test]
+    fn claude_normalized_ids_still_price() {
+        // The normalized key is what `claude_cost_usd` is called with, so a
+        // regression here silently zeroes out every cost figure in the app.
+        let model = normalize_claude_model("claude-opus-4-5-20251101");
+        assert!(crate::pricing::claude_rates(&model).is_some());
+    }
+
     fn temp_dir(name: &str) -> PathBuf {
         let base = std::env::temp_dir().join(format!("otm-test-{name}-{}", epoch_ms_now()));
         let _ = remove_dir_all(&base);
@@ -2341,8 +2372,15 @@ mod tests {
 
     #[test]
     fn model_aliases_normalize() {
+        // Normalization now only strips the vendor prefix; the variant survives
+        // so the per-model breakdown can distinguish Codex from plain GPT-5.
+        // They still price identically — see `pricing::codex_rates`.
         assert_eq!(normalize_codex_model("openai/gpt-5"), "gpt-5");
-        assert_eq!(normalize_codex_model("gpt-5-codex"), "gpt-5");
+        assert_eq!(normalize_codex_model("gpt-5-codex"), "gpt-5-codex");
+        assert_eq!(
+            crate::pricing::codex_rates("gpt-5-codex"),
+            crate::pricing::codex_rates("gpt-5")
+        );
     }
 
     #[test]
@@ -2429,9 +2467,10 @@ mod tests {
         assert_eq!(cache.contribution.output, 50);
         assert_eq!(cache.contribution.cache_read, 10);
         assert_eq!(cache.contribution.total, 160);
-        // user msg (antigravity-mixed → fallback 0.15/0.60): 100·0.15/1e6 = 0.000015
-        // assistant msg (antigravity-3-flash → 0.30/2.50): 50·2.50/1e6 = 0.000125
-        assert!((cache.contribution.cost - 0.000140).abs() < 0.000001);
+        // user msg (antigravity-mixed → Flash fallback 0.75 in): 100·0.75/1e6 = 0.000075
+        // assistant msg (antigravity-3-flash → 0.75/0.075/3.75):
+        //   10 cached·0.075/1e6 + 50 out·3.75/1e6 = 0.00000075 + 0.0001875
+        assert!((cache.contribution.cost - 0.00026325).abs() < 0.000001);
         assert!(cache.contribution.daily.contains_key("2026-03-22"));
 
         let _ = remove_dir_all(dir);
@@ -2545,7 +2584,9 @@ mod tests {
         let entries = collect_claude_recent_entries(&messages);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].prompt, "install binwalk");
-        assert_eq!(entries[0].model.as_deref(), Some("claude-opus"));
+        // The version is preserved now — collapsing to "claude-opus" made it
+        // impossible to price Opus 4.1 ($15/$75) apart from Opus 4.6 ($5/$25).
+        assert_eq!(entries[0].model.as_deref(), Some("claude-opus-4-6"));
         assert_eq!(
             entries[0].response.as_deref(),
             Some("I can help with that.")

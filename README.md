@@ -16,7 +16,7 @@ One window for every usage gauge, cost trend, and recent prompt — without hand
 [![SQLite](https://img.shields.io/badge/SQLite-bundled-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.3-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
+[![Version](https://img.shields.io/badge/version-0.3.6-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#-installation)
 [![Local-First](https://img.shields.io/badge/data-local--first-success.svg)](#-data--privacy)
 
@@ -36,7 +36,7 @@ You're juggling **three coding agents** at once — Claude, Codex, and Antigravi
 
 - 📊 reads your **local CLI artifacts first** (`~/.claude`, `~/.codex`, `~/Library/Application Support/Antigravity/logs`)
 - 🔐 augments them with **live OAuth fetches** when credentials are present — never proxied through a third party
-- 💸 computes **accurate per-model cost** using current Q1 2026 published rates
+- 💸 computes **accurate per-model cost** using published list rates, reviewed September 2026
 - 🛟 keeps providers **visible even when offline**, surfacing health status instead of silently dropping them
 
 Everything stays on your machine. Snapshots persist in a local SQLite store; nothing leaves the device.
@@ -68,21 +68,32 @@ Everything stays on your machine. Snapshots persist in a local SQLite store; not
 - **Single-instance enforcement** — autostart launch + manual click no longer fight over the SQLite store
 - **Bundled WebView2 bootstrapper** — Windows MSI installs cleanly on machines without WebView2 pre-installed
 
-### 💰 Accurate Cost Estimation (Q1 2026 rates)
+### 💰 Accurate Cost Estimation (rates reviewed September 2026)
 
 All model rates live in a single source-of-truth: [`src-tauri/src/pricing.rs`](./src-tauri/src/pricing.rs).
+Rates are version-aware — Opus 4.1 and Opus 4.5 are priced differently, and the
+model id from your local logs keeps its version digits so the right tier is used.
 
 | Family | Tier | Rate (input / output per 1M tokens) |
 |---|---|---|
-| Claude | Opus 4.x | $15.00 / $75.00 |
-| Claude | Sonnet 4.x | $3.00 / $15.00 |
+| Claude | Fable / Mythos 5.x | $10.00 / $50.00 |
+| Claude | Opus 4.5 · 4.6 · 4.7 · 4.8 · 5 | $5.00 / $25.00 |
+| Claude | Opus 4 · 4.1 (legacy) | $15.00 / $75.00 |
+| Claude | Sonnet 5 | $2.00 / $10.00 |
+| Claude | Sonnet 4 · 4.5 · 4.6 | $3.00 / $15.00 |
 | Claude | Haiku 4.5 | $1.00 / $5.00 |
-| OpenAI | GPT-5 | $1.25 / $10.00 |
+| OpenAI | GPT-6 | $10.00 / $50.00 |
+| OpenAI | GPT-5.5 · 5.5 Pro | $5.00 / $30.00 · $30.00 / $180.00 |
+| OpenAI | GPT-5.2 · 5.3-codex | $1.75 / $14.00 |
+| OpenAI | GPT-5 · 5.1 | $1.25 / $10.00 |
 | OpenAI | GPT-5 mini / nano | $0.25 / $2.00 · $0.05 / $0.40 |
 | OpenAI | o3 / o4-mini | $2.00 / $8.00 · $1.10 / $4.40 |
-| Antigravity | Gemini 3 Pro / Flash / Flash-Lite | $1.25 / $10.00 · $0.30 / $2.50 · $0.10 / $0.40 |
+| Antigravity | 3.x Pro | $2.00 / $12.00 |
+| Antigravity | 3.6–3.8 Flash | $0.75 / $3.75 |
+| Antigravity | 2.5 Pro / Flash / Flash-Lite | $1.25 / $10.00 · $0.30 / $2.50 · $0.10 / $0.40 |
 
 Caching discounts and cache-write surcharges are applied where each provider exposes them.
+Antigravity's 3.6–3.8 Flash input rate is promotional and doubles on 2027-01-01.
 
 ### ⌨️ Keyboard Shortcuts
 
@@ -122,6 +133,20 @@ Grab the latest installer for your OS from [GitHub Releases](https://github.com/
 [![macOS Intel](https://img.shields.io/badge/macOS-Intel%20DMG-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon%20DMG-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
 [![Linux](https://img.shields.io/badge/Linux-DEB-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
+
+#### First launch on macOS
+
+Release builds are signed with a Developer ID certificate and notarized by Apple,
+so they open normally. If you built from source yourself, the bundle is ad-hoc
+signed and macOS will say it *"cannot verify the developer"* — right-click the app
+and choose **Open**, then **Open** again in the dialog. You only need to do this once.
+
+#### First launch on Windows
+
+If SmartScreen shows **"Windows protected your PC"**, click **More info → Run anyway**.
+This appears on installers whose signing certificate has not yet accumulated
+download reputation with Microsoft, and it disappears as the release matures.
+The installer runs per-user and does not ask for administrator rights.
 
 ### Build from source
 
@@ -212,8 +237,15 @@ Key entry points:
 ## 🔒 Data & Privacy
 
 - 🏠 **100 % local.** All snapshots, costs, and recent activity are stored in a local SQLite file under your OS app-data directory.
-- 🔑 **Credentials never leave the device.** OAuth tokens are read from the official CLI keychain entries; API requests go directly from your machine to Anthropic / OpenAI / Antigravity (Google Cloud).
+- 🔑 **Credentials never leave the device.** OAuth tokens are read from the official CLI keychain entries; API requests go directly from your machine to Anthropic / OpenAI / Antigravity.
 - 🚫 **No telemetry.** No analytics, no crash reporting, no phone-home.
+- 🔤 **Fonts are bundled, not fetched.** Manrope and JetBrains Mono ship inside the
+  app (`public/fonts/`). Nothing is loaded from Google Fonts or any other CDN.
+- 🔍 **Verify it yourself.** Point a network monitor at the app. The only outbound
+  connections are `api.anthropic.com`, `chatgpt.com`, `auth.openai.com`, and —
+  only when you have the auto-updater configured — GitHub Releases. The webview
+  is additionally locked down by a [Content Security Policy](./src-tauri/tauri.conf.json)
+  that permits exactly those hosts.
 - 🧹 **Reset by deleting** the app-data SQLite file (`%APPDATA%\com.opentokenmonitor.desktop\usage.db` on Windows; equivalents on macOS / Linux).
 
 ---

@@ -1,6 +1,8 @@
+import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useState } from 'react';
 import { check, type Update, type DownloadEvent } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { isTauriRuntime } from '@/utils/runtime';
 
 export function UpdateChecker() {
   const [update, setUpdate] = useState<Update | null>(null);
@@ -11,7 +13,14 @@ export function UpdateChecker() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (!isTauriRuntime()) return;
       try {
+        // Builds without a real signing keypair can never install an update, so
+        // asking the release endpoint just produces a 404 and a console error on
+        // every launch. Skip the round trip entirely.
+        const configured = await invoke<boolean>('is_updater_configured');
+        if (cancelled || !configured) return;
+
         const result = await check();
         if (!cancelled && result?.available) {
           setUpdate(result);

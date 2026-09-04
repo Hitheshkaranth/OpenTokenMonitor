@@ -82,7 +82,7 @@ impl AppState {
             registry,
             store,
             api_keys: Mutex::new(initial_keys),
-            cadence: Mutex::new(RefreshCadence::Every1m),
+            cadence: Mutex::new(RefreshCadence::Every2m),
             scheduler: PollScheduler::new(),
         })
     }
@@ -373,7 +373,7 @@ pub fn run() {
 
             {
                 let state_ref = app.state::<AppState>();
-                restart_scheduler(app.handle(), &state_ref, RefreshCadence::Every1m);
+                restart_scheduler(app.handle(), &state_ref, RefreshCadence::Every2m);
             }
 
             // Initial bootstrap refresh so the UI has data on first paint.
@@ -425,6 +425,7 @@ pub fn run() {
             commands::get_launch_at_startup,
             commands::set_launch_at_startup,
             commands::quit_app,
+            commands::is_updater_configured,
         ])
         .run(tauri::generate_context!());
 

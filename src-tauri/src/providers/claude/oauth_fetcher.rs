@@ -8,6 +8,10 @@ pub struct ClaudeOauthWindow {
     pub five_hour_utilization: f64,
     pub seven_day_utilization: f64,
     pub seven_day_opus_utilization: f64,
+    /// Whether the API actually reported an Opus window. Distinguishes "Opus
+    /// quota is at 0%" from "this plan has no Opus window", so the gauge does
+    /// not vanish and reappear between polls.
+    pub has_opus_window: bool,
     pub five_hour_resets_at: Option<DateTime<Utc>>,
     pub seven_day_resets_at: Option<DateTime<Utc>>,
     /// Extra/Max usage credits info (when enabled on the plan).
@@ -21,9 +25,13 @@ pub struct ExtraUsageInfo {
     pub utilization: f64,
 }
 
+/// Marker prefix on rate-limit errors so `fetch_usage` can stop early instead of
+/// retrying a second endpoint behind the same limiter.
+const RATE_LIMITED_PREFIX: &str = "429 rate limited";
+
 /// Endpoints to try in order. The legacy `usage` endpoint has a known response
 /// format; the newer `client_data` endpoint (used by Claude Code v2.1+) is tried
-/// as a fallback when the primary is rate-limited or unavailable.
+/// as a fallback when the primary is unavailable or returns an unexpected shape.
 const ENDPOINTS: &[&str] = &[
     "https://api.anthropic.com/api/oauth/usage",
     "https://api.anthropic.com/api/oauth/claude_cli/client_data",
@@ -43,7 +51,15 @@ pub async fn fetch_usage(token: &str) -> Result<ClaudeOauthWindow, String> {
             Ok(window) => return Ok(window),
             Err(e) => {
                 warn!("[claude] endpoint {endpoint} failed: {e}");
+                let rate_limited = e.starts_with(RATE_LIMITED_PREFIX);
                 last_err = e;
+                if rate_limited {
+                    // Both endpoints share one rate limiter, so trying the next
+                    // one just burns another request and deepens the throttle.
+                    // Bail out and let the provider-level backoff serve the
+                    // last known-good snapshot instead.
+                    break;
+                }
             }
         }
     }
@@ -56,12 +72,13 @@ async fn try_endpoint(
     endpoint: &str,
     token: &str,
 ) -> Result<ClaudeOauthWindow, String> {
-    // Retry up to 3 times with exponential backoff for 429 errors
+    // One retry for a transient 429. Anything more multiplies request volume
+    // against the same limiter that just rejected us; `ClaudeProvider` already
+    // applies a 30s→600s exponential backoff on top of this.
     let mut last_err = String::new();
-    for attempt in 0..3 {
+    for attempt in 0..2 {
         if attempt > 0 {
-            let delay = std::time::Duration::from_millis(500 * (1 << attempt)); // 1s, 2s
-            tokio::time::sleep(delay).await;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
 
         let res = match client
@@ -83,7 +100,7 @@ async fn try_endpoint(
         let status = res.status();
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
             let body = res.text().await.unwrap_or_default();
-            last_err = format!("429 rate limited (attempt {}): {body}", attempt + 1);
+            last_err = format!("{RATE_LIMITED_PREFIX} (attempt {}): {body}", attempt + 1);
             warn!("[claude] OAuth: {last_err}");
             continue;
         }
@@ -99,13 +116,25 @@ async fn try_endpoint(
         return parse_usage_response(payload);
     }
 
-    Err(format!("rate limited after 3 attempts: {last_err}"))
+    Err(last_err)
 }
 
 fn parse_usage_response(payload: Value) -> Result<ClaudeOauthWindow, String> {
     // Try to find the usage data — it could be at the top level (legacy endpoint),
     // nested under "usage" or "rate_limits" (client_data endpoint), or elsewhere.
-    let root = find_usage_root(&payload);
+    //
+    // If no recognizable window object is present we MUST fail rather than fall
+    // through: every field below is read with `unwrap_or(0.0)`, so an unexpected
+    // 200 response would otherwise parse as a perfectly valid "0% used"
+    // snapshot. That snapshot then gets cached as the last known-good value and
+    // persisted over the real one, which is what makes the gauges collapse to
+    // zero for no visible reason.
+    let Some(root) = find_usage_root(&payload) else {
+        return Err(
+            "response contained no five_hour/seven_day usage window (unexpected payload shape)"
+                .to_string(),
+        );
+    };
 
     let f = root.get("five_hour").cloned().unwrap_or(Value::Null);
     let s = root.get("seven_day").cloned().unwrap_or(Value::Null);
@@ -139,6 +168,7 @@ fn parse_usage_response(payload: Value) -> Result<ClaudeOauthWindow, String> {
         five_hour_utilization: f.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
         seven_day_utilization: s.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
         seven_day_opus_utilization: o.get("utilization").and_then(Value::as_f64).unwrap_or(0.0),
+        has_opus_window: o.is_object(),
         five_hour_resets_at: parse_dt(f.get("resets_at").and_then(Value::as_str)),
         seven_day_resets_at: parse_dt(s.get("resets_at").and_then(Value::as_str)),
         extra_usage,
@@ -159,33 +189,38 @@ fn parse_usage_response(payload: Value) -> Result<ClaudeOauthWindow, String> {
 
 /// Walk the JSON payload to find the object containing `five_hour` / `seven_day` keys.
 /// Supports: top-level, nested under "usage", "rate_limits", or one level deep in any key.
-fn find_usage_root(payload: &Value) -> &Value {
+///
+/// Returns `None` when no such object exists. Callers must treat that as a hard
+/// error — see the note in `parse_usage_response`.
+fn find_usage_root(payload: &Value) -> Option<&Value> {
+    fn has_window(value: &Value) -> bool {
+        value.get("five_hour").is_some() || value.get("seven_day").is_some()
+    }
+
     // Direct top-level match
-    if payload.get("five_hour").is_some() || payload.get("seven_day").is_some() {
-        return payload;
+    if has_window(payload) {
+        return Some(payload);
     }
 
     // Known nesting keys
     for key in &["usage", "rate_limits", "rateLimits", "data"] {
         if let Some(inner) = payload.get(key) {
-            if inner.get("five_hour").is_some() || inner.get("seven_day").is_some() {
-                return inner;
+            if has_window(inner) {
+                return Some(inner);
             }
         }
     }
 
     // Scan one level deep for any object containing usage fields
     if let Some(obj) = payload.as_object() {
-        for (_key, val) in obj {
-            if val.is_object() && (val.get("five_hour").is_some() || val.get("seven_day").is_some())
-            {
-                return val;
+        for val in obj.values() {
+            if val.is_object() && has_window(val) {
+                return Some(val);
             }
         }
     }
 
-    // Fallback — return payload as-is and let the caller handle missing fields
-    payload
+    None
 }
 
 fn parse_dt(value: Option<&str>) -> Option<DateTime<Utc>> {

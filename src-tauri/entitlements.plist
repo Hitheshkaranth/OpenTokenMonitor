@@ -2,17 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <!-- Not sandboxed: the app's entire job is reading CLI artifacts outside its
+       container (~/.claude, ~/.codex, Antigravity logs) and the login keychain. -->
   <key>com.apple.security.app-sandbox</key>
   <false/>
+
+  <!-- Outbound only, to the three provider APIs. -->
   <key>com.apple.security.network.client</key>
   <true/>
-  <key>com.apple.security.files.user-selected.read-only</key>
-  <false/>
+
+  <!-- WebKit's JavaScript JIT requires this. It is the only hardened-runtime
+       exception this app actually needs.
+
+       Deliberately NOT set (both were previously enabled and neither is used):
+         com.apple.security.cs.disable-library-validation
+           - would let any unsigned dylib load into the process, which defeats
+             most of what notarization is meant to guarantee.
+         com.apple.security.cs.allow-unsigned-executable-memory
+           - superseded by allow-jit for WebKit; broader than we need. -->
   <key>com.apple.security.cs.allow-jit</key>
-  <true/>
-  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
-  <true/>
-  <key>com.apple.security.cs.disable-library-validation</key>
   <true/>
 </dict>
 </plist>

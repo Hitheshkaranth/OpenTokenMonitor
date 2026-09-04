@@ -29,7 +29,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       enabledProviders: { claude: true, codex: true, antigravity: true },
-      refreshCadence: 'every1m',
+      refreshCadence: 'every2m',
       apiKeys: { claude: '', codex: '', antigravity: '' },
       theme: 'system',
       widgetMode: false,

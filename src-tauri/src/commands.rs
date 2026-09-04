@@ -27,6 +27,32 @@ use crate::{
     clear_persisted_api_key, persist_api_key, resolve_log_dir, restart_scheduler, AppState,
 };
 
+// ───────────────────────── Updater ─────────────────────────
+
+/// Placeholder shipped in `tauri.conf.json` before a real signing keypair is
+/// generated. See BUILDING.md → "Release signing".
+const UPDATER_PUBKEY_PLACEHOLDER: &str = "PUBKEY_PLACEHOLDER";
+
+/// Whether this build has a real updater signing key configured.
+///
+/// The frontend checks this before calling `check()`. Without it, a build with
+/// an unconfigured key fires a doomed request at the release endpoint on every
+/// launch and surfaces a console error the user can do nothing about.
+#[tauri::command]
+pub fn is_updater_configured(app: AppHandle) -> bool {
+    app.config()
+        .plugins
+        .0
+        .get("updater")
+        .and_then(|cfg| cfg.get("pubkey"))
+        .and_then(|key| key.as_str())
+        .map(|key| {
+            let key = key.trim();
+            !key.is_empty() && key != UPDATER_PUBKEY_PLACEHOLDER
+        })
+        .unwrap_or(false)
+}
+
 // ───────────────────────── Snapshot reads ─────────────────────────
 
 #[tauri::command]

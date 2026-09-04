@@ -93,7 +93,10 @@ fn spawn_refresh_all(app: &AppHandle) {
 /// Build the tray icon, menu, and click handlers, then store the icon in
 /// Tauri-managed state so tooltip updates can find it later.
 pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
-    let icon_bytes_png: &[u8] = include_bytes!("../../open_token_monitor_icon.png");
+    // Sourced from `public/` so the tray icon and the webview favicon are the
+    // same single file. There used to be an identical copy at the repo root
+    // purely for this `include_bytes!`.
+    let icon_bytes_png: &[u8] = include_bytes!("../../public/open_token_monitor_icon.png");
     let img = image::load_from_memory_with_format(icon_bytes_png, image::ImageFormat::Png)
         .map_err(|e| tauri::Error::Io(std::io::Error::other(e)))?
         .to_rgba8();

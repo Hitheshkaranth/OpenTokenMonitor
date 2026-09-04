@@ -198,8 +198,11 @@ impl UsageProvider for ClaudeProvider {
                             "Claude OAuth reports utilization for the 7-day subscriber window.",
                         ),
                     ];
-                    // Only add the Opus window if the API actually reports it (non-zero)
-                    if oauth.seven_day_opus_utilization > 0.0 {
+                    // Add the Opus window whenever the API *reports* one, even at
+                    // 0%. Keying off a non-zero utilization made the gauge
+                    // disappear from the card the moment Opus quota reset, which
+                    // reads as "my usage vanished" rather than "quota is fresh".
+                    if oauth.has_opus_window {
                         windows.push(UsageWindow::percent(
                             WindowType::Weekly,
                             oauth.seven_day_opus_utilization,

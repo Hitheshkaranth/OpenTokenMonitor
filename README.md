@@ -16,7 +16,7 @@ One window for every usage gauge, cost trend, and recent prompt — without hand
 [![SQLite](https://img.shields.io/badge/SQLite-bundled-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.6-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
+[![Version](https://img.shields.io/badge/version-0.3.7-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#-installation)
 [![Local-First](https://img.shields.io/badge/data-local--first-success.svg)](#-data--privacy)
 

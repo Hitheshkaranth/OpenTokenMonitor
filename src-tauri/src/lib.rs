@@ -355,6 +355,12 @@ pub fn run() {
                     MacosLauncher::LaunchAgent,
                     Some(vec!["--autostart"]),
                 ))?;
+
+                // Self-heal: if autostart is enabled, rewrite the entry to point
+                // at this (installed/release) binary. Corrects a stale path left
+                // by a prior `tauri dev` session, which otherwise launches a dev
+                // build with no UI server at boot and appears to crash.
+                autostart::heal_autostart_path(app.handle());
             }
 
             let state = AppState::new(app.handle())

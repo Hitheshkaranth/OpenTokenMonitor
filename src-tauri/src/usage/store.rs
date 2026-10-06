@@ -23,7 +23,35 @@ impl UsageStore {
             conn: Arc::new(Mutex::new(conn)),
         };
         store.init_schema()?;
+        store.purge_legacy_rows()?;
         Ok(store)
+    }
+
+    /// Delete cost rows the current scanners can never write: unversioned
+    /// model keys (`claude-opus`), un-stripped vendor prefixes, and retired
+    /// provider ids (`gemini`). Migrations v1/v2 did this once, but an older
+    /// build sharing the same database (e.g. a not-yet-updated install) can
+    /// write them again, and since a fresh scan writes the versioned key
+    /// alongside, the same usage is then counted twice. Running on every open
+    /// is cheap and idempotent; the rows are re-derived from local logs.
+    fn purge_legacy_rows(&self) -> Result<(), String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
+        let removed = conn
+            .execute(
+                "DELETE FROM cost_entries
+                  WHERE model IN ('claude-opus', 'claude-sonnet', 'claude-haiku')
+                     OR model LIKE '%/%'
+                     OR provider NOT IN ('claude', 'codex', 'antigravity')",
+                [],
+            )
+            .map_err(|e| e.to_string())?;
+        if removed > 0 {
+            tracing::info!("[store] purged {removed} legacy cost rows on open");
+        }
+        Ok(())
     }
 
     fn init_schema(&self) -> Result<(), String> {
@@ -703,5 +731,64 @@ mod tests {
             .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].utilization, 7.0);
+    }
+
+    #[test]
+    fn reopening_purges_legacy_rows_written_after_migration() {
+        let path = std::env::temp_dir().join(format!(
+            "otm-store-purge-{}.db",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        let store = UsageStore::open(&path).unwrap();
+        let entry = |provider: ProviderId, model: &str| CostEntry {
+            date: "2026-09-04".to_string(),
+            provider,
+            model: model.to_string(),
+            input_tokens: 10,
+            output_tokens: 5,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            estimated_cost_usd: 1.0,
+        };
+        // Simulate an older build writing a collapsed key after migrations ran.
+        store
+            .save_cost_entries(&[
+                entry(ProviderId::Claude, "claude-opus"),
+                entry(ProviderId::Claude, "claude-opus-5"),
+            ])
+            .unwrap();
+        {
+            let conn = store.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO cost_entries VALUES ('2026-09-04','gemini','g',1,1,0,0,1.0)",
+                [],
+            )
+            .unwrap();
+        }
+        drop(store);
+
+        let store = UsageStore::open(&path).unwrap();
+        let models: Vec<String> = store
+            .get_cost_history(ProviderId::Claude, 30)
+            .unwrap()
+            .into_iter()
+            .map(|e| e.model)
+            .collect();
+        assert_eq!(models, vec!["claude-opus-5".to_string()]);
+        let gemini: i64 = store
+            .conn
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM cost_entries WHERE provider = 'gemini'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(gemini, 0);
+        let _ = std::fs::remove_file(&path);
     }
 }

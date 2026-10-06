@@ -8,6 +8,7 @@ import { useBurnRate, BurnReadout } from '@/hooks/useBurnRate';
 import { getProviderAccessState, providerAccessColor } from '@/utils/providerAccess';
 import { displayWindows } from '@/utils/usageWindows';
 import '@/components/comparison/comparison.css';
+import { formatUsd } from '@/utils/format';
 
 const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
@@ -30,9 +31,6 @@ const formatTokens = (value: number) => {
   return String(Math.round(value));
 };
 
-// Keep large totals narrow enough for the compact window cells.
-const formatUsd = (value: number) =>
-  value >= 1000 ? `$${Math.round(value).toLocaleString()}` : `$${value.toFixed(2)}`;
 
 // Sum the cost buckets that actually fall inside the selected window so the
 // headline number tracks the trend selector rather than everything on record.

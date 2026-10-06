@@ -11,6 +11,7 @@ import {
   SessionUsage,
 } from '@/types';
 import { buildProjectSummaries } from '@/utils/projectActivity';
+import { formatUsd } from '@/utils/format';
 
 type ProjectOverviewProps = {
   recentActivity: Record<ProviderId, RecentActivityEntry[]>;
@@ -172,8 +173,8 @@ const ProjectCard = ({ project }: { project: ProjectCardData }) => {
           </span>
         </div>
         <div className="proj-card-cost-col">
-          <span className="proj-card-cost">${project.costUsd.toFixed(2)}</span>
-          <span className="proj-card-cost-sub">today ${project.todayCostUsd.toFixed(2)}</span>
+          <span className="proj-card-cost">{formatUsd(project.costUsd)}</span>
+          <span className="proj-card-cost-sub">today {formatUsd(project.todayCostUsd)}</span>
         </div>
       </div>
 
@@ -261,15 +262,15 @@ const SessionRow = ({ session }: { session: SessionUsage }) => {
           <span className="proj-chip">{formatTokens(session.total_tokens)} tok</span>
           {session.total_tokens > 0 && <span className="proj-chip">cache {Math.round(hit * 100)}%</span>}
           {session.models.slice(0, 2).map((m) => (
-            <span key={m.model} className="proj-chip proj-chip-model" title={`${m.model} · $${m.cost_usd.toFixed(2)}`}>
+            <span key={m.model} className="proj-chip proj-chip-model" title={`${m.model} · ${formatUsd(m.cost_usd)}`}>
               {shortModel(m.model)}
             </span>
           ))}
         </div>
       </div>
       <div className="proj-card-cost-col">
-        <span className="proj-card-cost">${session.cost_usd.toFixed(2)}</span>
-        {session.today_cost_usd > 0 && <span className="proj-card-cost-sub">today ${session.today_cost_usd.toFixed(2)}</span>}
+        <span className="proj-card-cost">{formatUsd(session.cost_usd)}</span>
+        {session.today_cost_usd > 0 && <span className="proj-card-cost-sub">today {formatUsd(session.today_cost_usd)}</span>}
       </div>
     </div>
   );
@@ -303,7 +304,7 @@ const ProjectOverview = ({ recentActivity, costHistory, projectUsage, sessionUsa
                 ? 'Exact cost from the Claude and Codex session logs still on disk. Claude Code deletes logs after 30 days by default, so older spend is not attributed to projects.'
                 : 'Exact cost from local Claude and Codex session logs'
             }>
-            {periodDays}d · ${exactTotal.toFixed(2)}
+            {periodDays}d · {formatUsd(exactTotal)}
             {periodDays > 30 && ' · logs on disk only'}
           </span>
         </div>

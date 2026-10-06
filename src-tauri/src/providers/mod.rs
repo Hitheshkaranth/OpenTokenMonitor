@@ -36,6 +36,9 @@ impl FetchContext {
     }
 }
 
+// `async_trait` expands each method with a `#[must_use]` on a type that is
+// already must-use; newer clippy flags that inside the macro output.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 // Every provider implementation exposes the same small contract: fetch current
 // usage, fetch cost history, and report health. The registry and aggregator rely

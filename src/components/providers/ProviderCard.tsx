@@ -23,6 +23,7 @@ import {
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { displayWindows, windowLabel, windowValueLabel } from '@/utils/usageWindows';
 import { buildProjectSummaries } from '@/utils/projectActivity';
+import { formatUsd } from '@/utils/format';
 
 const providerMeta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'antigravity'; color: string; accent: string }> = {
   claude: { name: 'Claude', tint: 'claude', color: '#d97757', accent: '217 119 87' },
@@ -274,9 +275,9 @@ const ProviderCard = ({
             <div className="pcard-section-head">
               <span className="pcard-section-title">Cost</span>
               <div className="pcard-cost-pills">
-                <span className="pcard-cost-chip">Today ${costToday.toFixed(2)}</span>
+                <span className="pcard-cost-chip">Today {formatUsd(costToday)}</span>
                 <span className="pcard-cost-chip">
-                  {trend?.days ?? 30}d ${(trend?.total_cost_usd ?? 0) >= 1000 ? Math.round(trend?.total_cost_usd ?? 0).toLocaleString() : (trend?.total_cost_usd ?? 0).toFixed(2)}
+                  {trend?.days ?? 30}d {formatUsd(trend?.total_cost_usd ?? 0)}
                 </span>
               </div>
             </div>
@@ -296,7 +297,7 @@ const ProviderCard = ({
                     <span className="pcard-model-name">{entry.model}</span>
                     <span className="pcard-model-stat">{formatTokens(entry.input_tokens)}in</span>
                     <span className="pcard-model-stat">{formatTokens(entry.output_tokens)}out</span>
-                    <span className="pcard-model-cost">${entry.estimated_cost_usd.toFixed(2)}</span>
+                    <span className="pcard-model-cost">{formatUsd(entry.estimated_cost_usd)}</span>
                   </div>
                 ))}
               </div>
@@ -329,7 +330,7 @@ const ProviderCard = ({
                       {project.path ?? 'session activity'}
                     </span>
                   </div>
-                  <span className="pcard-proj-cost">${project.costUsd.toFixed(2)}</span>
+                  <span className="pcard-proj-cost">{formatUsd(project.costUsd)}</span>
                 </div>
 
                 <div className="pcard-proj-stats">

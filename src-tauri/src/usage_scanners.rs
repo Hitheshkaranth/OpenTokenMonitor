@@ -605,7 +605,7 @@ pub fn scan_session_usage(since_day: &str, today: &str) -> Vec<SessionUsage> {
         }
     }
 
-    out.sort_by(|a, b| b.last_ts.cmp(&a.last_ts));
+    out.sort_by_key(|s| std::cmp::Reverse(s.last_ts));
     out
 }
 

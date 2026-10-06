@@ -16,7 +16,7 @@ One window for every usage gauge, cost trend, and recent prompt — without hand
 [![SQLite](https://img.shields.io/badge/SQLite-bundled-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.7-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#-installation)
 [![Local-First](https://img.shields.io/badge/data-local--first-success.svg)](#-data--privacy)
 
@@ -48,9 +48,19 @@ Everything stays on your machine. Snapshots persist in a local SQLite store; not
 ### 🎯 Core Dashboard
 
 - **Unified overview** — Claude · Codex · Antigravity in one glance, with live usage rings, trend sparklines, and provider health badges
-- **Per-provider detail pages** with cost history, model breakdowns, alert thresholds (75 % / 90 % / 95 %), and recent-prompt activity
-- **Projects view** — recent activity rolled up by workspace with cross-model spend attribution and command summaries
+- **Menu-bar badges** — each provider's logo wrapped in its usage rings, right in the macOS menu bar; click one to open that provider
+- **Time-to-limit forecast** — a *FULL IN* pill appears when a window is on pace to hit 100 % before it resets
+- **Per-provider detail pages** with cost history, model breakdowns, cache-hit rate, prompt-cache savings, and model spend mix
+- **Exact project & session costs** — read from Claude and Codex session logs, not estimated; switch between Projects and Sessions
+- **Compare view** — spend share and side-by-side usage for every provider
 - **Compact widget mode** — fixed-size always-on-top panel for at-a-glance gauges and reset countdowns
+
+### 🔔 Alerts, Budgets & Export
+
+- **Desktop notifications** raised by the backend, so they work with the window hidden: once per threshold crossing (per-provider ladders), when you're on pace to hit a limit before reset, and when spend is projected over budget
+- **Budgets** per provider with spend forecasting
+- **Export** usage reports to CSV, JSON, or printable HTML/PDF
+- **Per-provider refresh cadence** and a 7 / 30 / 90-day or custom trend period
 
 ### 🔌 Provider Intelligence
 
@@ -109,13 +119,21 @@ Antigravity's 3.6–3.8 Flash input rate is promotional and doubles on 2027-01-0
 
 ## 📸 Screens
 
-| Overview | Projects |
+| Overview | Provider Detail |
 |---|---|
-| ![Overview](./docs/images/overview-0.3.1.png) | ![Projects](./docs/images/projects-0.3.1.png) |
+| ![Overview](./docs/images/overview-0.4.0.png) | ![Provider detail](./docs/images/provider-detail-0.4.0.png) |
 
-| Provider Detail | Widget Mode |
+| Projects | Sessions |
 |---|---|
-| ![Provider detail](./docs/images/provider-detail-0.3.1.png) | ![Widget](./docs/images/widget-0.3.1.png) |
+| ![Projects](./docs/images/projects-0.4.0.png) | ![Sessions](./docs/images/sessions-0.4.0.png) |
+
+| Compare | Widget Mode |
+|---|---|
+| ![Compare](./docs/images/compare-0.4.0.png) | ![Widget](./docs/images/widget-0.3.1.png) |
+
+**Menu bar** — logo + usage rings per provider (outer ring: primary window, inner ring: secondary)
+
+![Menu-bar badges](./docs/images/menubar-0.4.0.png)
 
 | Settings |
 |---|
@@ -252,11 +270,14 @@ Key entry points:
 
 ## 🗺️ Roadmap
 
-- [ ] Per-project budget alerts with native notifications
-- [ ] Export usage reports to CSV / JSON / PDF
-- [ ] Custom refresh cadences per provider
-- [ ] Cursor / Aider / Continue.dev provider adapters
-- [ ] Multi-month spend forecasting
+- [x] Budget alerts with native notifications
+- [x] Export usage reports to CSV / JSON / PDF
+- [x] Custom refresh cadences per provider
+- [x] Time-to-limit forecasting and exact per-project / per-session costs
+- [ ] Keep project history beyond Claude Code's 30-day log cleanup
+- [ ] Claude Code statusline integration and a local CLI / JSON state file
+- [ ] Windows/Linux per-provider tray badges
+- [ ] OpenCode / Gemini CLI / Copilot CLI / Cursor provider adapters
 
 Have a request? [Open an issue](https://github.com/Hitheshkaranth/OpenTokenMonitor/issues/new).
 

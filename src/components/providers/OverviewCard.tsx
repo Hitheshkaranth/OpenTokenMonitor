@@ -13,6 +13,7 @@ import {
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { displayWindows } from '@/utils/usageWindows';
 import { useUsageStore } from '@/stores/usageStore';
+import { formatUsd } from '@/utils/format';
 
 const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'antigravity'; color: string }> = {
   claude: { label: 'Claude', tint: 'claude', color: '#d97757' },
@@ -160,9 +161,9 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
           <Sparkline points={trend?.points ?? []} color={meta.color} height={36} />
         </div>
         <div className="overview-card-cost-row">
-          <span className="overview-card-cost">${costToday.toFixed(2)}</span>
+          <span className="overview-card-cost">{formatUsd(costToday)}</span>
           <span className="overview-card-cost-label">
-            / ${trend?.total_cost_usd.toFixed(2) ?? '0.00'} 30d
+            / {formatUsd(trend?.total_cost_usd ?? 0)} {trend?.days ?? 30}d
           </span>
         </div>
       </div>

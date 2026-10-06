@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { ModelBreakdownEntry, ProviderId } from '@/types';
+import { formatUsd } from '@/utils/format';
 
 type UsageInsightsProps = {
   provider: ProviderId;
@@ -52,7 +53,7 @@ const UsageInsights = ({ provider, breakdown }: UsageInsightsProps) => {
           )}
           {insights.saved >= 0.01 && (
             <span className="pcard-cost-chip" title="Cache reads priced at the full input rate, minus what they actually cost">
-              Cache saved ${insights.saved >= 1000 ? Math.round(insights.saved).toLocaleString() : insights.saved.toFixed(2)}
+              Cache saved {formatUsd(insights.saved)}
             </span>
           )}
         </div>

@@ -1143,8 +1143,11 @@
 
 .overview-card-cost-row {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: baseline;
-  gap: 3px;
+  gap: 1px 3px;
+  max-width: 100%;
   white-space: nowrap;
 }
 

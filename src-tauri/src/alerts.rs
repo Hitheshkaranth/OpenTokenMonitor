@@ -59,15 +59,22 @@ pub fn snapshot_percent(snapshot: &UsageSnapshot) -> f64 {
 /// - `>= high`     → High, `threshold_percent = high`
 /// - `>= warning`  → Warning, `threshold_percent = warning`
 /// - below         → no alert
-pub fn build_alerts_with_thresholds(snapshots: &[UsageSnapshot], thresholds: &ThresholdConfig) -> Vec<UsageAlert> {
+pub fn build_alerts_with_thresholds(
+    snapshots: &[UsageSnapshot],
+    thresholds: &ThresholdConfig,
+) -> Vec<UsageAlert> {
     let mut alerts = Vec::new();
     for snapshot in snapshots {
         for window in &snapshot.windows {
             let utilization = window.utilization.clamp(0.0, 100.0);
             let (threshold_percent, severity): (u8, Option<AlertSeverity>) = match utilization {
-                u if u >= thresholds.critical as f64 => (thresholds.critical, Some(AlertSeverity::Critical)),
+                u if u >= thresholds.critical as f64 => {
+                    (thresholds.critical, Some(AlertSeverity::Critical))
+                }
                 u if u >= thresholds.high as f64 => (thresholds.high, Some(AlertSeverity::High)),
-                u if u >= thresholds.warning as f64 => (thresholds.warning, Some(AlertSeverity::Warning)),
+                u if u >= thresholds.warning as f64 => {
+                    (thresholds.warning, Some(AlertSeverity::Warning))
+                }
                 _ => (0, None),
             };
 
@@ -167,7 +174,11 @@ mod tests {
 
     #[test]
     fn custom_thresholds_are_applied() {
-        let custom = ThresholdConfig { warning: 60, high: 80, critical: 92 };
+        let custom = ThresholdConfig {
+            warning: 60,
+            high: 80,
+            critical: 92,
+        };
         let alerts = build_alerts_with_thresholds(
             &[
                 snapshot_with_utilization(ProviderId::Claude, 65.0),

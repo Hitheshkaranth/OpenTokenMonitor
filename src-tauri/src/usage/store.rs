@@ -673,7 +673,9 @@ mod tests {
         duplicate.windows[0].utilization = 99.0;
         store.append_snapshot_history(&older).unwrap();
         store.append_snapshot_history(&duplicate).unwrap();
-        store.append_snapshot_history(&history_snapshot(0, 20.0)).unwrap();
+        store
+            .append_snapshot_history(&history_snapshot(0, 20.0))
+            .unwrap();
 
         let rows = store
             .get_snapshot_history(ProviderId::Claude, WindowType::FiveHour, 0)
@@ -693,7 +695,9 @@ mod tests {
         store
             .append_snapshot_history(&history_snapshot(40 * 24 * 3600, 5.0))
             .unwrap();
-        store.append_snapshot_history(&history_snapshot(0, 7.0)).unwrap();
+        store
+            .append_snapshot_history(&history_snapshot(0, 7.0))
+            .unwrap();
         let rows = store
             .get_snapshot_history(ProviderId::Claude, WindowType::FiveHour, 0)
             .unwrap();

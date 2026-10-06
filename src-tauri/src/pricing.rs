@@ -546,6 +546,9 @@ mod tests {
         // Haiku 4.5: $1.00 input, $0.10 cache read per 1M.
         let saved = cache_savings_usd(ProviderId::Claude, "claude-haiku-4-5", 1_000_000);
         assert!((saved - 0.9).abs() < 1e-9, "saved {saved}");
-        assert_eq!(cache_savings_usd(ProviderId::Codex, "unknown-model-xyz", 1_000_000), 0.0);
+        assert_eq!(
+            cache_savings_usd(ProviderId::Codex, "unknown-model-xyz", 1_000_000),
+            0.0
+        );
     }
 }

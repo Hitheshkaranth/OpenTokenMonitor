@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { useEffect, useMemo, useState } from 'react';
 import NavBar from '@/components/layout/Sidebar';
 import WidgetMode from '@/components/layout/WidgetMode';
@@ -22,6 +23,7 @@ import ErrorBoundary from '@/components/states/ErrorBoundary';
 import ErrorState from '@/components/states/ErrorState';
 import LoadingState from '@/components/states/LoadingState';
 import { UpdateChecker } from '@/components/system/UpdateChecker';
+import { isTauriRuntime } from '@/utils/runtime';
 
 // App is the frontend orchestration layer. It does not own provider-specific
 // parsing logic; instead it coordinates Zustand stores, startup hooks, window
@@ -161,6 +163,18 @@ const App = () => {
       }).catch(() => undefined);
     });
   }, [settingsHydrated]);
+
+  // Clicking a provider's menu-bar badge opens that provider's page.
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    const unlisten = listen<ProviderId>('tray-navigate', (event) => {
+      setWidgetMode(false);
+      setPage(event.payload);
+    });
+    return () => {
+      unlisten.then((fn) => fn()).catch(() => undefined);
+    };
+  }, [setWidgetMode]);
 
   // Desktop notifications are raised by the backend after every refresh (so
   // they work while the window is hidden); the UI only forwards the switch.

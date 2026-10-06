@@ -129,7 +129,11 @@ pub fn evaluate(app: &AppHandle, snapshots: &[UsageSnapshot]) {
     let Some(state) = app.try_state::<AppState>() else {
         return;
     };
-    let enabled = state.notifications_enabled.lock().map(|g| *g).unwrap_or(false);
+    let enabled = state
+        .notifications_enabled
+        .lock()
+        .map(|g| *g)
+        .unwrap_or(false);
     let thresholds = state
         .per_provider_thresholds
         .lock()
@@ -216,7 +220,10 @@ pub fn evaluate(app: &AppHandle, snapshots: &[UsageSnapshot]) {
         notified.insert(budget.provider, forecast.projected_exceeds_budget);
         if forecast.projected_exceeds_budget && !was {
             pending.push(PendingNotification {
-                title: format!("OpenTokenMonitor — {} budget", provider_name(budget.provider)),
+                title: format!(
+                    "OpenTokenMonitor — {} budget",
+                    provider_name(budget.provider)
+                ),
                 body: format!(
                     "Projected ${:.2} exceeds the ${:.2} budget over {}d",
                     forecast.projected_spend_usd, budget.amount_usd, budget.period_days
@@ -240,7 +247,11 @@ mod tests {
         ThresholdConfig::default() // 75 / 90 / 95
     }
 
-    fn step(prev: Option<NotifiedState>, u: f64, resets_at: Option<i64>) -> (NotifiedState, Option<AlertSeverity>) {
+    fn step(
+        prev: Option<NotifiedState>,
+        u: f64,
+        resets_at: Option<i64>,
+    ) -> (NotifiedState, Option<AlertSeverity>) {
         decide(prev, u, resets_at, &t())
     }
 
@@ -294,7 +305,11 @@ mod tests {
 
     #[test]
     fn reset_clears_eta_flag() {
-        let s = NotifiedState { level: 1, resets_at: Some(1000), eta_notified: true };
+        let s = NotifiedState {
+            level: 1,
+            resets_at: Some(1000),
+            eta_notified: true,
+        };
         let (s, _) = step(Some(s), 80.0, Some(50_000));
         assert!(!s.eta_notified);
     }
@@ -303,11 +318,23 @@ mod tests {
     fn eta_notification_rules() {
         let fresh = NotifiedState::default();
         assert!(should_notify_eta(&fresh, 60.0, Some(600), true));
-        assert!(!should_notify_eta(&fresh, 60.0, Some(600), false), "resets first");
-        assert!(!should_notify_eta(&fresh, 60.0, Some(3 * 3600), true), "too far out");
+        assert!(
+            !should_notify_eta(&fresh, 60.0, Some(600), false),
+            "resets first"
+        );
+        assert!(
+            !should_notify_eta(&fresh, 60.0, Some(3 * 3600), true),
+            "too far out"
+        );
         assert!(!should_notify_eta(&fresh, 60.0, None, true));
-        assert!(!should_notify_eta(&fresh, 100.0, Some(0), true), "already full");
-        let sent = NotifiedState { eta_notified: true, ..fresh };
+        assert!(
+            !should_notify_eta(&fresh, 100.0, Some(0), true),
+            "already full"
+        );
+        let sent = NotifiedState {
+            eta_notified: true,
+            ..fresh
+        };
         assert!(!should_notify_eta(&sent, 60.0, Some(600), true));
     }
 

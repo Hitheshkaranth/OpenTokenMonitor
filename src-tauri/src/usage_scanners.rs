@@ -483,7 +483,13 @@ pub fn sorted_model_costs(model_costs: HashMap<String, f64>) -> Vec<ModelCost> {
 }
 
 impl SessionUsage {
-    fn new(provider: ProviderId, session_id: String, cwd: Option<String>, first_ts: Option<i64>, last_ts: Option<i64>) -> Self {
+    fn new(
+        provider: ProviderId,
+        session_id: String,
+        cwd: Option<String>,
+        first_ts: Option<i64>,
+        last_ts: Option<i64>,
+    ) -> Self {
         Self {
             provider,
             session_id,
@@ -530,9 +536,19 @@ pub fn scan_session_usage(since_day: &str, today: &str) -> Vec<SessionUsage> {
                     .unwrap_or(key)
                     .to_string()
             });
-            let mut session = SessionUsage::new(ProviderId::Claude, session_id, c.cwd.clone(), c.first_ts, c.last_ts);
+            let mut session = SessionUsage::new(
+                ProviderId::Claude,
+                session_id,
+                c.cwd.clone(),
+                c.first_ts,
+                c.last_ts,
+            );
             let mut model_costs = HashMap::<String, f64>::new();
-            for point in c.daily_by_model.values().filter(|p| p.day.as_str() >= since_day) {
+            for point in c
+                .daily_by_model
+                .values()
+                .filter(|p| p.day.as_str() >= since_day)
+            {
                 session.input_tokens += point.input_tokens;
                 session.output_tokens += point.output_tokens;
                 session.cache_read_tokens += point.cache_read_input_tokens;
@@ -553,14 +569,29 @@ pub fn scan_session_usage(since_day: &str, today: &str) -> Vec<SessionUsage> {
         let mut guard = cache.lock().expect("codex scanner cache lock poisoned");
         guard.refresh_codex();
         let contributions = dedupe_codex_contributions(
-            guard.files.values().map(|f| f.contribution.clone()).collect(),
+            guard
+                .files
+                .values()
+                .map(|f| f.contribution.clone())
+                .collect(),
         );
         for (i, c) in contributions.into_iter().enumerate() {
             let session_id = c.session_id.clone().unwrap_or_else(|| format!("codex-{i}"));
-            let mut session = SessionUsage::new(ProviderId::Codex, session_id, c.cwd.clone(), c.first_ts, c.last_ts);
+            let mut session = SessionUsage::new(
+                ProviderId::Codex,
+                session_id,
+                c.cwd.clone(),
+                c.first_ts,
+                c.last_ts,
+            );
             let mut model_costs = HashMap::<String, f64>::new();
-            for point in c.daily_by_model.values().filter(|p| p.day.as_str() >= since_day) {
-                session.input_tokens += point.input_tokens.saturating_sub(point.cached_input_tokens);
+            for point in c
+                .daily_by_model
+                .values()
+                .filter(|p| p.day.as_str() >= since_day)
+            {
+                session.input_tokens +=
+                    point.input_tokens.saturating_sub(point.cached_input_tokens);
                 session.cache_read_tokens += point.cached_input_tokens;
                 session.output_tokens += point.output_tokens;
                 session.total_tokens += point.total_tokens;

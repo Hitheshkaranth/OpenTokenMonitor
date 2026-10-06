@@ -137,21 +137,21 @@ const SettingsPage = () => {
     { key: 'providers', label: 'Sources', value: `${enabledCount}/3`, badge: `${activeCount} live`, icon: Server },
   ] as const;
 
-  // Live previews of what each menu-bar mode would show, mirroring the
-  // backend's format_tray_title (cost rows are keyed by UTC day).
+  // Live previews of the text beside each provider's ring badge, mirroring
+  // the backend's build_badges (cost rows are keyed by UTC day).
   const trayPreviews = useMemo(() => {
-    const letters: Record<ProviderId, string> = { claude: 'C', codex: 'X', antigravity: 'A' };
-    const percent = providers
-      .filter((p) => snapshots[p])
-      .map((p) => `${letters[p]} ${Math.round(snapshots[p]?.windows[0]?.utilization ?? 0)}%`)
-      .slice(0, 2)
-      .join(' · ');
+    const live = providers.filter((p) => snapshots[p]).slice(0, 3);
+    const percent = live.map((p) => `${Math.round(snapshots[p]?.windows[0]?.utilization ?? 0)}%`).join(' · ');
     const today = new Date().toISOString().slice(0, 10);
-    const cost = providers
-      .flatMap((p) => costHistory[p] ?? [])
-      .filter((entry) => entry.date === today)
-      .reduce((sum, entry) => sum + entry.estimated_cost_usd, 0);
-    return { off: 'icon only', percent: percent || 'C 0%', cost: `$${cost.toFixed(2)} today` } satisfies Record<TrayTitleMode, string>;
+    const cost = live
+      .map((p) => {
+        const spent = (costHistory[p] ?? [])
+          .filter((entry) => entry.date === today)
+          .reduce((sum, entry) => sum + entry.estimated_cost_usd, 0);
+        return `$${spent.toFixed(0)}`;
+      })
+      .join(' · ');
+    return { off: 'hidden', percent: percent || '0%', cost: cost || '$0' } satisfies Record<TrayTitleMode, string>;
   }, [snapshots, costHistory]);
 
   const trayTitleOptions: { value: TrayTitleMode; label: string }[] = [
@@ -429,7 +429,7 @@ const SettingsPage = () => {
                     key={option.value}
                     className={`stg-cadence-card ${isActive ? 'stg-cadence-card-active' : ''}`}
                     onClick={() => setTrayTitleMode(option.value)}
-                    title="Shows live usage next to the menu-bar icon"
+                    title="One menu-bar badge per provider: its logo wrapped in usage rings, plus this value"
                   >
                     <span className="stg-tray-preview">{trayPreviews[option.value]}</span>
                     <span className="stg-cadence-label">{option.label}</span>

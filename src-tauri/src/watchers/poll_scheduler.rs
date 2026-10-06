@@ -69,8 +69,7 @@ impl PollScheduler {
             for provider in ProviderId::all() {
                 let cb = Arc::clone(&callback);
                 let handle = tauri::async_runtime::spawn(async move {
-                    let mut interval =
-                        tokio::time::interval(std::time::Duration::from_secs(30));
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
                     loop {
                         interval.tick().await;
                         cb(provider);

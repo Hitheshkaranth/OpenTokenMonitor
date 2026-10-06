@@ -11,8 +11,8 @@ use tauri_plugin_notification::NotificationExt;
 use tracing::warn;
 
 use crate::alerts::ThresholdConfig;
-use crate::usage::models::{AlertSeverity, ProviderId};
 use crate::usage::models::UsageAlert;
+use crate::usage::models::{AlertSeverity, ProviderId};
 use crate::AppState;
 
 /// App display name used to anchor notifications to OpenTokenMonitor on macOS
@@ -21,7 +21,7 @@ use crate::AppState;
 const APP_DISPLAY_NAME: &str = "OpenTokenMonitor";
 
 /// Returns every alert that belongs to `provider`.
-fn provider_alerts<'a>(alerts: &'a [UsageAlert], provider: ProviderId) -> Vec<&'a UsageAlert> {
+fn provider_alerts(alerts: &[UsageAlert], provider: ProviderId) -> Vec<&UsageAlert> {
     alerts.iter().filter(|a| a.provider == provider).collect()
 }
 
@@ -52,7 +52,11 @@ pub fn notify_usage_alerts(
         .iter()
         .map(|alert| alert.severity)
         .fold(AlertSeverity::Warning, max_severity);
-    let title = format!("{APP_DISPLAY_NAME} — {} {}", provider.as_str(), severity_label(highest));
+    let title = format!(
+        "{APP_DISPLAY_NAME} — {} {}",
+        provider.as_str(),
+        severity_label(highest)
+    );
 
     show_notification(&app, &title, &body);
     Ok(())
@@ -114,7 +118,11 @@ pub fn set_thresholds(
     high: u8,
     critical: u8,
 ) -> Result<(), String> {
-    let config = ThresholdConfig { warning, high, critical };
+    let config = ThresholdConfig {
+        warning,
+        high,
+        critical,
+    };
     let mut map = state
         .per_provider_thresholds
         .lock()

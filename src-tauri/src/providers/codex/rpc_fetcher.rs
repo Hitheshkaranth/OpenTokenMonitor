@@ -66,8 +66,7 @@ fn cli_command() -> Command {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let command = Command::new(codex_command());
-        command
+        Command::new(codex_command())
     }
 }
 

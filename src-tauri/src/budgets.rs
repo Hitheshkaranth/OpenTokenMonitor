@@ -122,9 +122,7 @@ pub fn compute_forecast(
         .unwrap_or_else(|| effective_days.max(1));
     let projected_spend_usd = daily_average_usd * forecast_window as f64;
 
-    let projected_exceeds_budget = budget_usd
-        .map(|b| projected_spend_usd > b)
-        .unwrap_or(false);
+    let projected_exceeds_budget = budget_usd.map(|b| projected_spend_usd > b).unwrap_or(false);
 
     let utilization_percent = match budget_usd {
         Some(b) if b > 0.0 => (spend_to_date_usd / b) * 100.0,
@@ -180,5 +178,10 @@ pub async fn get_forecast(
     let budget = load_budgets(&app)
         .into_iter()
         .find(|b| b.provider == provider);
-    Ok(compute_forecast(&state.store, budget.as_ref(), provider, days))
+    Ok(compute_forecast(
+        &state.store,
+        budget.as_ref(),
+        provider,
+        days,
+    ))
 }

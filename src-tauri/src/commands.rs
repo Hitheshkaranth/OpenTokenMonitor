@@ -15,8 +15,8 @@ use tracing::warn;
 
 use crate::alerts::{build_alerts_with_thresholds, ThresholdConfig};
 use crate::autostart::{launch_at_startup_enabled, set_launch_at_startup_enabled};
-use crate::providers::auth::AuthState;
 use crate::post_refresh::on_snapshots_updated;
+use crate::providers::auth::AuthState;
 use crate::tray::TrayTitleMode;
 use crate::usage::aggregator;
 use crate::usage::models::{
@@ -330,7 +330,12 @@ pub async fn get_per_provider_cadence(
         .map_err(|_| "cadence lock poisoned".to_string())?
         .get(&provider)
         .copied()
-        .unwrap_or(*state.cadence.lock().map_err(|_| "cadence lock poisoned".to_string())?);
+        .unwrap_or(
+            *state
+                .cadence
+                .lock()
+                .map_err(|_| "cadence lock poisoned".to_string())?,
+        );
     Ok(cadence)
 }
 
@@ -352,8 +357,10 @@ pub async fn quit_app(app: AppHandle) -> Result<(), String> {
 
 // ───────────────────────── Menu bar & notifications ─────────────────────────
 
+/// Async so it runs off the main thread: re-rendering the tray waits on the
+/// main thread, which must stay free.
 #[tauri::command]
-pub fn set_tray_title_mode(
+pub async fn set_tray_title_mode(
     app: AppHandle,
     state: State<'_, AppState>,
     mode: TrayTitleMode,

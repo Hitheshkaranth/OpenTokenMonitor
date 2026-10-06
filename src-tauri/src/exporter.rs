@@ -99,9 +99,15 @@ pub fn render_csv(report: &UsageReport, days: u32) -> String {
     out.push('\n');
     out.push_str("# SUMMARY\n");
     out.push_str(&format!("# report_days,{}\n", days.max(1)));
-    out.push_str(&format!("# generated_at,{}\n", report.generated_at.to_rfc3339()));
+    out.push_str(&format!(
+        "# generated_at,{}\n",
+        report.generated_at.to_rfc3339()
+    ));
     out.push_str(&format!("# providers,{}\n", providers.len()));
-    out.push_str(&format!("# model_entries,{}\n", report.model_breakdowns.len()));
+    out.push_str(&format!(
+        "# model_entries,{}\n",
+        report.model_breakdowns.len()
+    ));
     out.push_str(&format!("# alerts,{}\n", report.alerts.len()));
     out.push_str(&format!("# tokens.input,{}\n", total_input));
     out.push_str(&format!("# tokens.output,{}\n", total_output));
@@ -121,7 +127,13 @@ pub fn render_json(report: &UsageReport) -> String {
 /// Render a usage report as a minimal, self-contained HTML document.
 pub fn render_html(report: &UsageReport) -> String {
     let generated_at = report.generated_at.to_rfc3339();
-    let report_days = report.model_breakdowns.iter().map(|e| e.days).max().unwrap_or(0).max(1);
+    let report_days = report
+        .model_breakdowns
+        .iter()
+        .map(|e| e.days)
+        .max()
+        .unwrap_or(0)
+        .max(1);
 
     let mut total_input: u64 = 0;
     let mut total_output: u64 = 0;
@@ -151,9 +163,15 @@ pub fn render_html(report: &UsageReport) -> String {
     out.push_str(".summary{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.75rem;}\n");
     out.push_str(".card{background:#fff;border:1px solid #e2e2e2;border-radius:8px;padding:.75rem 1rem;min-width:110px;}\n");
     out.push_str(".card .n{font-size:1.25rem;font-weight:600;}\n");
-    out.push_str(".card .l{color:#666;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;}\n");
-    out.push_str("table{border-collapse:collapse;width:100%;margin-bottom:1.75rem;background:#fff;}\n");
-    out.push_str("th,td{border:1px solid #e2e2e2;padding:.5rem .6rem;text-align:left;font-size:.9rem;}\n");
+    out.push_str(
+        ".card .l{color:#666;font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;}\n",
+    );
+    out.push_str(
+        "table{border-collapse:collapse;width:100%;margin-bottom:1.75rem;background:#fff;}\n",
+    );
+    out.push_str(
+        "th,td{border:1px solid #e2e2e2;padding:.5rem .6rem;text-align:left;font-size:.9rem;}\n",
+    );
     out.push_str("th{background:#f0f0f0;}\n");
     out.push_str("tr:nth-child(even){background:#fafafa;}\n");
     out.push_str(".sev-warning{color:#9a7300;font-weight:600;}\n");
@@ -171,14 +189,26 @@ pub fn render_html(report: &UsageReport) -> String {
     card(&mut out, &format!("${:.4}", total_cost), "Cost (USD)");
     card(&mut out, &total_tokens.to_string(), "Total tokens");
     card(&mut out, &providers.len().to_string(), "Providers");
-    card(&mut out, &report.model_breakdowns.len().to_string(), "Models");
+    card(
+        &mut out,
+        &report.model_breakdowns.len().to_string(),
+        "Models",
+    );
     card(&mut out, &report.alerts.len().to_string(), "Alerts");
     out.push_str("</div>\n");
 
     out.push_str("<h2>Token usage by model</h2>\n");
     out.push_str("<table>\n<thead>\n<tr>\n");
     for h in [
-        "Provider", "Model", "Days", "Input", "Output", "Cache read", "Cache write", "Total", "Cost (USD)",
+        "Provider",
+        "Model",
+        "Days",
+        "Input",
+        "Output",
+        "Cache read",
+        "Cache write",
+        "Total",
+        "Cost (USD)",
     ] {
         out.push_str(&format!("<th>{}</th>\n", esc(h)));
     }
@@ -209,7 +239,14 @@ pub fn render_html(report: &UsageReport) -> String {
     if !report.alerts.is_empty() {
         out.push_str("<h2>Usage alerts</h2>\n");
         out.push_str("<table>\n<thead>\n<tr>\n");
-        for h in ["Provider", "Window", "Utilization", "Threshold", "Severity", "Message"] {
+        for h in [
+            "Provider",
+            "Window",
+            "Utilization",
+            "Threshold",
+            "Severity",
+            "Message",
+        ] {
             out.push_str(&format!("<th>{}</th>\n", esc(h)));
         }
         out.push_str("</tr>\n</thead>\n<tbody>\n");
@@ -286,8 +323,7 @@ pub async fn export_report(
         .app_data_dir()
         .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
     let exports_dir = data_dir.join("exports");
-    fs::create_dir_all(&exports_dir)
-        .map_err(|e| format!("failed to create exports dir: {e}"))?;
+    fs::create_dir_all(&exports_dir).map_err(|e| format!("failed to create exports dir: {e}"))?;
 
     let timestamp = Utc::now().format("%Y%m%d-%H%M%S").to_string();
     // Provider-agnostic base name: the report aggregates all providers, so it
@@ -295,8 +331,7 @@ pub async fn export_report(
     let filename = format!("usage-report-{timestamp}.{ext}");
     let file_path = exports_dir.join(&filename);
 
-    fs::write(&file_path, content)
-        .map_err(|e| format!("failed to write report file: {e}"))?;
+    fs::write(&file_path, content).map_err(|e| format!("failed to write report file: {e}"))?;
 
     Ok(file_path.to_string_lossy().to_string())
 }
@@ -431,8 +466,9 @@ mod tests {
             serde_json::from_str(&json).expect("render_json must produce valid JSON");
         // serde_json renders the Utc instant with a `Z` suffix, so normalize the
         // offset before comparing against the rfc3339 form.
-        let generated_at =
-            value["generated_at"].as_str().expect("generated_at is a string");
+        let generated_at = value["generated_at"]
+            .as_str()
+            .expect("generated_at is a string");
         assert_eq!(
             generated_at.replace("Z", "+00:00"),
             report.generated_at.to_rfc3339()

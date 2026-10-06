@@ -97,7 +97,7 @@ pub fn forecast_window(
         _ => None,
     };
     let will_hit_before_reset = match eta_to_full_secs {
-        Some(eta) => resets_in_secs.map_or(true, |r| eta < r),
+        Some(eta) => resets_in_secs.is_none_or(|r| eta < r),
         None => false,
     };
 
@@ -189,7 +189,12 @@ mod tests {
     }
 
     /// One sample per minute for `minutes`, rising `per_min` points from `start`.
-    fn rising(start: f64, per_min: f64, minutes: i64, resets_at: Option<i64>) -> Vec<HistorySample> {
+    fn rising(
+        start: f64,
+        per_min: f64,
+        minutes: i64,
+        resets_at: Option<i64>,
+    ) -> Vec<HistorySample> {
         (0..=minutes)
             .map(|m| sample((minutes - m) * 60, start + per_min * m as f64, resets_at))
             .collect()
@@ -209,14 +214,21 @@ mod tests {
         assert!((f.rate_per_hour.unwrap() - 60.0).abs() < 0.01);
         assert_eq!(f.utilization, 50.0);
         assert_eq!(f.eta_to_full_secs, Some(50 * 60));
-        assert!(f.will_hit_before_reset, "unknown reset counts as before-reset");
+        assert!(
+            f.will_hit_before_reset,
+            "unknown reset counts as before-reset"
+        );
     }
 
     #[test]
     fn reset_drop_discards_previous_cycle() {
         let mut samples = rising(80.0, 1.0, 10, None);
         samples.truncate(6); // 80..85, 10..5 min ago
-        samples.extend([sample(240, 2.0, None), sample(120, 2.0, None), sample(0, 2.0, None)]);
+        samples.extend([
+            sample(240, 2.0, None),
+            sample(120, 2.0, None),
+            sample(0, 2.0, None),
+        ]);
         let f = forecast(&samples);
         assert_eq!(f.sample_count, 3);
         assert_eq!(f.utilization, 2.0);
@@ -234,7 +246,10 @@ mod tests {
         samples.extend(rising(10.0, 0.5, 2, Some(NOW + 18_000)));
         let f = forecast(&samples);
         assert_eq!(f.sample_count, 3);
-        assert_eq!(f.rate_per_hour, None, "3 samples over ~2 min is too short a span");
+        assert_eq!(
+            f.rate_per_hour, None,
+            "3 samples over ~2 min is too short a span"
+        );
     }
 
     #[test]

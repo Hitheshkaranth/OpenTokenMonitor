@@ -5,7 +5,9 @@
 //! - a left-click toggle for show/hide of the main window
 //! - a right-click menu (Show/Hide, Refresh All, Quit)
 //! - a tooltip showing each provider's primary-window utilization
-//! - an optional menu-bar title (macOS) with live usage % or today's cost
+//! - optional menu-bar badges: the tray icon becomes a strip of provider
+//!   logos wrapped in usage rings (see [`crate::tray_badges`]); clicking a
+//!   badge opens that provider
 //!
 //! The tray icon handle lives inside [`TrayState`] (kept in Tauri-managed
 //! state) because the tooltip is updated from multiple paths after startup.
@@ -27,6 +29,11 @@ use crate::AppState;
 /// any command or background task.
 pub struct TrayState {
     pub icon: Mutex<Option<tauri::tray::TrayIcon>>,
+    /// The app icon, restored when badges are turned off.
+    pub default_icon: Image<'static>,
+    /// Providers currently drawn in the badge strip, in display order, with
+    /// the rounded percentages it was last rendered at.
+    pub badges: Mutex<Vec<(ProviderId, (i64, i64))>>,
 }
 
 /// Build the tooltip line shown on tray hover. Always lists all three
@@ -51,8 +58,9 @@ fn format_tray_tooltip(snapshots: &[UsageSnapshot]) -> String {
     )
 }
 
-/// What the tray shows as text next to its icon. Only macOS renders tray
-/// titles; elsewhere setting one is a no-op.
+/// What the tray shows. `Percent` and `Cost` both draw the ring badges (the
+/// rings *are* the usage %); `Cost` adds today's spend as a title. `Off`
+/// keeps the plain app icon. Only macOS renders tray titles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TrayTitleMode {
@@ -62,53 +70,171 @@ pub enum TrayTitleMode {
     Cost,
 }
 
-/// Build the menu-bar title, e.g. `C 72% · X 41% · A 12%` or `$4.20 today`.
-pub fn format_tray_title(
-    mode: TrayTitleMode,
-    snapshots: &[UsageSnapshot],
-    today_cost_usd: f64,
-) -> Option<String> {
-    match mode {
-        TrayTitleMode::Off => None,
-        TrayTitleMode::Cost => Some(format!("${today_cost_usd:.2} today")),
-        TrayTitleMode::Percent => {
-            let parts: Vec<String> = ProviderId::all()
-                .into_iter()
-                .filter_map(|provider| {
-                    let snapshot = snapshots.iter().find(|s| s.provider == provider)?;
-                    let letter = match provider {
-                        ProviderId::Claude => "C",
-                        ProviderId::Codex => "X",
-                        ProviderId::Antigravity => "A",
-                    };
-                    Some(format!("{letter} {:.0}%", snapshot_percent(snapshot)))
-                })
-                .collect();
-            (!parts.is_empty()).then(|| parts.join(" · "))
-        }
+/// One provider's menu-bar badge.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProviderBadge {
+    pub provider: ProviderId,
+    /// Primary / secondary window utilization, percent.
+    pub primary: f64,
+    pub secondary: Option<f64>,
+    pub tooltip: String,
+}
+
+/// Title beside the badge strip: today's total spend in `Cost` mode.
+pub fn strip_title(mode: TrayTitleMode, today_cost_usd: f64) -> Option<String> {
+    (mode == TrayTitleMode::Cost).then(|| format!("${today_cost_usd:.2} today"))
+}
+
+fn provider_name(provider: ProviderId) -> &'static str {
+    match provider {
+        ProviderId::Claude => "Claude",
+        ProviderId::Codex => "Codex",
+        ProviderId::Antigravity => "Antigravity",
     }
 }
 
-/// Replace (or clear, with `None`) the tray's menu-bar title.
-pub fn set_tray_title(app: &AppHandle, title: Option<String>) {
-    if let Some(tray_state) = app.try_state::<TrayState>() {
-        if let Ok(mut icon_slot) = tray_state.icon.lock() {
-            if let Some(icon) = icon_slot.as_mut() {
-                let _ = icon.set_title(title);
-            }
-        }
+/// Build the badges for `mode`, in fixed order Claude, Codex, Antigravity,
+/// for providers that have a snapshot.
+pub fn build_badges(mode: TrayTitleMode, snapshots: &[UsageSnapshot]) -> Vec<ProviderBadge> {
+    if mode == TrayTitleMode::Off {
+        return Vec::new();
     }
+    ProviderId::all()
+        .into_iter()
+        .filter_map(|provider| {
+            let snapshot = snapshots.iter().find(|s| s.provider == provider)?;
+            let primary = snapshot_percent(snapshot);
+            let secondary = snapshot.windows.get(1).map(|w| w.utilization);
+            let windows: Vec<String> = snapshot
+                .windows
+                .iter()
+                .take(2)
+                .map(|w| {
+                    format!(
+                        "{} {:.0}%",
+                        crate::alerts::format_window_label(w.window_type),
+                        w.utilization
+                    )
+                })
+                .collect();
+            Some(ProviderBadge {
+                provider,
+                primary,
+                secondary,
+                tooltip: format!("{} — {}", provider_name(provider), windows.join(" · ")),
+            })
+        })
+        .collect()
+}
+
+/// A clone of the tray icon handle. Callers must not hold any `TrayState`
+/// lock while calling tray APIs: on macOS they block until the main thread
+/// runs them, and the main thread may itself be waiting on that lock (a
+/// synchronous command), which deadlocks the app.
+fn tray_icon(app: &AppHandle) -> Option<tauri::tray::TrayIcon> {
+    app.try_state::<TrayState>()?.icon.lock().ok()?.clone()
+}
+
+/// Show `badges` as the tray icon (or restore the app icon when empty).
+/// The strip is only re-rendered when a provider appears/disappears or a
+/// rounded percentage moves.
+pub fn sync_provider_badges(app: &AppHandle, badges: &[ProviderBadge], title: Option<String>) {
+    let Some(tray_state) = app.try_state::<TrayState>() else {
+        return;
+    };
+    let Some(icon) = tray_icon(app) else {
+        return;
+    };
+    let next: Vec<(ProviderId, (i64, i64))> = badges
+        .iter()
+        .map(|b| {
+            (
+                b.provider,
+                (
+                    b.primary.round() as i64,
+                    b.secondary.map_or(-1, |s| s.round() as i64),
+                ),
+            )
+        })
+        .collect();
+    // Decide under the lock, call the tray API after releasing it.
+    let changed = match tray_state.badges.lock() {
+        Ok(mut shown) if *shown != next => {
+            *shown = next;
+            true
+        }
+        Ok(_) => false,
+        Err(_) => return,
+    };
+
+    if changed {
+        let image = if badges.is_empty() {
+            tray_state.default_icon.clone()
+        } else {
+            let strip = crate::tray_badges::render_strip(
+                &badges
+                    .iter()
+                    .map(|b| (b.provider, b.primary, b.secondary))
+                    .collect::<Vec<_>>(),
+            );
+            let (w, h) = strip.dimensions();
+            Image::new_owned(strip.into_raw(), w, h)
+        };
+        let _ = icon.set_icon(Some(image));
+        let _ = icon.set_icon_as_template(false);
+    }
+    let _ = icon.set_title(title);
+    if !badges.is_empty() {
+        let lines: Vec<&str> = badges.iter().map(|b| b.tooltip.as_str()).collect();
+        let _ = icon.set_tooltip(Some(format!("OpenTokenMonitor\n{}", lines.join("\n"))));
+    }
+}
+
+/// Left-click: on a badge strip, open the provider under the cursor;
+/// otherwise toggle the main window.
+fn handle_left_click(app: &AppHandle, position_x: f64, rect: &tauri::Rect) {
+    let providers: Vec<ProviderId> = app
+        .try_state::<TrayState>()
+        .and_then(|s| {
+            s.badges
+                .lock()
+                .ok()
+                .map(|b| b.iter().map(|(p, _)| *p).collect())
+        })
+        .unwrap_or_default();
+    if providers.is_empty() {
+        toggle_main_window(app);
+        return;
+    }
+    let origin = rect.position.to_physical::<f64>(1.0);
+    let size = rect.size.to_physical::<f64>(1.0);
+    // macOS draws the icon ~18pt tall in a ~24pt item, keeping its aspect
+    // ratio; any title sits to the right of the strip.
+    use crate::tray_badges::{BADGE_SIZE, STRIP_GAP};
+    let n = providers.len() as f64;
+    let aspect = (n * BADGE_SIZE as f64 + (n - 1.0) * STRIP_GAP as f64) / BADGE_SIZE as f64;
+    let strip_w = (size.height * 0.75 * aspect).min(size.width);
+    let fraction = (position_x - origin.x) / strip_w.max(1.0);
+    match crate::tray_badges::badge_index_at(fraction, providers.len()) {
+        Some(i) if fraction <= 1.0 => open_provider(app, providers[i]),
+        _ => toggle_main_window(app),
+    }
+}
+
+/// Bring the main window forward on a provider's detail page.
+fn open_provider(app: &AppHandle, provider: ProviderId) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+    let _ = app.emit("tray-navigate", provider);
 }
 
 /// Replace the tray tooltip with the latest provider utilizations.
 pub fn update_tray_tooltip(app: &AppHandle, snapshots: &[UsageSnapshot]) {
-    let tooltip = format_tray_tooltip(snapshots);
-    if let Some(tray_state) = app.try_state::<TrayState>() {
-        if let Ok(mut icon_slot) = tray_state.icon.lock() {
-            if let Some(icon) = icon_slot.as_mut() {
-                let _ = icon.set_tooltip(Some(tooltip));
-            }
-        }
+    if let Some(icon) = tray_icon(app) {
+        let _ = icon.set_tooltip(Some(format_tray_tooltip(snapshots)));
     }
 }
 
@@ -154,6 +280,7 @@ pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
         .to_rgba8();
     let (width, height) = image::GenericImageView::dimensions(&img);
     let tray_icon_image = Image::new_owned(img.into_raw(), width, height);
+    let default_icon = tray_icon_image.clone();
 
     let show_hide = MenuItemBuilder::new("Show / Hide")
         .id("show-hide")
@@ -178,16 +305,20 @@ pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
             if let tauri::tray::TrayIconEvent::Click {
                 button: tauri::tray::MouseButton::Left,
                 button_state: tauri::tray::MouseButtonState::Up,
+                position,
+                rect,
                 ..
             } = event
             {
-                toggle_main_window(tray.app_handle());
+                handle_left_click(tray.app_handle(), position.x, &rect);
             }
         })
         .build(app)?;
 
     app.manage(TrayState {
         icon: Mutex::new(Some(tray_icon)),
+        default_icon,
+        badges: Mutex::new(Vec::new()),
     });
     update_tray_tooltip(app.handle(), &[]);
 
@@ -226,22 +357,39 @@ mod tests {
         }
     }
 
-    #[test]
-    fn percent_title_uses_fixed_order_and_skips_missing() {
-        let snaps = [snap(ProviderId::Antigravity, 12.4), snap(ProviderId::Claude, 71.6)];
-        assert_eq!(
-            format_tray_title(TrayTitleMode::Percent, &snaps, 0.0).as_deref(),
-            Some("C 72% · A 12%")
-        );
-        assert_eq!(format_tray_title(TrayTitleMode::Percent, &[], 0.0), None);
+    fn snap2(provider: ProviderId, primary: f64, secondary: f64) -> UsageSnapshot {
+        let mut s = snap(provider, primary);
+        let mut second = s.windows[0].clone();
+        second.window_type = WindowType::SevenDay;
+        second.utilization = secondary;
+        s.windows.push(second);
+        s
     }
 
     #[test]
-    fn cost_and_off_titles() {
+    fn badges_follow_fixed_order_and_skip_missing() {
+        let snaps = [
+            snap(ProviderId::Antigravity, 12.4),
+            snap2(ProviderId::Claude, 71.6, 92.0),
+        ];
+        let badges = build_badges(TrayTitleMode::Percent, &snaps);
+        assert_eq!(badges.len(), 2);
+        assert_eq!(badges[0].provider, ProviderId::Claude);
+        assert_eq!(badges[0].secondary, Some(92.0));
+        assert_eq!(badges[0].tooltip, "Claude — 5h window 72% · 7d window 92%");
+        assert_eq!(badges[1].provider, ProviderId::Antigravity);
+        assert_eq!(badges[1].secondary, None);
+    }
+
+    #[test]
+    fn cost_mode_adds_title_and_off_mode_hides_badges() {
+        let snaps = [snap(ProviderId::Codex, 5.0)];
+        assert_eq!(build_badges(TrayTitleMode::Cost, &snaps).len(), 1);
         assert_eq!(
-            format_tray_title(TrayTitleMode::Cost, &[], 4.2).as_deref(),
+            strip_title(TrayTitleMode::Cost, 4.2).as_deref(),
             Some("$4.20 today")
         );
-        assert_eq!(format_tray_title(TrayTitleMode::Off, &[snap(ProviderId::Codex, 5.0)], 1.0), None);
+        assert_eq!(strip_title(TrayTitleMode::Percent, 4.2), None);
+        assert!(build_badges(TrayTitleMode::Off, &snaps).is_empty());
     }
 }

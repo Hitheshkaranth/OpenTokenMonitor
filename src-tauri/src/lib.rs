@@ -43,14 +43,15 @@ mod pricing;
 mod providers;
 mod session_usage;
 mod tray;
+mod tray_badges;
 mod usage;
 mod usage_scanners;
 mod watchers;
 
 use crate::alerts::ThresholdConfig;
+use post_refresh::on_snapshots_updated;
 use providers::registry::ProviderRegistry;
 use providers::FetchContext;
-use post_refresh::on_snapshots_updated;
 use usage::aggregator;
 use usage::models::{ProviderId, RefreshCadence};
 use usage::store::UsageStore;
@@ -296,7 +297,8 @@ pub fn restart_per_provider_scheduler(app: &AppHandle, state: &AppState) {
     use std::time::{Duration, Instant};
 
     let app_handle = app.clone();
-    let last_refresh: Arc<Mutex<HashMap<ProviderId, Instant>>> = Arc::new(Mutex::new(HashMap::new()));
+    let last_refresh: Arc<Mutex<HashMap<ProviderId, Instant>>> =
+        Arc::new(Mutex::new(HashMap::new()));
     state.scheduler.restart_per_provider(move |provider| {
         let app_inner = app_handle.clone();
         let last_refresh = last_refresh.clone();

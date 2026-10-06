@@ -144,10 +144,16 @@ pub fn group_by_project(sessions: &[SessionUsage]) -> Vec<ProjectUsage> {
 fn day_window(days: u32) -> (String, String) {
     let today = Utc::now().date_naive();
     let since = today - Duration::days(i64::from(days.max(1)) - 1);
-    (since.format("%Y-%m-%d").to_string(), today.format("%Y-%m-%d").to_string())
+    (
+        since.format("%Y-%m-%d").to_string(),
+        today.format("%Y-%m-%d").to_string(),
+    )
 }
 
-async fn scan_sessions(days: u32, provider: Option<ProviderId>) -> Result<Vec<SessionUsage>, String> {
+async fn scan_sessions(
+    days: u32,
+    provider: Option<ProviderId>,
+) -> Result<Vec<SessionUsage>, String> {
     let (since, today) = day_window(days);
     let mut sessions = tauri::async_runtime::spawn_blocking(move || {
         usage_scanners::scan_session_usage(&since, &today)
@@ -185,7 +191,12 @@ pub async fn get_project_usage(
 mod tests {
     use super::*;
 
-    fn session(provider: ProviderId, cwd: Option<&str>, cost: f64, models: &[&str]) -> SessionUsage {
+    fn session(
+        provider: ProviderId,
+        cwd: Option<&str>,
+        cost: f64,
+        models: &[&str],
+    ) -> SessionUsage {
         SessionUsage {
             provider,
             session_id: format!("{}-{cost}", provider.as_str()),
@@ -213,8 +224,18 @@ mod tests {
     fn merges_providers_sharing_a_cwd() {
         let projects = group_by_project(&[
             session(ProviderId::Codex, Some("/work/app/"), 1.0, &["gpt-5"]),
-            session(ProviderId::Claude, Some("/work/app"), 3.0, &["claude-opus-4-5"]),
-            session(ProviderId::Claude, Some("\\work\\app"), 2.0, &["claude-sonnet-4-5"]),
+            session(
+                ProviderId::Claude,
+                Some("/work/app"),
+                3.0,
+                &["claude-opus-4-5"],
+            ),
+            session(
+                ProviderId::Claude,
+                Some("\\work\\app"),
+                2.0,
+                &["claude-sonnet-4-5"],
+            ),
         ]);
         assert_eq!(projects.len(), 1);
         let p = &projects[0];

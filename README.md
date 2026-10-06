@@ -1,90 +1,326 @@
 <div align="center">
 
-<img src="./public/open_token_monitor_icon.png" alt="OpenToken Monitor" width="120" />
+<img src="./public/open_token_monitor_icon.png" alt="OpenToken Monitor" width="112" />
 
 # OpenToken Monitor
 
-**The unified, local-first desktop monitor for Claude, Codex, and Antigravity.**
+### Every AI coding quota, in your menu bar.
 
-One window for every usage gauge, cost trend, and recent prompt — without handing your keys to a SaaS dashboard.
+Live usage limits, exact per-project costs, and time-to-limit alerts for **Claude Code**, **Codex**, and **Antigravity** — read from your own machine, never a SaaS dashboard.
 
-[![Tauri](https://img.shields.io/badge/Tauri-2.x-FFC131?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
-[![Rust](https://img.shields.io/badge/Rust-2021-CE422B?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
-[![React](https://img.shields.io/badge/React-19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![SQLite](https://img.shields.io/badge/SQLite-bundled-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#-installation)
-[![Local-First](https://img.shields.io/badge/data-local--first-success.svg)](#-data--privacy)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#-install)
+[![Local-first](https://img.shields.io/badge/data-local--first-success.svg)](#-privacy)
+[![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=white)](https://tauri.app/)
+[![Rust](https://img.shields.io/badge/Rust-2021-CE422B?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![React](https://img.shields.io/badge/React-19-20232A?logo=react&logoColor=61DAFB)](https://react.dev/)
 
-[Download](#-installation) ·
+[**Download**](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest) ·
 [Features](#-features) ·
+[How it works](#-how-it-works) ·
 [Screens](#-screens) ·
-[Architecture](./ARCHITECTURE.md) ·
-[Contributing](#-contributing)
+[Privacy](#-privacy) ·
+[FAQ](#-faq)
+
+<br/>
+
+<img src="./docs/images/menubar-0.4.0.png" alt="OpenToken Monitor in the macOS menu bar" width="760" />
+
+<sub>Each provider's logo sits inside its usage rings — outer ring: primary window (Claude 5-hour), inner ring: secondary window (Claude 7-day). Click a ring to open that provider.</sub>
+
+<br/><br/>
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="./docs/images/overview-0.4.0.png" alt="Overview" width="260" /><br/><b>Overview</b></td>
+    <td align="center" width="33%"><img src="./docs/images/provider-detail-0.4.0.png" alt="Provider detail" width="260" /><br/><b>Provider detail</b></td>
+    <td align="center" width="33%"><img src="./docs/images/compare-0.4.0.png" alt="Compare" width="260" /><br/><b>Compare</b></td>
+  </tr>
+</table>
 
 </div>
 
 ---
 
-## ✨ Why OpenToken Monitor?
+## ✨ Why
 
-You're juggling **three coding agents** at once — Claude, Codex, and Antigravity — each with its own dashboard, its own quota window, and its own pricing page. OpenToken Monitor stitches them into a **single tray-resident desktop app** that:
+You run more than one coding agent. Each has its own quota window, its own reset timer, and its own pricing page — and none of them tells you *you're about to hit the wall* until you do.
 
-- 📊 reads your **local CLI artifacts first** (`~/.claude`, `~/.codex`, `~/Library/Application Support/Antigravity/logs`)
-- 🔐 augments them with **live OAuth fetches** when credentials are present — never proxied through a third party
-- 💸 computes **accurate per-model cost** using published list rates, reviewed September 2026
-- 🛟 keeps providers **visible even when offline**, surfacing health status instead of silently dropping them
+OpenToken Monitor is a small tray app that watches all of them at once:
 
-Everything stays on your machine. Snapshots persist in a local SQLite store; nothing leaves the device.
+- **Know before you hit a limit.** It learns your burn rate and warns when a window will fill *before* it resets.
+- **Know where the money went.** Exact cost per project and per session, straight from your CLI session logs.
+- **Glance, don't open.** Usage rings live in the menu bar; the window is there when you need detail.
+- **Keep your data.** Everything is computed on your machine. No account, no telemetry, no proxy.
 
 ---
 
 ## 🚀 Features
 
-### 🎯 Core Dashboard
+<table>
+<tr>
+<td width="50%" valign="top">
 
-- **Unified overview** — Claude · Codex · Antigravity in one glance, with live usage rings, trend sparklines, and provider health badges
-- **Menu-bar badges** — each provider's logo wrapped in its usage rings, right in the macOS menu bar; click one to open that provider
-- **Time-to-limit forecast** — a *FULL IN* pill appears when a window is on pace to hit 100 % before it resets
-- **Per-provider detail pages** with cost history, model breakdowns, cache-hit rate, prompt-cache savings, and model spend mix
-- **Exact project & session costs** — read from Claude and Codex session logs, not estimated; switch between Projects and Sessions
-- **Compare view** — spend share and side-by-side usage for every provider
-- **Compact widget mode** — fixed-size always-on-top panel for at-a-glance gauges and reset countdowns
+### 📊 Live limits
+- Claude **5-hour, 7-day and Opus** windows, Codex **session and weekly**, Antigravity **5-hour and daily**
+- Reset countdowns on every window
+- **Menu-bar ring badges** per provider, colour-coded green → amber → red
+- Compact always-on-top **widget mode**
 
-### 🔔 Alerts, Budgets & Export
+</td>
+<td width="50%" valign="top">
 
-- **Desktop notifications** raised by the backend, so they work with the window hidden: once per threshold crossing (per-provider ladders), when you're on pace to hit a limit before reset, and when spend is projected over budget
-- **Budgets** per provider with spend forecasting
-- **Export** usage reports to CSV, JSON, or printable HTML/PDF
-- **Per-provider refresh cadence** and a 7 / 30 / 90-day or custom trend period
+### ⏱️ Time-to-limit forecast
+- Fits your burn rate over the last 30 minutes
+- A **FULL IN** pill appears only when a window will hit 100 % *before* it resets
+- Works on every window, including weekly quotas
 
-### 🔌 Provider Intelligence
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-| Provider | Sources | Windows tracked |
-|---|---|---|
-| **Claude** | Anthropic OAuth usage API + `~/.claude/projects` local logs | 5-hour rolling, 7-day, Opus weekly, extra-credits |
-| **Codex (OpenAI)** | Bearer / cookie / RPC fetchers + `~/.codex/sessions` | Daily, model breakdown |
-| **Antigravity** | Google Cloud Code API (OAuth) + Local Language Server loopback + `~/Library/Application Support/Antigravity/logs` | 5-hour rolling, Daily request cap |
+### 💸 Exact costs
+- Per **project** (by working directory) and per **session**, from Claude and Codex logs
+- Per-model breakdown with version-aware list prices
+- **Cache-hit rate** and how much prompt caching saved you
+- Model spend mix, and a 7 / 30 / 90-day or custom period
 
-### 🛡️ Resilience Built-In
+</td>
+<td valign="top">
 
-- **Smart OAuth backoff** — separate cooldowns for success (120 s) and failure (25 s), so one transient 429 doesn't pin Claude to local-mode for two minutes
-- **Stale-cache fallback** — last good snapshot stays on screen marked `stale` if a fetch fails
-- **Reactive file watching** — `notify` watchers refresh the affected provider the moment a CLI session file changes
-- **Single-instance enforcement** — autostart launch + manual click no longer fight over the SQLite store
-- **Bundled WebView2 bootstrapper** — Windows MSI installs cleanly on machines without WebView2 pre-installed
+### 🔔 Alerts that respect you
+- Desktop notifications raised by the background service — they work with the window closed
+- Fire **once per escalation** (warning → high → critical), re-arm on reset
+- Pace warnings and **projected budget overruns**
+- Per-provider thresholds, budgets and refresh cadence
 
-### 💰 Accurate Cost Estimation (rates reviewed September 2026)
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-All model rates live in a single source-of-truth: [`src-tauri/src/pricing.rs`](./src-tauri/src/pricing.rs).
-Rates are version-aware — Opus 4.1 and Opus 4.5 are priced differently, and the
-model id from your local logs keeps its version digits so the right tier is used.
+### 🧭 Compare
+- Spend share across providers at a glance
+- Side-by-side usage, spend, tokens and burn
 
-| Family | Tier | Rate (input / output per 1M tokens) |
+</td>
+<td valign="top">
+
+### 📤 Export
+- Usage reports as **CSV**, **JSON**, or printable **HTML/PDF**
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🧠 How it works
+
+```mermaid
+flowchart TB
+  subgraph SRC["💻 Your machine"]
+    direction LR
+    CL["~/.claude/projects<br/>session logs"]
+    CX["~/.codex/sessions"]
+    AG["Antigravity logs"]
+  end
+
+  subgraph LIVE["🌐 Live limits (optional)"]
+    direction LR
+    AN["Anthropic usage API<br/>(your CLI's OAuth token)"]
+    OA["ChatGPT / Codex usage"]
+    LS["Antigravity language server<br/>(127.0.0.1)"]
+  end
+
+  subgraph CORE["🦀 Rust core"]
+    direction TB
+    TRG["Poll scheduler<br/>+ file watchers"]
+    SCN["Incremental log scanners"]
+    PRV["Provider adapters"]
+    AGG["Aggregator"]
+    DB[("SQLite<br/>snapshots · history · costs")]
+    FC["Limit forecast"]
+    SES["Session & project usage"]
+    HOOK["Post-refresh hook"]
+    ALR["Alert engine"]
+  end
+
+  subgraph UI["⚛️ React UI"]
+    direction LR
+    STO["Zustand stores"]
+    VIEWS["Overview · Detail · Projects<br/>Compare · Widget · Settings"]
+  end
+
+  subgraph DESK["🖥️ Desktop"]
+    direction LR
+    BAR["Menu-bar ring badges"]
+    NOTE["Notifications"]
+  end
+
+  SRC --> SCN --> PRV
+  LIVE --> PRV
+  TRG --> AGG
+  PRV --> AGG --> DB
+  DB --> FC
+  SCN --> SES
+  AGG --> HOOK
+  HOOK --> BAR
+  HOOK --> ALR --> NOTE
+  FC --> ALR
+  DB -- "Tauri commands" --> STO
+  SES -- "Tauri commands" --> STO
+  HOOK -- "usage-updated event" --> STO
+  STO --> VIEWS
+```
+
+1. **Collect.** Scanners read the CLIs' own session logs incrementally (only new bytes are parsed). When your CLI is signed in, the matching adapter also fetches the live quota — using the token the CLI already stored, never one you paste in.
+2. **Store.** Each refresh writes the latest snapshot, a utilization history point, and daily per-model costs to a local SQLite file.
+3. **Derive.** The forecast fits a line through the last 30 minutes of history; sessions are rolled up into projects by working directory; costs use the rate tables in [`pricing.rs`](./src-tauri/src/pricing.rs).
+4. **Surface.** One post-refresh hook updates the menu-bar badges, evaluates alerts, and tells the UI to re-render — whichever path triggered the refresh (timer, file change, or you).
+
+> Full module map and data flow → [**ARCHITECTURE.md**](./ARCHITECTURE.md)
+
+### Data sources
+
+| Provider | Live limits | Local history | Windows |
+|---|---|---|---|
+| **Claude Code** | Anthropic usage API via the Claude CLI's OAuth token | `~/.claude/projects/**/*.jsonl` | 5-hour, 7-day, Opus weekly, extra credits |
+| **Codex** | ChatGPT usage via the Codex CLI's credentials (bearer → cookie → `codex` RPC) | `~/.codex/sessions/**/*.jsonl` | Session, weekly |
+| **Antigravity** | Local Antigravity language server on `127.0.0.1` | Antigravity log directory | 5-hour, daily request cap |
+
+When a live fetch fails, the last good snapshot stays on screen marked *stale*, and the provider falls back to local logs.
+
+---
+
+## 📸 Screens
+
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="./docs/images/sessions-0.4.0.png" alt="Sessions" width="260" /><br/><b>Sessions</b><br/><sub>exact cost per CLI session</sub></td>
+    <td align="center" width="33%"><img src="./docs/images/settings-0.4.0.png" alt="Settings" width="260" /><br/><b>Settings</b><br/><sub>theme, refresh, alerts, budgets, menu bar</sub></td>
+    <td align="center" width="33%"><img src="./docs/images/widget-0.4.0.png" alt="Widget mode" width="260" /><br/><b>Widget mode</b><br/><sub>always-on-top gauges</sub></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><img src="./docs/images/projects-0.4.0.png" alt="Projects" width="540" /><br/><b>Projects</b><br/><sub>spend by working directory across Claude and Codex</sub></td>
+    <td align="center"><img src="./docs/images/menubar-badges-0.4.0.png" alt="Menu-bar ring badges" width="260" /><br/><b>Menu-bar badges</b><br/><sub>logo + usage rings</sub></td>
+  </tr>
+</table>
+
+<details>
+<summary><b>The full menu bar</b></summary>
+<br/>
+<img src="./docs/images/menubar-full-0.4.0.png" alt="Full macOS menu bar with OpenToken Monitor running" />
+</details>
+
+---
+
+## 📦 Install
+
+Grab the installer for your OS from **[GitHub Releases](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)**:
+
+[![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
+[![macOS Intel](https://img.shields.io/badge/macOS-Intel-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
+[![Windows](https://img.shields.io/badge/Windows-Installer-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
+[![Linux](https://img.shields.io/badge/Linux-DEB-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
+
+Then just sign in to the CLIs you already use (`claude`, `codex`, Antigravity). OpenToken Monitor finds their logs and credentials on its own — there is nothing to configure.
+
+<details>
+<summary><b>First launch on macOS</b></summary>
+
+Release builds are signed with a Developer ID certificate and notarized by Apple, so they open normally. If you built from source, the bundle is ad-hoc signed and macOS will say it *"cannot verify the developer"* — right-click the app, choose **Open**, then **Open** again. You only need to do this once.
+</details>
+
+<details>
+<summary><b>First launch on Windows</b></summary>
+
+If SmartScreen shows **"Windows protected your PC"**, click **More info → Run anyway**. This appears while a new signing certificate builds download reputation with Microsoft. The installer is per-user and does not ask for administrator rights.
+</details>
+
+<details>
+<summary><b>Build from source</b></summary>
+
+> **Prerequisites:** Node.js 18+, Rust stable, and the [Tauri 2 dependencies](https://tauri.app/start/prerequisites/) for your OS.
+
+```bash
+git clone https://github.com/Hitheshkaranth/OpenTokenMonitor.git
+cd OpenTokenMonitor
+npm install
+
+npm run tauri dev            # run with hot reload
+npm run tauri build          # production build for this platform
+npm run tauri:build:win      # Windows NSIS installer
+npm run tauri:build:mac      # macOS app bundle + installer
+```
+</details>
+
+---
+
+## ⌨️ Usage
+
+| Action | How |
+|---|---|
+| Open a provider | Click its ring in the menu bar, or press <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> |
+| Projects & sessions | <kbd>4</kbd> |
+| Back to overview | <kbd>Esc</kbd> |
+| Refresh everything | <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>R</kbd> |
+| Settings | <kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>,</kbd> |
+| Show / hide, refresh, quit | Right-click the menu-bar item |
+
+**Menu-bar modes** (Settings → Menu bar): *Usage %* shows the ring badges, *Today's cost* adds today's spend beside them, *Off* keeps the plain app icon.
+
+---
+
+## 🔒 Privacy
+
+- 🏠 **100 % local.** Snapshots, history and costs live in a SQLite file in your OS app-data folder.
+- 🔑 **Your CLIs' credentials, read-only.** Tokens are read from where `claude` and `codex` already keep them; requests go straight from your machine to the provider.
+- 🚫 **No telemetry**, no analytics, no crash reporting.
+- 🔤 **No CDN.** Fonts ship inside the app.
+- 🔍 **Verify it.** The only outbound hosts are `api.anthropic.com`, `chatgpt.com` and `auth.openai.com` (plus GitHub Releases if you enable the updater). Antigravity is read from a server on `127.0.0.1`. The webview's [Content Security Policy](./src-tauri/tauri.conf.json) enforces the same list.
+- 🧹 **Reset** by deleting `usage.db` from the app-data folder (`%APPDATA%\com.opentokenmonitor.desktop\` on Windows, `~/Library/Application Support/com.opentokenmonitor.desktop/` on macOS).
+
+---
+
+## ❓ FAQ
+
+<details>
+<summary><b>Are the costs what I actually pay?</b></summary>
+
+They are **API list-price equivalents**: what the same tokens would cost on the pay-as-you-go API, including cache discounts and cache-write surcharges. On a Pro/Max/Plus subscription you pay a flat fee, so treat the number as the value you're getting. Rates live in one file, [`pricing.rs`](./src-tauri/src/pricing.rs), with a review date at the top.
+</details>
+
+<details>
+<summary><b>Why do project totals stop at about 30 days?</b></summary>
+
+Claude Code deletes session logs older than 30 days by default. Daily totals are kept in OpenToken Monitor's own database, but older spend can no longer be split by project. The Projects header says so when your period is longer than 30 days.
+</details>
+
+<details>
+<summary><b>I don't see the badges in my menu bar.</b></summary>
+
+macOS hides the left-most status items when the menu bar is full — on MacBooks, behind the notch. Hold <kbd>⌘</kbd> and drag the OpenToken Monitor item further right, or remove a few other items.
+</details>
+
+<details>
+<summary><b>How is "FULL IN" calculated?</b></summary>
+
+A least-squares fit of the window's utilization over the last 30 minutes of the current reset cycle (at least 3 samples spanning 5 minutes). The pill only appears when the projected time to 100 % is shorter than the time to reset.
+</details>
+
+<details>
+<summary><b>Does it work on Windows and Linux?</b></summary>
+
+Yes — dashboard, widget, alerts, exports and the tray icon all work. Tray titles are a macOS feature, so *Today's cost* in the tray is macOS-only. Per-provider tray badges sized for Windows' 16 px tray are on the roadmap.
+</details>
+
+<details>
+<summary><b>Model rates (reviewed September 2026)</b></summary>
+
+| Family | Tier | Input / output per 1M tokens |
 |---|---|---|
 | Claude | Fable / Mythos 5.x | $10.00 / $50.00 |
 | Claude | Opus 4.5 · 4.6 · 4.7 · 4.8 · 5 | $5.00 / $25.00 |
@@ -102,214 +338,57 @@ model id from your local logs keeps its version digits so the right tier is used
 | Antigravity | 3.6–3.8 Flash | $0.75 / $3.75 |
 | Antigravity | 2.5 Pro / Flash / Flash-Lite | $1.25 / $10.00 · $0.30 / $2.50 · $0.10 / $0.40 |
 
-Caching discounts and cache-write surcharges are applied where each provider exposes them.
 Antigravity's 3.6–3.8 Flash input rate is promotional and doubles on 2027-01-01.
-
-### ⌨️ Keyboard Shortcuts
-
-| Shortcut | Action |
-|---|---|
-| <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> | Jump to Claude / Codex / Antigravity |
-| <kbd>4</kbd> | Open Projects |
-| <kbd>Esc</kbd> | Return to overview |
-| <kbd>Ctrl</kbd>+<kbd>R</kbd> / <kbd>⌘</kbd>+<kbd>R</kbd> | Refresh all providers |
-| <kbd>Ctrl</kbd>+<kbd>,</kbd> / <kbd>⌘</kbd>+<kbd>,</kbd> | Open settings |
+</details>
 
 ---
 
-## 📸 Screens
+## 🧱 Built with
 
-| Overview | Provider Detail |
-|---|---|
-| ![Overview](./docs/images/overview-0.4.0.png) | ![Provider detail](./docs/images/provider-detail-0.4.0.png) |
-
-| Projects | Sessions |
-|---|---|
-| ![Projects](./docs/images/projects-0.4.0.png) | ![Sessions](./docs/images/sessions-0.4.0.png) |
-
-| Compare | Widget Mode |
-|---|---|
-| ![Compare](./docs/images/compare-0.4.0.png) | ![Widget](./docs/images/widget-0.3.1.png) |
-
-**Menu bar** — logo + usage rings per provider (outer ring: primary window, inner ring: secondary)
-
-![Menu-bar badges](./docs/images/menubar-0.4.0.png)
-
-| Settings |
-|---|
-| ![Settings](./docs/images/settings-0.3.1.png) |
-
----
-
-## 📦 Installation
-
-### Pre-built binaries
-
-Grab the latest installer for your OS from [GitHub Releases](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest):
-
-[![Windows](https://img.shields.io/badge/Windows-MSI-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
-[![macOS Intel](https://img.shields.io/badge/macOS-Intel%20DMG-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
-[![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon%20DMG-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
-[![Linux](https://img.shields.io/badge/Linux-DEB-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)
-
-#### First launch on macOS
-
-Release builds are signed with a Developer ID certificate and notarized by Apple,
-so they open normally. If you built from source yourself, the bundle is ad-hoc
-signed and macOS will say it *"cannot verify the developer"* — right-click the app
-and choose **Open**, then **Open** again in the dialog. You only need to do this once.
-
-#### First launch on Windows
-
-If SmartScreen shows **"Windows protected your PC"**, click **More info → Run anyway**.
-This appears on installers whose signing certificate has not yet accumulated
-download reputation with Microsoft, and it disappears as the release matures.
-The installer runs per-user and does not ask for administrator rights.
-
-### Build from source
-
-> **Prerequisites:** Node.js 18+, Rust stable, and your OS-specific [Tauri 2 dependencies](https://tauri.app/start/prerequisites/).
-
-```bash
-# Clone & install
-git clone https://github.com/Hitheshkaranth/OpenTokenMonitor.git
-cd OpenTokenMonitor
-npm install
-
-# Run in dev mode (hot-reload)
-npm run tauri dev
-
-# Production build
-npm run tauri build              # all platforms
-npm run tauri:build:win          # Windows NSIS installer
-npm run tauri:build:mac          # macOS app bundle + installer
-```
-
----
-
-## 🧱 Tech Stack
-
-<table>
-<tr>
-<td valign="top" width="50%">
-
-### 🦀 Backend (Rust)
-
-- [**Tauri 2**](https://tauri.app/) — desktop shell & IPC
-- [**Tokio**](https://tokio.rs/) — async runtime
-- [**Reqwest**](https://github.com/seanmonstar/reqwest) — HTTPS with rustls
-- [**Rusqlite**](https://github.com/rusqlite/rusqlite) — bundled SQLite persistence
-- [**Notify**](https://github.com/notify-rs/notify) — filesystem watchers
-- [**Chrono · Serde · Async-trait**](https://crates.io)
-- `tauri-plugin-single-instance`, `tauri-plugin-autostart`
-
-</td>
-<td valign="top" width="50%">
-
-### ⚛️ Frontend (TypeScript)
-
-- [**React 19**](https://react.dev/) — UI runtime
-- [**Zustand**](https://zustand-demo.pmnd.rs/) — store layer
-- [**Recharts**](https://recharts.org/) — usage trend graphs
-- [**Framer Motion**](https://www.framer.com/motion/) — micro-interactions
-- [**Lucide React**](https://lucide.dev/) — icon set
-- [**Vite 7**](https://vitejs.dev/) — bundler
-- [**Tailwind**](https://tailwindcss.com/) — utility styling
-
-</td>
-</tr>
-</table>
-
----
-
-## 🏗️ Architecture
-
-```
-┌──────────────────────────────────────────────────────────┐
-│  React 19  ·  Zustand stores  ·  hooks (resize / kbd)    │
-└──────────────────┬───────────────────────────────────────┘
-                   │  Tauri invoke()  /  usage-updated event
-┌──────────────────┴───────────────────────────────────────┐
-│  commands.rs  →  aggregator  →  provider registry        │
-│         │                          ├─ Claude  (OAuth + logs)
-│         │                          ├─ Codex   (bearer/cookie/RPC + logs)
-│         │                          ├─ Antigravity (OAuth + Live Loopback + logs)
-│         ↓                                                │
-│  UsageStore (SQLite)  ·  pricing.rs  ·  alerts.rs        │
-│  tray.rs  ·  watchers (poll + filesystem)                │
-└──────────────────────────────────────────────────────────┘
-```
-
-Full module map and data-flow walkthrough → [**ARCHITECTURE.md**](./ARCHITECTURE.md)
-
-Key entry points:
-
-- 🚪 Frontend root — [`src/App.tsx`](./src/App.tsx)
-- 🔌 Backend entry — [`src-tauri/src/lib.rs`](./src-tauri/src/lib.rs)
-- 📞 Tauri commands — [`src-tauri/src/commands.rs`](./src-tauri/src/commands.rs)
-- 💱 Cost rate tables — [`src-tauri/src/pricing.rs`](./src-tauri/src/pricing.rs)
-- 🗄️ SQLite layer — [`src-tauri/src/usage/store.rs`](./src-tauri/src/usage/store.rs)
-
----
-
-## 🔒 Data & Privacy
-
-- 🏠 **100 % local.** All snapshots, costs, and recent activity are stored in a local SQLite file under your OS app-data directory.
-- 🔑 **Credentials never leave the device.** OAuth tokens are read from the official CLI keychain entries; API requests go directly from your machine to Anthropic / OpenAI / Antigravity.
-- 🚫 **No telemetry.** No analytics, no crash reporting, no phone-home.
-- 🔤 **Fonts are bundled, not fetched.** Manrope and JetBrains Mono ship inside the
-  app (`public/fonts/`). Nothing is loaded from Google Fonts or any other CDN.
-- 🔍 **Verify it yourself.** Point a network monitor at the app. The only outbound
-  connections are `api.anthropic.com`, `chatgpt.com`, `auth.openai.com`, and —
-  only when you have the auto-updater configured — GitHub Releases. The webview
-  is additionally locked down by a [Content Security Policy](./src-tauri/tauri.conf.json)
-  that permits exactly those hosts.
-- 🧹 **Reset by deleting** the app-data SQLite file (`%APPDATA%\com.opentokenmonitor.desktop\usage.db` on Windows; equivalents on macOS / Linux).
+**Rust** — [Tauri 2](https://tauri.app/) · [Tokio](https://tokio.rs/) · [Reqwest](https://github.com/seanmonstar/reqwest) (rustls) · [Rusqlite](https://github.com/rusqlite/rusqlite) (bundled SQLite) · [Notify](https://github.com/notify-rs/notify) · [image](https://github.com/image-rs/image)
+**TypeScript** — [React 19](https://react.dev/) · [Zustand](https://zustand-demo.pmnd.rs/) · [Recharts](https://recharts.org/) · [Framer Motion](https://www.framer.com/motion/) · [Lucide](https://lucide.dev/) · [Vite 7](https://vitejs.dev/)
 
 ---
 
 ## 🗺️ Roadmap
 
 - [x] Budget alerts with native notifications
-- [x] Export usage reports to CSV / JSON / PDF
-- [x] Custom refresh cadences per provider
-- [x] Time-to-limit forecasting and exact per-project / per-session costs
+- [x] Export to CSV / JSON / PDF
+- [x] Per-provider refresh cadence and thresholds
+- [x] Time-to-limit forecasting
+- [x] Exact per-project and per-session costs
+- [x] Menu-bar ring badges
 - [ ] Keep project history beyond Claude Code's 30-day log cleanup
 - [ ] Claude Code statusline integration and a local CLI / JSON state file
-- [ ] Windows/Linux per-provider tray badges
-- [ ] OpenCode / Gemini CLI / Copilot CLI / Cursor provider adapters
+- [ ] Per-provider tray badges on Windows and Linux
+- [ ] OpenCode, Gemini CLI, Copilot CLI and Cursor adapters
 
-Have a request? [Open an issue](https://github.com/Hitheshkaranth/OpenTokenMonitor/issues/new).
+Have an idea? [Open an issue](https://github.com/Hitheshkaranth/OpenTokenMonitor/issues/new).
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome — start with the architecture map and pricing module:
-
-1. Read [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the module layout.
-2. For new providers: implement the `UsageProvider` trait in `src-tauri/src/providers/<name>/` and register it in `registry.rs`.
-3. For pricing updates: edit `src-tauri/src/pricing.rs` and bump the review-date stamp at the top of the file.
-4. Run the test suite before opening a PR:
+1. Read [ARCHITECTURE.md](./ARCHITECTURE.md) for the module map.
+2. **New provider:** implement the `UsageProvider` trait in `src-tauri/src/providers/<name>/` and register it in `registry.rs`.
+3. **Pricing update:** edit `src-tauri/src/pricing.rs` and bump the review date at the top.
+4. Before opening a PR:
 
 ```bash
-cd src-tauri && cargo test --lib
-npx tsc --noEmit
+cargo fmt   --manifest-path src-tauri/Cargo.toml --all -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings -A unused-mut
+cargo test  --manifest-path src-tauri/Cargo.toml
+npm run build
 ```
-
----
-
-## 📜 License
-
-Released under the [MIT License](./LICENSE) — free for personal and commercial use.
 
 ---
 
 <div align="center">
 
-**Built with ❤️ for developers who use more than one AI agent.**
+Released under the [MIT License](./LICENSE).
 
-OpenTokenMonitor is not affiliated with Anthropic, OpenAI, or Google.
+**Built for developers who use more than one AI agent.**
+OpenToken Monitor is not affiliated with Anthropic, OpenAI, or Google.
 
 [⬆ Back to top](#opentoken-monitor)
 

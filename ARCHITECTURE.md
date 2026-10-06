@@ -13,6 +13,66 @@ OpenTokenMonitor is a Tauri desktop app with:
 - a SQLite persistence layer managed by the Rust backend
 - provider adapters that combine local CLI artifacts with live authenticated fetches
 
+```mermaid
+flowchart TB
+  subgraph FE["⚛️ Frontend — src/"]
+    direction LR
+    VIEWS["Views<br/>Overview · Provider detail · Projects/Sessions<br/>Compare · Widget · Settings"]
+    STORES["Zustand stores<br/>usageStore · settingsStore"]
+    HOOKS["Runtime hooks<br/>useUsageData · useProviderStatus · …"]
+    VIEWS --- STORES --- HOOKS
+  end
+
+  subgraph BRIDGE["Tauri IPC"]
+    direction LR
+    CMD["invoke(command)"]
+    EVT["usage-updated · tray-navigate events"]
+  end
+
+  subgraph BE["🦀 Backend — src-tauri/src/"]
+    direction TB
+    subgraph IN["Triggers"]
+      direction LR
+      POLL["poll_scheduler"]
+      WATCH["file_watcher"]
+      MANUAL["commands / tray menu"]
+    end
+    AGG["usage/aggregator"]
+    subgraph PROV["providers/"]
+      direction LR
+      CLAUDE["claude"]
+      CODEX["codex"]
+      ANTI["antigravity"]
+    end
+    SCAN["usage_scanners<br/>incremental JSONL parsing"]
+    STORE[("usage/store — SQLite<br/>snapshots · snapshot_history · cost_entries")]
+    subgraph DERIVE["Derived views"]
+      direction LR
+      FC["limit_forecast"]
+      SES["session_usage"]
+      BUD["budgets"]
+      PRICE["pricing"]
+    end
+    HOOK["post_refresh::on_snapshots_updated"]
+    subgraph OUT["Outputs"]
+      direction LR
+      TRAY["tray + tray_badges"]
+      ALERT["alert_engine → notifications"]
+      EXP["exporter"]
+    end
+  end
+
+  HOOKS --> CMD --> BE
+  IN --> AGG --> PROV
+  PROV --> SCAN
+  AGG --> STORE
+  STORE --> DERIVE
+  SCAN --> SES
+  AGG --> HOOK --> TRAY
+  HOOK --> ALERT
+  HOOK --> EVT --> STORES
+```
+
 The important design choice is that the frontend does not talk to provider APIs
 directly. The React app talks to the Rust backend through Tauri commands, and
 the Rust backend owns provider fetch logic, persistence, background refreshes,
@@ -35,20 +95,44 @@ and filesystem watching.
 
 ### Data refresh
 
-The normal refresh path looks like this:
+```mermaid
+sequenceDiagram
+  autonumber
+  participant T as Trigger<br/>(timer · file change · UI · tray)
+  participant A as aggregator
+  participant P as provider
+  participant S as SQLite store
+  participant H as post_refresh hook
+  participant UI as React
 
-1. React calls a store action such as `refreshAll()` in `src/stores/usageStore.ts`.
-2. The store calls a Tauri command through `invoke(...)`.
-3. Rust receives the command in `src-tauri/src/lib.rs`.
-4. The command delegates to `src-tauri/src/usage/aggregator.rs`.
-5. The aggregator asks a provider implementation for fresh usage.
-6. The backend writes snapshots and cost history into SQLite.
-7. Rust emits a `usage-updated` event.
-8. `useUsageData` listens for that event and upserts the updated snapshot into the frontend store.
+  T->>A: refresh_provider / refresh_all
+  A->>P: fetch_usage (live API, else local logs)
+  P-->>A: UsageSnapshot
+  A->>S: save_snapshot + append_snapshot_history
+  A->>P: fetch_cost_history(30)
+  A->>S: save_cost_entries
+  A-->>H: on_snapshots_updated(all snapshots)
+  H->>H: tray tooltip + ring badges
+  H->>H: alert_engine::evaluate (thresholds · pace · budgets)
+  H-->>UI: emit usage-updated
+  UI->>S: get_limit_forecasts · get_project_usage · … (commands)
+```
+
+1. Something triggers a refresh: the poll scheduler, a file watcher, a UI store
+   action such as `refreshAll()`, or the tray's *Refresh All*.
+2. The trigger calls `src-tauri/src/usage/aggregator.rs`.
+3. The aggregator asks the provider for fresh usage (live API first, local logs
+   as fallback) and writes the snapshot, a `snapshot_history` row per window,
+   and daily per-model costs into SQLite.
+4. **Every** refresh path then calls `post_refresh::on_snapshots_updated`, which
+   updates the tray (tooltip and ring badges) and runs the alert engine.
+5. Rust emits `usage-updated`; `useUsageData` upserts the snapshot and the UI
+   re-fetches derived data (forecasts, projects, sessions) for the visible page.
 
 ### Background updates
 
-Two backend systems keep the UI current even when the user does not press refresh:
+Two backend systems keep the UI current even when the user does not press refresh
+(both go through the same post-refresh hook, so badges and alerts stay in sync):
 
 - `src-tauri/src/watchers/poll_scheduler.rs`
   Periodically triggers refreshes based on the configured cadence.
@@ -126,10 +210,16 @@ The main UI surfaces are grouped by responsibility:
   Sidebar, widget mode, widget activity surface
 - `components/providers/`
   Overview cards and full provider detail screens
+- `components/projects/`
+  Projects / Sessions page (exact costs from `get_project_usage` / `get_session_usage`)
+- `components/comparison/`
+  Compare view (spend share + side-by-side rows built on the overview card styles)
+- `components/insights/`
+  Cache-hit rate, cache savings and model spend mix on provider pages
 - `components/settings/`
   Settings and About panels
 - `components/meters/`
-  Circular/widget gauges, reset countdowns, and usage meters
+  Circular/widget gauges, reset countdowns, the `LimitEta` time-to-limit pill, and usage meters
 - `components/states/`
   Empty, loading, error, and diagnostics states
 
@@ -150,8 +240,16 @@ the file for where each concern lives.
 | Concern                        | Module                          |
 |--------------------------------|---------------------------------|
 | Tauri command handlers         | `src-tauri/src/commands.rs`     |
-| Tray icon, menu, tooltip       | `src-tauri/src/tray.rs`         |
-| Alert generation + thresholds  | `src-tauri/src/alerts.rs`       |
+| Post-refresh fan-out (tray, alerts) | `src-tauri/src/post_refresh.rs` |
+| Tray icon, menu, tooltip, title | `src-tauri/src/tray.rs`        |
+| Menu-bar ring badge rendering  | `src-tauri/src/tray_badges.rs`  |
+| Alert bands for reports        | `src-tauri/src/alerts.rs`       |
+| Notification decisions (once per escalation, pace, budget) | `src-tauri/src/alert_engine.rs` |
+| OS notification delivery       | `src-tauri/src/notifications.rs` |
+| Time-to-limit forecast         | `src-tauri/src/limit_forecast.rs` |
+| Per-session / per-project usage | `src-tauri/src/session_usage.rs` |
+| Budgets + spend forecast       | `src-tauri/src/budgets.rs`      |
+| CSV / JSON / HTML export       | `src-tauri/src/exporter.rs`     |
 | OS launch-at-startup wrapper   | `src-tauri/src/autostart.rs`    |
 | Per-model cost rate tables     | `src-tauri/src/pricing.rs`      |
 | Provider implementations       | `src-tauri/src/providers/`      |
@@ -193,17 +291,24 @@ Its job is to:
 
 This module owns SQLite persistence. It is the durable source for:
 
-- latest snapshots
-- cost history
-- model breakdown queries
-- usage trend queries
+- latest snapshots (`snapshots`, one row per provider)
+- utilization history (`snapshot_history`, one row per window per fresh fetch,
+  pruned to 30 days) — the input to `limit_forecast`
+- cost history (`cost_entries`, keyed by UTC day × provider × model)
+- model breakdown (including cache savings) and usage trend queries
 
-When the UI asks for cached historical data, the answer comes from here.
+Schema changes are `PRAGMA user_version` migrations that each stamp their own
+version. On every open the store also purges cost rows the current scanners can
+never write (unversioned model keys, retired providers): an older build sharing
+the database could otherwise re-insert them and double-count usage.
 
 ### `src-tauri/src/usage_scanners.rs`
 
-This module scans local recent CLI activity and turns that into the prompt
-history shown in the widget and provider detail pages.
+This module parses the CLIs' local JSONL logs incrementally (per-file caches
+keyed by size/mtime, so only new bytes are read). It produces daily and
+per-model token/cost totals, per-session usage (one log file = one session,
+with its working directory and time span), and the recent-prompt history shown
+in the widget and provider pages.
 
 ### `src-tauri/src/watchers/`
 
@@ -213,6 +318,15 @@ These modules keep local-file-driven providers reactive:
   Watches the relevant directories and triggers provider refreshes
 - `poll_scheduler.rs`
   Owns the repeatable timer used for cadence-based refreshes
+
+### Tray and threading rule
+
+Tray APIs (`set_icon`, `set_title`, `set_tooltip`) block until the main thread
+runs them. Never hold a `TrayState` (or any `AppState`) mutex while calling
+them — clone the `TrayIcon` handle out of the lock first (`tray::tray_icon`).
+Synchronous Tauri commands run on the main thread, so a command waiting on a
+lock held by a background refresh that is itself waiting on the main thread
+freezes the app. Commands that touch the tray are `async` for the same reason.
 
 ## 5. Data Ownership
 

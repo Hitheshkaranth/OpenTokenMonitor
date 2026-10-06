@@ -5,12 +5,14 @@
 //! - a left-click toggle for show/hide of the main window
 //! - a right-click menu (Show/Hide, Refresh All, Quit)
 //! - a tooltip showing each provider's primary-window utilization
+//! - an optional menu-bar title (macOS) with live usage % or today's cost
 //!
 //! The tray icon handle lives inside [`TrayState`] (kept in Tauri-managed
 //! state) because the tooltip is updated from multiple paths after startup.
 
 use std::sync::Mutex;
 
+use serde::{Deserialize, Serialize};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItemBuilder};
 use tauri::{AppHandle, Emitter, Manager};
@@ -49,6 +51,55 @@ fn format_tray_tooltip(snapshots: &[UsageSnapshot]) -> String {
     )
 }
 
+/// What the tray shows as text next to its icon. Only macOS renders tray
+/// titles; elsewhere setting one is a no-op.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrayTitleMode {
+    Off,
+    #[default]
+    Percent,
+    Cost,
+}
+
+/// Build the menu-bar title, e.g. `C 72% · X 41% · A 12%` or `$4.20 today`.
+pub fn format_tray_title(
+    mode: TrayTitleMode,
+    snapshots: &[UsageSnapshot],
+    today_cost_usd: f64,
+) -> Option<String> {
+    match mode {
+        TrayTitleMode::Off => None,
+        TrayTitleMode::Cost => Some(format!("${today_cost_usd:.2} today")),
+        TrayTitleMode::Percent => {
+            let parts: Vec<String> = ProviderId::all()
+                .into_iter()
+                .filter_map(|provider| {
+                    let snapshot = snapshots.iter().find(|s| s.provider == provider)?;
+                    let letter = match provider {
+                        ProviderId::Claude => "C",
+                        ProviderId::Codex => "X",
+                        ProviderId::Antigravity => "A",
+                    };
+                    Some(format!("{letter} {:.0}%", snapshot_percent(snapshot)))
+                })
+                .collect();
+            (!parts.is_empty()).then(|| parts.join(" · "))
+        }
+    }
+}
+
+/// Replace (or clear, with `None`) the tray's menu-bar title.
+pub fn set_tray_title(app: &AppHandle, title: Option<String>) {
+    if let Some(tray_state) = app.try_state::<TrayState>() {
+        if let Ok(mut icon_slot) = tray_state.icon.lock() {
+            if let Some(icon) = icon_slot.as_mut() {
+                let _ = icon.set_title(title);
+            }
+        }
+    }
+}
+
 /// Replace the tray tooltip with the latest provider utilizations.
 pub fn update_tray_tooltip(app: &AppHandle, snapshots: &[UsageSnapshot]) {
     let tooltip = format_tray_tooltip(snapshots);
@@ -85,6 +136,7 @@ fn spawn_refresh_all(app: &AppHandle) {
         if let Ok(snapshots) =
             aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context()).await
         {
+            crate::post_refresh::on_snapshots_updated(&app_inner, &snapshots);
             let _ = app_inner.emit("usage-updated", snapshots);
         }
     });
@@ -140,4 +192,56 @@ pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     update_tray_tooltip(app.handle(), &[]);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::usage::models::{
+        DataProvenance, DataSource, UsageUnit, UsageWindow, WindowAccuracy, WindowType,
+    };
+    use chrono::Utc;
+
+    fn snap(provider: ProviderId, utilization: f64) -> UsageSnapshot {
+        UsageSnapshot {
+            provider,
+            windows: vec![UsageWindow {
+                window_type: WindowType::FiveHour,
+                utilization,
+                used: None,
+                limit: None,
+                remaining: None,
+                resets_at: None,
+                reset_countdown_secs: None,
+                unit: UsageUnit::Percent,
+                accuracy: WindowAccuracy::PercentOnly,
+                note: None,
+            }],
+            credits: None,
+            plan: None,
+            fetched_at: Utc::now(),
+            source: DataSource::Oauth,
+            provenance: DataProvenance::Official,
+            stale: false,
+        }
+    }
+
+    #[test]
+    fn percent_title_uses_fixed_order_and_skips_missing() {
+        let snaps = [snap(ProviderId::Antigravity, 12.4), snap(ProviderId::Claude, 71.6)];
+        assert_eq!(
+            format_tray_title(TrayTitleMode::Percent, &snaps, 0.0).as_deref(),
+            Some("C 72% · A 12%")
+        );
+        assert_eq!(format_tray_title(TrayTitleMode::Percent, &[], 0.0), None);
+    }
+
+    #[test]
+    fn cost_and_off_titles() {
+        assert_eq!(
+            format_tray_title(TrayTitleMode::Cost, &[], 4.2).as_deref(),
+            Some("$4.20 today")
+        );
+        assert_eq!(format_tray_title(TrayTitleMode::Off, &[snap(ProviderId::Codex, 5.0)], 1.0), None);
+    }
 }

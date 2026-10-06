@@ -27,7 +27,7 @@ impl ProviderId {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WindowType {
     FiveHour,
@@ -36,6 +36,31 @@ pub enum WindowType {
     Monthly,
     Session,
     Weekly,
+}
+
+impl WindowType {
+    /// Stable snake_case key (matches the serde name) used as the
+    /// `snapshot_history.window_type` column value.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::FiveHour => "five_hour",
+            Self::SevenDay => "seven_day",
+            Self::Daily => "daily",
+            Self::Monthly => "monthly",
+            Self::Session => "session",
+            Self::Weekly => "weekly",
+        }
+    }
+}
+
+/// One recorded utilization point for a provider window. `ts` and
+/// `resets_at` are unix seconds.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistorySample {
+    pub ts: i64,
+    pub utilization: f64,
+    pub used: Option<u64>,
+    pub resets_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -245,6 +270,9 @@ pub struct ModelBreakdownEntry {
     pub cache_write_tokens: u64,
     pub total_tokens: u64,
     pub estimated_cost_usd: f64,
+    /// Saved by prompt caching versus paying the full input rate.
+    #[serde(default)]
+    pub cache_savings_usd: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -259,7 +287,7 @@ pub struct RecentActivityEntry {
     pub model: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AlertSeverity {
     Warning,

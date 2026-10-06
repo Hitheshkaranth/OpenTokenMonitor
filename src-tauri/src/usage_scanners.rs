@@ -149,6 +149,9 @@ struct CodexRunningTotals {
 #[derive(Clone, Debug, Default)]
 struct CodexContribution {
     session_id: Option<String>,
+    cwd: Option<String>,
+    first_ts: Option<i64>,
+    last_ts: Option<i64>,
     model_hint: Option<String>,
     input: u64,
     cached_input: u64,
@@ -179,6 +182,10 @@ struct CodexScannerCache {
 
 #[derive(Clone, Debug, Default)]
 struct ClaudeContribution {
+    session_id: Option<String>,
+    cwd: Option<String>,
+    first_ts: Option<i64>,
+    last_ts: Option<i64>,
     input: u64,
     cache_read_input: u64,
     cache_creation_input: u64,
@@ -431,6 +438,144 @@ pub fn scan_antigravity_model_daily_usage() -> Vec<AntigravityModelDailyUsagePoi
         .expect("antigravity scanner cache lock poisoned");
     guard.refresh_antigravity();
     guard.antigravity_model_daily()
+}
+
+/// Token usage and cost of one CLI session (one log file), restricted to the
+/// days in the requested window. Token columns follow Claude's convention:
+/// `input_tokens` excludes cache reads, so for Codex the cached part of its
+/// input is moved into `cache_read_tokens`.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SessionUsage {
+    pub provider: ProviderId,
+    pub session_id: String,
+    pub cwd: Option<String>,
+    pub first_ts: Option<i64>,
+    pub last_ts: Option<i64>,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub cache_write_tokens: u64,
+    pub total_tokens: u64,
+    pub cost_usd: f64,
+    /// Distinct models with their cost in the window, highest cost first.
+    pub models: Vec<ModelCost>,
+    pub today_cost_usd: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ModelCost {
+    pub model: String,
+    pub cost_usd: f64,
+}
+
+/// Turn accumulated per-model costs into a list ordered by cost, then name.
+pub fn sorted_model_costs(model_costs: HashMap<String, f64>) -> Vec<ModelCost> {
+    let mut models: Vec<ModelCost> = model_costs
+        .into_iter()
+        .map(|(model, cost_usd)| ModelCost { model, cost_usd })
+        .collect();
+    models.sort_by(|a, b| {
+        b.cost_usd
+            .total_cmp(&a.cost_usd)
+            .then_with(|| a.model.cmp(&b.model))
+    });
+    models
+}
+
+impl SessionUsage {
+    fn new(provider: ProviderId, session_id: String, cwd: Option<String>, first_ts: Option<i64>, last_ts: Option<i64>) -> Self {
+        Self {
+            provider,
+            session_id,
+            cwd,
+            first_ts,
+            last_ts,
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            total_tokens: 0,
+            cost_usd: 0.0,
+            models: Vec::new(),
+            today_cost_usd: 0.0,
+        }
+    }
+
+    fn finish(mut self, model_costs: HashMap<String, f64>) -> Option<Self> {
+        if self.total_tokens == 0 {
+            return None;
+        }
+        self.models = sorted_model_costs(model_costs);
+        Some(self)
+    }
+}
+
+/// Per-session usage for Claude and Codex over days `since_day..=today`
+/// (`YYYY-MM-DD`, UTC — the same bucketing the scanners use). Sorted by most
+/// recent activity first. Antigravity logs carry no working directory, so it
+/// has no session attribution.
+pub fn scan_session_usage(since_day: &str, today: &str) -> Vec<SessionUsage> {
+    let mut out = Vec::new();
+
+    {
+        let cache = CLAUDE_CACHE.get_or_init(|| Mutex::new(ClaudeScannerCache::default()));
+        let mut guard = cache.lock().expect("claude scanner cache lock poisoned");
+        guard.refresh_claude();
+        for (key, file) in &guard.files {
+            let c = &file.contribution;
+            let session_id = c.session_id.clone().unwrap_or_else(|| {
+                Path::new(key)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(key)
+                    .to_string()
+            });
+            let mut session = SessionUsage::new(ProviderId::Claude, session_id, c.cwd.clone(), c.first_ts, c.last_ts);
+            let mut model_costs = HashMap::<String, f64>::new();
+            for point in c.daily_by_model.values().filter(|p| p.day.as_str() >= since_day) {
+                session.input_tokens += point.input_tokens;
+                session.output_tokens += point.output_tokens;
+                session.cache_read_tokens += point.cache_read_input_tokens;
+                session.cache_write_tokens += point.cache_creation_input_tokens;
+                session.total_tokens += point.total_tokens;
+                session.cost_usd += point.cost_usd;
+                if point.day == today {
+                    session.today_cost_usd += point.cost_usd;
+                }
+                *model_costs.entry(point.model.clone()).or_default() += point.cost_usd;
+            }
+            out.extend(session.finish(model_costs));
+        }
+    }
+
+    {
+        let cache = CODEX_CACHE.get_or_init(|| Mutex::new(CodexScannerCache::default()));
+        let mut guard = cache.lock().expect("codex scanner cache lock poisoned");
+        guard.refresh_codex();
+        let contributions = dedupe_codex_contributions(
+            guard.files.values().map(|f| f.contribution.clone()).collect(),
+        );
+        for (i, c) in contributions.into_iter().enumerate() {
+            let session_id = c.session_id.clone().unwrap_or_else(|| format!("codex-{i}"));
+            let mut session = SessionUsage::new(ProviderId::Codex, session_id, c.cwd.clone(), c.first_ts, c.last_ts);
+            let mut model_costs = HashMap::<String, f64>::new();
+            for point in c.daily_by_model.values().filter(|p| p.day.as_str() >= since_day) {
+                session.input_tokens += point.input_tokens.saturating_sub(point.cached_input_tokens);
+                session.cache_read_tokens += point.cached_input_tokens;
+                session.output_tokens += point.output_tokens;
+                session.total_tokens += point.total_tokens;
+                session.cost_usd += point.cost_usd;
+                if point.day == today {
+                    session.today_cost_usd += point.cost_usd;
+                }
+                *model_costs.entry(point.model.clone()).or_default() += point.cost_usd;
+            }
+            out.extend(session.finish(model_costs));
+        }
+    }
+
+    out.sort_by(|a, b| b.last_ts.cmp(&a.last_ts));
+    out
 }
 
 pub fn scan_recent_activity(provider: ProviderId, limit: usize) -> Vec<RecentActivityEntry> {
@@ -1157,6 +1302,21 @@ fn push_recent_entry(out: &mut Vec<RecentActivityEntry>, entry: Option<RecentAct
     }
 }
 
+/// Widen a session's `[first, last]` unix-seconds span with this line's
+/// top-level ISO `timestamp`, if it has one.
+fn note_line_timestamp(json: &Value, first: &mut Option<i64>, last: &mut Option<i64>) {
+    let Some(ts) = json
+        .get("timestamp")
+        .and_then(|v| v.as_str())
+        .and_then(timestamp_from_iso)
+        .map(|t| t.timestamp())
+    else {
+        return;
+    };
+    *first = Some(first.map_or(ts, |f| f.min(ts)));
+    *last = Some(last.map_or(ts, |l| l.max(ts)));
+}
+
 fn timestamp_from_iso(value: &str) -> Option<chrono::DateTime<chrono::Utc>> {
     chrono::DateTime::parse_from_rfc3339(value)
         .ok()
@@ -1573,9 +1733,22 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
             continue;
         };
         let entry_type = json.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        note_line_timestamp(
+            &json,
+            &mut cache.contribution.first_ts,
+            &mut cache.contribution.last_ts,
+        );
+        if matches!(entry_type, "session_meta" | "turn_context") {
+            if let Some(cwd) = pick_first_str(&json, &[&["cwd"], &["payload", "cwd"]]) {
+                cache.contribution.cwd = Some(cwd);
+            }
+        }
         match entry_type {
             "session_meta" => {
-                if let Some(sid) = pick_first_str(&json, &[&["session_id"], &["session", "id"]]) {
+                if let Some(sid) = pick_first_str(
+                    &json,
+                    &[&["session_id"], &["session", "id"], &["payload", "id"]],
+                ) {
                     cache.session_id = Some(sid.clone());
                     cache.contribution.session_id = Some(sid);
                 }
@@ -1727,6 +1900,17 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
         let Ok(json) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
+        note_line_timestamp(
+            &json,
+            &mut cache.contribution.first_ts,
+            &mut cache.contribution.last_ts,
+        );
+        if let Some(sid) = pick_first_str(&json, &[&["sessionId"], &["session_id"]]) {
+            cache.contribution.session_id = Some(sid);
+        }
+        if let Some(cwd) = pick_first_str(&json, &[&["cwd"]]) {
+            cache.contribution.cwd = Some(cwd);
+        }
         if json.get("type").and_then(|v| v.as_str()) != Some("assistant") {
             continue;
         }
@@ -2502,6 +2686,38 @@ mod tests {
         assert_eq!(cache.contribution.input, 10);
         assert_eq!(cache.contribution.output, 3);
         assert_eq!(cache.contribution.deduped_chunks, 1);
+
+        let _ = remove_dir_all(dir);
+    }
+
+    #[test]
+    fn claude_parser_records_session_metadata() {
+        let dir = temp_dir("claude-session-meta");
+        let file = dir.join("session.jsonl");
+        let mut f = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&file)
+            .unwrap();
+        writeln!(
+            f,
+            "{{\"type\":\"user\",\"sessionId\":\"s-1\",\"cwd\":\"/work/app\",\"timestamp\":\"2026-10-06T10:00:00Z\"}}"
+        )
+        .unwrap();
+        writeln!(
+            f,
+            "{{\"type\":\"assistant\",\"sessionId\":\"s-1\",\"cwd\":\"/work/app\",\"timestamp\":\"2026-10-06T10:05:00Z\",\"requestId\":\"r1\",\"message\":{{\"id\":\"m1\",\"model\":\"claude-sonnet-4-5\",\"usage\":{{\"input_tokens\":10,\"cache_read_input_tokens\":40,\"cache_creation_input_tokens\":0,\"output_tokens\":3}}}}}}"
+        )
+        .unwrap();
+
+        let mut cache = ClaudeFileCache::default();
+        parse_claude_file_incremental(&file, &mut cache);
+        let c = &cache.contribution;
+        assert_eq!(c.session_id.as_deref(), Some("s-1"));
+        assert_eq!(c.cwd.as_deref(), Some("/work/app"));
+        assert_eq!(c.first_ts, Some(1_791_280_800));
+        assert_eq!(c.last_ts, Some(1_791_281_100));
+        assert_eq!(c.cache_read_input, 40);
 
         let _ = remove_dir_all(dir);
     }

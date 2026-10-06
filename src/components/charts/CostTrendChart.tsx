@@ -5,13 +5,29 @@ type CostTrendChartProps = {
   points: TrendPoint[];
   color: string;
   compact?: boolean;
+  days?: number;
 };
 
-const CostTrendChart = ({ points, color, compact }: CostTrendChartProps) => {
+const CostTrendChart = ({ points, color, compact, days }: CostTrendChartProps) => {
   const height = compact ? 80 : 150;
 
   return (
-    <div style={{ height, padding: compact ? 0 : 8 }}>
+    <div style={{ height, padding: compact ? 0 : 8, display: 'flex', flexDirection: 'column', gap: compact ? 0 : 2 }}>
+      {days != null && !compact ? (
+        <div style={{ paddingRight: 4, paddingBottom: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <span
+            style={{
+              fontSize: 8,
+              fontWeight: 700,
+              color: 'var(--text-muted)',
+              letterSpacing: '0.03em',
+              textTransform: 'uppercase',
+            }}
+          >
+            {days}d
+          </span>
+        </div>
+      ) : null}
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={points} margin={{ top: 4, right: 4, left: compact ? -20 : -16, bottom: 0 }}>
           <defs>

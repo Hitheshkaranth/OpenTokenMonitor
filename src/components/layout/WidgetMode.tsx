@@ -5,7 +5,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import GlassPanel from '@/components/glass/GlassPanel';
 import WidgetActivityView from '@/components/layout/WidgetActivityView';
 import WidgetGauge, { arcColor } from '@/components/meters/WidgetGauge';
-import ResetCountdown from '@/components/meters/ResetCountdown';
+import LimitEta, { forecastFor } from '@/components/meters/LimitEta';
+import { useUsageStore } from '@/stores/usageStore';
 import { ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry, UsageSnapshot, WindowType } from '@/types';
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { isTauriRuntime } from '@/utils/runtime';
@@ -61,6 +62,7 @@ const WidgetMode = ({
 }: WidgetModeProps) => {
   const [screen, setScreen] = useState<WidgetScreen>('usage');
   const [activityProvider, setActivityProvider] = useState<ProviderId>('codex');
+  const allForecasts = useUsageStore((s) => s.forecasts);
 
   useEffect(() => {
     if (recentActivity[activityProvider]?.length > 0) return;
@@ -140,6 +142,7 @@ const WidgetMode = ({
             const snapshot = snapshots[id];
             const access = getProviderAccessState(statuses[id], snapshot);
             const [primary, secondary] = displayWindows(snapshot);
+            const forecasts = allForecasts[id];
             const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
             const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
             const emptyStateLabel = access.health === 'error' ? 'Unavailable' : 'Awaiting';
@@ -175,7 +178,7 @@ const WidgetMode = ({
                             {primaryPct.toFixed(0)}%
                           </span>
                         </div>
-                        <ResetCountdown resetsAt={primary?.resets_at} className="widget-provider-reset" />
+                        <LimitEta replacesReset resetsAt={primary?.resets_at} forecast={forecastFor(forecasts, primary)} className="widget-provider-reset" />
                       </div>
                       {secondaryPct != null && (
                         <div className="widget-provider-complication">
@@ -187,7 +190,7 @@ const WidgetMode = ({
                               {secondaryPct.toFixed(0)}%
                             </span>
                           </div>
-                          <ResetCountdown resetsAt={secondary?.resets_at} className="widget-provider-reset" />
+                          <LimitEta replacesReset resetsAt={secondary?.resets_at} forecast={forecastFor(forecasts, secondary)} className="widget-provider-reset" />
                         </div>
                       )}
                     </>

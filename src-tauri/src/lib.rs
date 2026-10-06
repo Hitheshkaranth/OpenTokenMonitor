@@ -30,19 +30,27 @@ use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{fmt, EnvFilter, Registry};
 
+mod alert_engine;
 mod alerts;
 mod autostart;
+mod budgets;
 mod commands;
+mod exporter;
+mod limit_forecast;
+mod notifications;
+mod post_refresh;
 mod pricing;
 mod providers;
+mod session_usage;
 mod tray;
 mod usage;
 mod usage_scanners;
 mod watchers;
 
+use crate::alerts::ThresholdConfig;
 use providers::registry::ProviderRegistry;
 use providers::FetchContext;
-use tray::update_tray_tooltip;
+use post_refresh::on_snapshots_updated;
 use usage::aggregator;
 use usage::models::{ProviderId, RefreshCadence};
 use usage::store::UsageStore;
@@ -59,7 +67,13 @@ pub struct AppState {
     pub store: UsageStore,
     pub api_keys: Mutex<HashMap<ProviderId, String>>,
     pub cadence: Mutex<RefreshCadence>,
+    pub per_provider_cadence: Mutex<HashMap<ProviderId, RefreshCadence>>,
+    pub per_provider_thresholds: Mutex<HashMap<ProviderId, ThresholdConfig>>,
     pub scheduler: PollScheduler,
+    pub tray_title_mode: Mutex<tray::TrayTitleMode>,
+    pub notifications_enabled: Mutex<bool>,
+    pub alert_memory: Mutex<alert_engine::AlertMemory>,
+    pub budget_notified: Mutex<HashMap<ProviderId, bool>>,
 }
 
 impl AppState {
@@ -83,7 +97,13 @@ impl AppState {
             store,
             api_keys: Mutex::new(initial_keys),
             cadence: Mutex::new(RefreshCadence::Every2m),
+            per_provider_cadence: Mutex::new(HashMap::new()),
+            per_provider_thresholds: Mutex::new(HashMap::new()),
             scheduler: PollScheduler::new(),
+            tray_title_mode: Mutex::new(tray::TrayTitleMode::default()),
+            notifications_enabled: Mutex::new(true),
+            alert_memory: Mutex::new(HashMap::new()),
+            budget_notified: Mutex::new(HashMap::new()),
         })
     }
 
@@ -255,9 +275,73 @@ pub fn restart_scheduler(app: &AppHandle, state: &AppState, cadence: RefreshCade
             )
             .await
             {
-                update_tray_tooltip(&app_inner, &snapshots);
+                on_snapshots_updated(&app_inner, &snapshots);
                 let _ = app_inner.emit("usage-updated", snapshots);
             }
+        });
+    });
+}
+
+/// Restart the per-provider poll scheduler.
+///
+/// Each provider gets its own timer. On every tick the closure resolves that
+/// provider's effective cadence — a per-provider override from
+/// [`AppState::per_provider_cadence`], or the global [`AppState::cadence`]
+/// fallback — and refreshes only that provider once the interval has elapsed.
+/// Unlike the manual-refresh commands it intentionally skips
+/// `usage_scanners::invalidate_activity_cache()` so background polls stay
+/// lightweight.
+pub fn restart_per_provider_scheduler(app: &AppHandle, state: &AppState) {
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    let app_handle = app.clone();
+    let last_refresh: Arc<Mutex<HashMap<ProviderId, Instant>>> = Arc::new(Mutex::new(HashMap::new()));
+    state.scheduler.restart_per_provider(move |provider| {
+        let app_inner = app_handle.clone();
+        let last_refresh = last_refresh.clone();
+        tauri::async_runtime::spawn(async move {
+            let state = app_inner.state::<AppState>();
+            let cadence = state
+                .per_provider_cadence
+                .lock()
+                .map_err(|e| e.to_string())?
+                .get(&provider)
+                .copied()
+                .unwrap_or(*state.cadence.lock().map_err(|e| e.to_string())?);
+            if cadence == RefreshCadence::Manual {
+                return Ok::<(), String>(());
+            }
+
+            let seconds = cadence.seconds().unwrap_or_default();
+            let now = Instant::now();
+            let eligible = last_refresh
+                .lock()
+                .map_err(|e| e.to_string())?
+                .get(&provider)
+                .map(|last| now.duration_since(*last) >= Duration::from_secs(seconds))
+                .unwrap_or(true);
+            if !eligible {
+                return Ok::<(), String>(());
+            }
+            if let Ok(mut guard) = last_refresh.lock() {
+                guard.insert(provider, now);
+            }
+
+            if let Ok(snapshot) = aggregator::refresh_provider(
+                &state.registry,
+                &state.store,
+                provider,
+                &state.fetch_context(),
+            )
+            .await
+            {
+                if let Ok(all) = state.store.get_all_snapshots() {
+                    on_snapshots_updated(&app_inner, &all);
+                }
+                let _ = app_inner.emit("usage-updated", snapshot);
+            }
+            Ok(())
         });
     });
 }
@@ -284,7 +368,7 @@ fn start_file_watchers(app: &AppHandle) {
             .await
             {
                 if let Ok(all) = state.store.get_all_snapshots() {
-                    update_tray_tooltip(&app_inner, &all);
+                    on_snapshots_updated(&app_inner, &all);
                 }
                 let _ = app_inner.emit("usage-updated", snapshot);
             }
@@ -379,7 +463,7 @@ pub fn run() {
 
             {
                 let state_ref = app.state::<AppState>();
-                restart_scheduler(app.handle(), &state_ref, RefreshCadence::Every2m);
+                restart_per_provider_scheduler(app.handle(), &state_ref);
             }
 
             // Initial bootstrap refresh so the UI has data on first paint.
@@ -390,7 +474,7 @@ pub fn run() {
                     aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context())
                         .await
                 {
-                    update_tray_tooltip(&app_handle, &snapshots);
+                    on_snapshots_updated(&app_handle, &snapshots);
                     let _ = app_handle.emit("usage-updated", snapshots);
                 }
             });
@@ -432,6 +516,21 @@ pub fn run() {
             commands::set_launch_at_startup,
             commands::quit_app,
             commands::is_updater_configured,
+            notifications::notify_threshold_alert,
+            notifications::notify_usage_alerts,
+            notifications::set_thresholds,
+            budgets::get_budgets,
+            budgets::set_budget,
+            budgets::get_forecast,
+            exporter::export_report,
+            commands::set_per_provider_cadence,
+            commands::get_per_provider_cadence,
+            commands::set_tray_title_mode,
+            commands::get_tray_title_mode,
+            commands::set_notifications_enabled,
+            limit_forecast::get_limit_forecasts,
+            session_usage::get_session_usage,
+            session_usage::get_project_usage,
         ])
         .run(tauri::generate_context!());
 

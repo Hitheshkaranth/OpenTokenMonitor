@@ -1,17 +1,24 @@
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { create } from 'zustand';
 import {
   AuthState,
+  BudgetConfig,
+  BudgetForecast,
   CostEntry,
+  ExportFormat,
   ModelBreakdownEntry,
+  ProjectUsage,
   ProviderId,
   ProviderStatus,
   RecentActivityEntry,
   RefreshCadence,
   TrendData,
   UsageAlert,
+  SessionUsage,
   UsageReport,
   UsageSnapshot,
+  WindowForecast,
 } from '@/types';
 import { isTauriRuntime } from '@/utils/runtime';
 
@@ -28,6 +35,12 @@ type UsageState = {
   alerts: Record<ProviderId, UsageAlert[]>;
   authStates: Record<ProviderId, AuthState | undefined>;
   latestReport?: UsageReport;
+  backendBudgets: Record<ProviderId, BudgetConfig | undefined>;
+  budgetsForecast: Record<ProviderId, BudgetForecast | undefined>;
+  forecasts: Record<ProviderId, WindowForecast[]>;
+  projectUsage: ProjectUsage[];
+  sessionUsage: SessionUsage[];
+  providerProjectUsage: Record<ProviderId, ProjectUsage[]>;
   loading: boolean;
   error?: string;
   fetchSnapshot: (provider: ProviderId) => Promise<void>;
@@ -35,10 +48,17 @@ type UsageState = {
   refreshProvider: (provider: ProviderId) => Promise<void>;
   refreshAll: () => Promise<void>;
   fetchCostHistory: (provider: ProviderId, days?: number) => Promise<void>;
-  fetchTrend: (provider: ProviderId) => Promise<void>;
+  fetchTrend: (provider: ProviderId, days?: number) => Promise<void>;
   fetchModelBreakdown: (provider: ProviderId, days?: number) => Promise<void>;
   fetchRecentActivity: (provider: ProviderId, limit?: number) => Promise<void>;
   fetchUsageReport: (days?: number) => Promise<void>;
+  exportReport: (format: ExportFormat, days?: number) => Promise<void>;
+  fetchBudgets: () => Promise<void>;
+  fetchBudgetForecast: (provider: ProviderId, days?: number) => Promise<void>;
+  fetchForecasts: () => Promise<void>;
+  fetchProjectUsage: (days: number) => Promise<void>;
+  fetchSessionUsage: (days: number, limit?: number) => Promise<void>;
+  fetchProviderProjectUsage: (provider: ProviderId, days: number) => Promise<void>;
   fetchStatus: (provider: ProviderId) => Promise<void>;
   fetchAuthState: (provider: ProviderId) => Promise<void>;
   fetchAllAuthStates: () => Promise<void>;
@@ -54,6 +74,12 @@ const EMPTY_SNAPSHOTS: Record<ProviderId, UsageSnapshot | undefined> = {
   antigravity: undefined,
 };
 
+const EMPTY_BACKEND_BUDGETS: Record<ProviderId, BudgetConfig | undefined> = {
+  claude: undefined,
+  codex: undefined,
+  antigravity: undefined,
+};
+
 export const useUsageStore = create<UsageState>((set, get) => ({
   snapshots: EMPTY_SNAPSHOTS,
   costHistory: { claude: [], codex: [], antigravity: [] },
@@ -64,6 +90,12 @@ export const useUsageStore = create<UsageState>((set, get) => ({
   alerts: { claude: [], codex: [], antigravity: [] },
   authStates: { claude: undefined, codex: undefined, antigravity: undefined },
   latestReport: undefined,
+  backendBudgets: { claude: undefined, codex: undefined, antigravity: undefined },
+  budgetsForecast: { claude: undefined, codex: undefined, antigravity: undefined },
+  forecasts: { claude: [], codex: [], antigravity: [] },
+  projectUsage: [],
+  sessionUsage: [],
+  providerProjectUsage: { claude: [], codex: [], antigravity: [] },
   loading: false,
   error: undefined,
 
@@ -122,9 +154,9 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     set((state) => ({ costHistory: { ...state.costHistory, [provider]: history } }));
   },
 
-  fetchTrend: async (provider) => {
+  fetchTrend: async (provider, days = 30) => {
     if (!isTauriRuntime()) return;
-    const trend = await invoke<TrendData>('get_usage_trends', { provider });
+    const trend = await invoke<TrendData>('get_usage_trends', { provider, days });
     set((state) => ({ trends: { ...state.trends, [provider]: trend } }));
   },
 
@@ -158,6 +190,101 @@ export const useUsageStore = create<UsageState>((set, get) => ({
         antigravity: report.model_breakdowns.filter((entry) => entry.provider === 'antigravity'),
       },
     });
+  },
+
+  // Write the report to <app_data>/exports/ and open it in the OS handler so
+  // the user can print-to-PDF or hand it off.
+  exportReport: async (format, days = 30) => {
+    if (!isTauriRuntime()) return;
+    try {
+      const path = await invoke<string>('export_report', { days, format });
+      openUrl(path, '_self');
+    } catch (error) {
+      console.error('export report failed', error);
+    }
+  },
+
+  // Load persisted backend budgets so the UI can surface a forecast even
+  // before the user has edited any budget locally.
+  fetchBudgets: async () => {
+    if (!isTauriRuntime()) return;
+    try {
+      const backendBudgets = await invoke<BudgetConfig[]>('get_budgets');
+      const merged = backendBudgets.reduce<Record<ProviderId, BudgetConfig | undefined>>(
+        (acc, config) => {
+          if (Object.prototype.hasOwnProperty.call(EMPTY_BACKEND_BUDGETS, config.provider)) {
+            acc[config.provider] = config;
+          }
+          return acc;
+        },
+        { ...EMPTY_BACKEND_BUDGETS }
+      );
+      set((state) => ({ backendBudgets: { ...state.backendBudgets, ...merged } }));
+    } catch (error) {
+      // backend store unavailable; keep the frontend-local budgets as source of truth
+      void error;
+    }
+  },
+
+  // (Re)forecast a provider's budget so the UI can render projected spend.
+  fetchBudgetForecast: async (provider, days = 30) => {
+    if (!isTauriRuntime()) return;
+    try {
+      const forecast = await invoke<BudgetForecast>('get_forecast', { provider, days });
+      set((state) => ({ budgetsForecast: { ...state.budgetsForecast, [provider]: forecast } }));
+    } catch (error) {
+      // forecast unavailable (no cost history / budget yet); leave prior forecast
+      void error;
+    }
+  },
+
+  // Time-to-limit projections for every window with recorded history.
+  fetchForecasts: async () => {
+    if (!isTauriRuntime()) return;
+    try {
+      const all = await invoke<WindowForecast[]>('get_limit_forecasts');
+      set({
+        forecasts: {
+          claude: all.filter((f) => f.provider === 'claude'),
+          codex: all.filter((f) => f.provider === 'codex'),
+          antigravity: all.filter((f) => f.provider === 'antigravity'),
+        },
+      });
+    } catch (error) {
+      // no history yet; keep the previous projections
+      void error;
+    }
+  },
+
+  fetchProjectUsage: async (days) => {
+    if (!isTauriRuntime()) return;
+    try {
+      const projectUsage = await invoke<ProjectUsage[]>('get_project_usage', { days });
+      set({ projectUsage });
+    } catch (error) {
+      void error;
+    }
+  },
+
+  fetchSessionUsage: async (days, limit = 50) => {
+    if (!isTauriRuntime()) return;
+    try {
+      const sessionUsage = await invoke<SessionUsage[]>('get_session_usage', { days, limit });
+      set({ sessionUsage });
+    } catch (error) {
+      void error;
+    }
+  },
+
+  // Projects counting only one provider's sessions (provider detail page).
+  fetchProviderProjectUsage: async (provider, days) => {
+    if (!isTauriRuntime()) return;
+    try {
+      const projects = await invoke<ProjectUsage[]>('get_project_usage', { days, provider });
+      set((state) => ({ providerProjectUsage: { ...state.providerProjectUsage, [provider]: projects } }));
+    } catch (error) {
+      void error;
+    }
   },
 
   fetchStatus: async (provider) => {

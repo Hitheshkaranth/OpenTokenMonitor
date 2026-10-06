@@ -1,12 +1,13 @@
-import { useState } from 'react';
-import { Monitor, Palette, Power, RefreshCw, Server } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Bell, Download, MenuSquare, Monitor, Palette, Power, RefreshCw, Server, Wallet } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 import GlassToggle from '@/components/glass/GlassToggle';
 import GlassInput from '@/components/glass/GlassInput';
 import GlassButton from '@/components/glass/GlassButton';
 import DiagnosticsPanel from '@/components/states/DiagnosticsPanel';
 import ProviderLogo from '@/components/providers/ProviderLogo';
 import AboutPanel from '@/components/settings/AboutPanel';
-import { ProviderId, ProviderStatus, RefreshCadence } from '@/types';
+import { Budget, BudgetForecast, ExportFormat, PerProviderThresholds, ProviderId, ProviderStatus, RefreshCadence, TrayTitleMode } from '@/types';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUsageStore } from '@/stores/usageStore';
 
@@ -64,8 +65,33 @@ const formatFetchedAt = (value?: string) => {
   return `Updated ${new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 };
 
+const BudgetForecastSummary = ({ forecast }: { forecast: BudgetForecast }) => {
+  const exceed = forecast.projected_exceeds_budget;
+  return (
+    <div className="stg-pp-forecast-wrap">
+      <div className="stg-pp-forecast">
+        <div className="stg-pp-forecast-item">
+          <span className="stg-pp-forecast-item-label">Spend</span>
+          <span className="stg-pp-forecast-item-value">${forecast.spend_to_date_usd.toFixed(2)}</span>
+        </div>
+        <div className="stg-pp-forecast-item">
+          <span className="stg-pp-forecast-item-label">Proj</span>
+          <span className="stg-pp-forecast-item-value">${forecast.projected_spend_usd.toFixed(2)}</span>
+        </div>
+        <div className={`stg-pp-forecast-item ${exceed ? 'stg-pp-forecast-exceed' : ''}`}>
+          <span className="stg-pp-forecast-item-label">Used</span>
+          <span className="stg-pp-forecast-item-value">{forecast.utilization_percent.toFixed(0)}%</span>
+        </div>
+        {exceed && <span className="stg-pp-forecast-flag">exceeds</span>}
+      </div>
+    </div>
+  );
+};
+
 const SettingsPage = () => {
   const [view, setView] = useState<SettingsView>('settings');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('csv');
+  const [exportDays, setExportDays] = useState(30);
 
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
@@ -79,10 +105,24 @@ const SettingsPage = () => {
   const launchAtStartup = useSettingsStore((s) => s.launchAtStartup);
   const setLaunchAtStartup = useSettingsStore((s) => s.setLaunchAtStartup);
 
+  const notificationsEnabled = useSettingsStore((s) => s.notificationsEnabled);
+  const setNotificationsEnabled = useSettingsStore((s) => s.setNotificationsEnabled);
+  const perProviderThresholds = useSettingsStore((s) => s.perProviderThresholds);
+  const setProviderThresholds = useSettingsStore((s) => s.setProviderThresholds);
+  const budgets = useSettingsStore((s) => s.budgets);
+  const setBudgets = useSettingsStore((s) => s.setBudgets);
+  const perProviderCadence = useSettingsStore((s) => s.perProviderCadence);
+  const setPerProviderCadence = useSettingsStore((s) => s.setPerProviderCadence);
+  const trayTitleMode = useSettingsStore((s) => s.trayTitleMode);
+  const setTrayTitleMode = useSettingsStore((s) => s.setTrayTitleMode);
+
   const snapshots = useUsageStore((s) => s.snapshots);
+  const costHistory = useUsageStore((s) => s.costHistory);
   const statuses = useUsageStore((s) => s.statuses);
   const alerts = useUsageStore((s) => s.alerts);
   const error = useUsageStore((s) => s.error);
+  const backendBudgets = useUsageStore((s) => s.backendBudgets);
+  const budgetsForecast = useUsageStore((s) => s.budgetsForecast);
   const setApiKeyRemote = useUsageStore((s) => s.setApiKey);
   const setCadenceRemote = useUsageStore((s) => s.setCadence);
   const refreshProvider = useUsageStore((s) => s.refreshProvider);
@@ -97,11 +137,97 @@ const SettingsPage = () => {
     { key: 'providers', label: 'Sources', value: `${enabledCount}/3`, badge: `${activeCount} live`, icon: Server },
   ] as const;
 
+  // Live previews of what each menu-bar mode would show, mirroring the
+  // backend's format_tray_title (cost rows are keyed by UTC day).
+  const trayPreviews = useMemo(() => {
+    const letters: Record<ProviderId, string> = { claude: 'C', codex: 'X', antigravity: 'A' };
+    const percent = providers
+      .filter((p) => snapshots[p])
+      .map((p) => `${letters[p]} ${Math.round(snapshots[p]?.windows[0]?.utilization ?? 0)}%`)
+      .slice(0, 2)
+      .join(' · ');
+    const today = new Date().toISOString().slice(0, 10);
+    const cost = providers
+      .flatMap((p) => costHistory[p] ?? [])
+      .filter((entry) => entry.date === today)
+      .reduce((sum, entry) => sum + entry.estimated_cost_usd, 0);
+    return { off: 'icon only', percent: percent || 'C 0%', cost: `$${cost.toFixed(2)} today` } satisfies Record<TrayTitleMode, string>;
+  }, [snapshots, costHistory]);
+
+  const trayTitleOptions: { value: TrayTitleMode; label: string }[] = [
+    { value: 'off', label: 'Off' },
+    { value: 'percent', label: 'Usage %' },
+    { value: 'cost', label: "Today's cost" },
+  ];
+
   const saveKey = async (provider: ProviderId) => {
     const key = apiKeys[provider];
     await setApiKeyRemote(provider, key);
     await refreshProvider(provider);
   };
+
+  // A1 — optimistically update the store, then persist the per-provider alert
+  // lines. The setter command name is owned by the backend agent; keep working
+  // locally if it is unavailable.
+  const applyProviderThreshold = async (provider: ProviderId, thresholds: PerProviderThresholds) => {
+    setProviderThresholds(provider, thresholds);
+    try {
+      await invoke('set_thresholds', {
+        provider,
+        warning: thresholds.warning,
+        high: thresholds.high,
+        critical: thresholds.critical,
+      });
+    } catch (err) {
+      console.warn('set_thresholds unavailable', err);
+    }
+  };
+
+  // A3 — persist the per-provider spend cap.
+  const applyProviderBudget = async (provider: ProviderId, budget: Budget) => {
+    setBudgets(provider, budget);
+    try {
+      await invoke('set_budget', {
+        provider,
+        amount_usd: budget.amount_usd,
+        period_days: budget.period_days,
+      });
+    } catch (err) {
+      console.warn('set_budget unavailable', err);
+    }
+  };
+
+  // A4 — persist the per-provider refresh cadence alongside the global one.
+  const applyProviderCadence = async (provider: ProviderId, cadence: RefreshCadence) => {
+    setPerProviderCadence(provider, cadence);
+    try {
+      await invoke('set_per_provider_cadence', { provider, cadence });
+    } catch (err) {
+      console.warn('set_provider_cadence unavailable', err);
+    }
+  };
+
+  // Load persisted backend budgets once, then (re)forecast each provider
+  // whenever the effective budget inputs change so the cards stay current.
+  const budgetForecastKey = useMemo(
+    () =>
+      providers
+        .map((provider) => `${provider}:${(backendBudgets[provider] ?? budgets[provider])?.period_days ?? ''}`)
+        .join('|'),
+    [backendBudgets, budgets]
+  );
+
+  useEffect(() => {
+    void useUsageStore.getState().fetchBudgets();
+  }, []);
+
+  useEffect(() => {
+    providers.forEach((provider) => {
+      const effective = backendBudgets[provider] ?? budgets[provider];
+      if (!effective || effective.amount_usd <= 0) return;
+      void useUsageStore.getState().fetchBudgetForecast(provider, effective.period_days);
+    });
+  }, [budgetForecastKey]);
 
   return (
     <div className="stg-page">
@@ -283,6 +409,250 @@ const SettingsPage = () => {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Menu bar title */}
+          <div className="stg-section">
+            <div className="stg-section-head">
+              <div className="stg-section-head-left">
+                <span className="stg-section-icon"><MenuSquare size={13} /></span>
+                <span className="stg-section-title">Menu bar</span>
+              </div>
+              <span className="stg-badge">macOS</span>
+            </div>
+            <div className="stg-cadence-row">
+              {trayTitleOptions.map((option) => {
+                const isActive = trayTitleMode === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    className={`stg-cadence-card ${isActive ? 'stg-cadence-card-active' : ''}`}
+                    onClick={() => setTrayTitleMode(option.value)}
+                    title="Shows live usage next to the menu-bar icon"
+                  >
+                    <span className="stg-tray-preview">{trayPreviews[option.value]}</span>
+                    <span className="stg-cadence-label">{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Notifications + alert thresholds */}
+          <div className="stg-section">
+            <div className="stg-section-head">
+              <div className="stg-section-head-left">
+                <span className="stg-section-icon"><Bell size={13} /></span>
+                <span className="stg-section-title">Notifications</span>
+              </div>
+              <span className="stg-badge">{notificationsEnabled ? 'On' : 'Off'}</span>
+            </div>
+            <div className="stg-pp-toggle-row">
+              <span className="stg-pp-toggle-text">
+                {notificationsEnabled
+                  ? 'Once per threshold crossing, when on pace to hit a limit before reset, and on projected budget overrun'
+                  : 'Notifications are disabled'}
+              </span>
+              <GlassToggle
+                checked={notificationsEnabled}
+                onChange={setNotificationsEnabled}
+                label={notificationsEnabled ? 'On' : 'Off'}
+              />
+            </div>
+            <div className="stg-note">
+              <Bell size={11} />
+              <span>
+                Notifications require the OS notification permission. Grant access for OpenToken Monitor in
+                System Settings → Privacy & Security → Notifications if alerts do not appear.
+              </span>
+            </div>
+            <div className="stg-pp-grid">
+              {providers.map((provider) => {
+                const thresholds = perProviderThresholds[provider];
+                return (
+                  <div
+                    key={provider}
+                    className="stg-pp-card"
+                    style={{ '--widget-accent': providerAccents[provider] } as React.CSSProperties}
+                  >
+                    <div className="stg-pp-identity">
+                      <ProviderLogo provider={provider} size={14} />
+                      <span className="stg-pp-name">{providerLabels[provider]}</span>
+                    </div>
+                    <div className="stg-pp-fields stg-pp-fields-threshold">
+                      {(['warning', 'high', 'critical'] as const).map((field) => (
+                        <div key={field} className="stg-pp-field">
+                          <span className="stg-pp-field-label">{field}</span>
+                          <GlassInput
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={String(thresholds[field])}
+                            onChange={(next) =>
+                              applyProviderThreshold(provider, {
+                                ...thresholds,
+                                [field]: Math.min(100, Math.max(0, Number(next) || thresholds[field])),
+                              })
+                            }
+                            style={{ minWidth: 60 }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Budgets */}
+          <div className="stg-section">
+            <div className="stg-section-head">
+              <div className="stg-section-head-left">
+                <span className="stg-section-icon"><Wallet size={13} /></span>
+                <span className="stg-section-title">Budgets</span>
+              </div>
+              <span className="stg-badge">spend cap</span>
+            </div>
+            <div className="stg-pp-grid">
+              {providers.map((provider) => {
+                const budget = budgets[provider];
+                return (
+                  <div
+                    key={provider}
+                    className="stg-pp-card"
+                    style={{ '--widget-accent': providerAccents[provider] } as React.CSSProperties}
+                  >
+                    <div className="stg-pp-identity">
+                      <ProviderLogo provider={provider} size={14} />
+                      <span className="stg-pp-name">{providerLabels[provider]}</span>
+                    </div>
+                    <div className="stg-pp-fields stg-pp-fields-budget">
+                      <div className="stg-pp-field">
+                        <span className="stg-pp-field-label">Amount ($)</span>
+                        <GlassInput
+                          type="number"
+                          min={0}
+                          value={String(budget.amount_usd)}
+                          onChange={(next) =>
+                            applyProviderBudget(provider, { ...budget, amount_usd: Math.max(0, Number(next) || 0) })
+                          }
+                          style={{ minWidth: 66 }}
+                        />
+                      </div>
+                      <div className="stg-pp-field">
+                        <span className="stg-pp-field-label">Period (days)</span>
+                        <GlassInput
+                          type="number"
+                          min={1}
+                          value={String(budget.period_days)}
+                          onChange={(next) =>
+                            applyProviderBudget(provider, { ...budget, period_days: Math.max(1, Number(next) || 1) })
+                          }
+                          style={{ minWidth: 66 }}
+                        />
+                      </div>
+                    </div>
+
+                    {budgetsForecast[provider] && (
+                      <div className="stg-pp-forecast-wrap">
+                        <BudgetForecastSummary forecast={budgetsForecast[provider]} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Per-provider refresh cadence */}
+          <div className="stg-section">
+            <div className="stg-section-head">
+              <div className="stg-section-head-left">
+                <span className="stg-section-icon"><RefreshCw size={13} /></span>
+                <span className="stg-section-title">Provider cadence</span>
+              </div>
+              <span className="stg-badge">per source</span>
+            </div>
+            <div className="stg-pp-grid">
+              {providers.map((provider) => {
+                const cadence = perProviderCadence[provider];
+                return (
+                  <div
+                    key={provider}
+                    className="stg-pp-card"
+                    style={{ '--widget-accent': providerAccents[provider] } as React.CSSProperties}
+                  >
+                    <div className="stg-pp-identity">
+                      <ProviderLogo provider={provider} size={14} />
+                      <span className="stg-pp-name">{providerLabels[provider]}</span>
+                    </div>
+                    <div className="stg-pp-fields stg-pp-field-select">
+                      <div className="stg-pp-field">
+                        <span className="stg-pp-field-label">Refresh</span>
+                        <select
+                          className="stg-cadence-select"
+                          value={cadence}
+                          onChange={(event) => applyProviderCadence(provider, event.target.value as RefreshCadence)}
+                        >
+                          {cadenceOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Export report */}
+          <div className="stg-section">
+            <div className="stg-section-head">
+              <div className="stg-section-head-left">
+                <span className="stg-section-icon"><Download size={13} /></span>
+                <span className="stg-section-title">Export</span>
+              </div>
+              <span className="stg-badge">CSV · JSON · PDF</span>
+            </div>
+            <div className="stg-pp-fields stg-pp-fields-budget">
+              <div className="stg-pp-field">
+                <span className="stg-pp-field-label">Format</span>
+                <select
+                  className="stg-cadence-select"
+                  value={exportFormat}
+                  onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
+                >
+                  <option value="csv">CSV</option>
+                  <option value="json">JSON</option>
+                  <option value="pdf">PDF</option>
+                </select>
+              </div>
+              <div className="stg-pp-field">
+                <span className="stg-pp-field-label">Days</span>
+                <select
+                  className="stg-cadence-select"
+                  value={String(exportDays)}
+                  onChange={(event) => setExportDays(Number(event.target.value))}
+                >
+                  <option value="7">7</option>
+                  <option value="30">30</option>
+                  <option value="90">90</option>
+                </select>
+              </div>
+              <div className="stg-pp-field stg-pp-field-btn">
+                <button
+                  type="button"
+                  className="stg-pp-export-btn"
+                  onClick={() => void useUsageStore.getState().exportReport(exportFormat, exportDays)}
+                >
+                  Export
+                </button>
+              </div>
             </div>
           </div>
 

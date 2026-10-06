@@ -1,0 +1,54 @@
+/* ── Compare view ──
+   Layout only: the header, spend panel and provider rows reuse the shared
+   proj-header / pcard-section-panel / overview-card-v2 styles. */
+.cmp-root {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.cmp-legend {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cmp-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cmp-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cmp-row {
+  flex: none;
+}
+
+/* Three equal cells spanning the row, so no hollow space to the right. */
+.cmp-row .overview-card-windows {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cmp-row .overview-card-window {
+  min-width: 0;
+}
+
+.cmp-row .overview-card-pct {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Value-first cells: the number takes the full width, its label sits below. */
+.cmp-row .overview-card-window {
+  justify-content: space-between;
+}

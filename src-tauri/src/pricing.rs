@@ -30,6 +30,8 @@
 //!    snapshot dates but deliberately keep version digits.
 //! 3. Update the model picker in any UI that shows per-model breakdowns.
 
+use crate::usage::models::ProviderId;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Anthropic — Claude
 // ─────────────────────────────────────────────────────────────────────────────
@@ -389,6 +391,23 @@ pub fn antigravity_cost_usd(model: &str, input: u64, cached: u64, output: u64) -
 /// Centralizing this keeps the unit conversion (and any future numerical
 /// guards) in exactly one spot.
 #[inline]
+/// What prompt caching saved: `cache_read_tokens` billed at the full input
+/// rate minus what they actually cost at the cache-read rate. 0 for models
+/// with no known rates.
+pub fn cache_savings_usd(provider: ProviderId, model: &str, cache_read_tokens: u64) -> f64 {
+    let rates = match provider {
+        ProviderId::Claude => claude_rates(model).map(|(input, read, _, _)| (input, read)),
+        ProviderId::Codex => codex_rates(model).map(|(input, cached, _)| (input, cached)),
+        ProviderId::Antigravity => {
+            let (input, cached, _) = antigravity_rates(model);
+            Some((input, cached))
+        }
+    };
+    rates
+        .map(|(input, read)| per_million(cache_read_tokens, (input - read).max(0.0)))
+        .unwrap_or(0.0)
+}
+
 fn per_million(tokens: u64, usd_per_1m: f64) -> f64 {
     (tokens as f64 / 1_000_000.0) * usd_per_1m
 }
@@ -520,5 +539,13 @@ mod tests {
         // input rate derived some other way.
         let cost = antigravity_cost_usd("antigravity-3.5-flash", M, M, 0);
         assert!((cost - 0.15).abs() < 0.0001);
+    }
+
+    #[test]
+    fn cache_savings_use_input_minus_read_rate() {
+        // Haiku 4.5: $1.00 input, $0.10 cache read per 1M.
+        let saved = cache_savings_usd(ProviderId::Claude, "claude-haiku-4-5", 1_000_000);
+        assert!((saved - 0.9).abs() < 1e-9, "saved {saved}");
+        assert_eq!(cache_savings_usd(ProviderId::Codex, "unknown-model-xyz", 1_000_000), 0.0);
     }
 }

@@ -84,6 +84,12 @@ pub async fn refresh_provider(
         }
     }
     store.save_snapshot(&snapshot)?;
+    if let Err(err) = store.append_snapshot_history(&snapshot) {
+        tracing::warn!(
+            "[{}] failed to record snapshot history: {err}",
+            provider.as_str()
+        );
+    }
 
     let history = provider_impl.fetch_cost_history(30).await?;
     if !history.is_empty() {

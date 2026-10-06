@@ -334,6 +334,26 @@
   box-shadow: 0 0 6px rgba(255, 196, 96, 0.3);
 }
 
+/* Menu-bar title preview inside a cadence-style card. */
+.stg-tray-preview {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.stg-cadence-card-active .stg-tray-preview {
+  color: var(--text-primary);
+}
+
 .stg-cadence-label {
   font-size: 9px;
   font-weight: 700;
@@ -430,6 +450,132 @@
   color: var(--text-muted);
   letter-spacing: 0.02em;
   flex-wrap: wrap;
+}
+
+/* ── Per-provider settings rows (notifications / budgets / cadence) ── */
+.stg-pp-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--widget-card-panel-border);
+  background: var(--widget-card-panel-bg);
+}
+
+.stg-pp-toggle-text {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.stg-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--widget-card-panel-border);
+  background: var(--widget-card-panel-bg);
+  color: var(--text-muted);
+  font-size: 7.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.stg-note > svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.stg-pp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.stg-pp-card {
+  --widget-accent: 148 163 184;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 9px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--widget-accent), 0.18);
+  background: var(--widget-card-entry-bg);
+  min-width: 0;
+}
+
+.stg-pp-identity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stg-pp-name {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.stg-pp-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.stg-pp-fields-threshold,
+.stg-pp-fields-budget {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.stg-pp-field-select {
+  justify-content: flex-end;
+}
+
+.stg-pp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stg-pp-field-label {
+  font-size: 6.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stg-cadence-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  min-width: 0;
+  max-width: 120px;
+  padding: 4px 26px 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--widget-card-panel-border);
+  background: var(--widget-card-panel-bg);
+  color: var(--text-primary);
+  font-size: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239aa4ac' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+
+.stg-cadence-select option {
+  background: var(--widget-card-shell);
+  color: var(--text-primary);
 }
 
 /* ── Diagnostics ── */
@@ -683,4 +829,133 @@
   font-size: 11px;
   font-weight: 800;
   color: var(--text-primary);
+}
+
+/* ── Budget forecast summary + export (compact, per-provider scale) ── */
+
+.stg-pp-forecast-wrap {
+  border-top: 1px solid var(--widget-card-panel-border);
+  padding-top: 5px;
+}
+
+.stg-pp-forecast {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.stg-pp-forecast-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stg-pp-forecast-item-label {
+  font-size: 6.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stg-pp-forecast-item-value {
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.stg-pp-forecast-exceed .stg-pp-forecast-item-value {
+  color: #c0392b;
+}
+
+.stg-pp-forecast-flag {
+  font-size: 6px;
+  font-weight: 800;
+  color: #c0392b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(192, 57, 43, 0.4);
+  background: rgba(192, 57, 43, 0.1);
+}
+
+.stg-pp-field-btn {
+  align-self: stretch;
+}
+
+.stg-pp-export-btn {
+  align-self: stretch;
+  min-height: 22px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(79, 158, 255, 0.5);
+  background: rgba(79, 158, 255, 0.15);
+  color: #9dc2ff;
+  font-size: 7.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+.stg-pp-export-btn:hover {
+  transform: translateY(-1px);
+}
+
+/* Whole-modal text scaled to match the ~5px period pills. Same selectors as the
+   rules above, later source position, so they win by source order. */
+
+.stg-badge,
+.stg-metric-label,
+.stg-theme-label,
+.stg-theme-tag,
+.stg-cadence-label,
+.stg-startup-text,
+.stg-provider-footer,
+.stg-pp-toggle-text,
+.stg-note,
+.stg-pp-field-label,
+.stg-cadence-select,
+.stg-diag-error,
+.stg-diag-status,
+.stg-diag-info,
+.stg-diag-alerts,
+.stg-pp-forecast-item-label,
+.stg-pp-forecast-flag,
+.stg-pp-export-btn,
+.abt-desc,
+.abt-signal-label,
+.abt-project-desc,
+.abt-version-label {
+  font-size: 5px;
+}
+
+.stg-toggle-btn,
+.stg-metric-value,
+.stg-section-title,
+.stg-provider-name,
+.stg-pp-name,
+.stg-diag-name,
+.stg-pp-forecast-item-value,
+.abt-signal-value,
+.abt-section-title,
+.abt-version-value {
+  font-size: 6px;
+}
+
+.abt-app-name,
+.abt-maintainer {
+  font-size: 7px;
+}
+
+.stg-page .glass-pill input,
+.stg-pp-field .glass-pill input,
+.stg-pp-field-select .glass-pill input {
+  font-size: 5px;
 }

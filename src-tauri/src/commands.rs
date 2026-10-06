@@ -13,10 +13,11 @@ use chrono::Utc;
 use tauri::{AppHandle, Emitter, State};
 use tracing::warn;
 
-use crate::alerts::build_alerts;
+use crate::alerts::{build_alerts_with_thresholds, ThresholdConfig};
 use crate::autostart::{launch_at_startup_enabled, set_launch_at_startup_enabled};
 use crate::providers::auth::AuthState;
-use crate::tray::update_tray_tooltip;
+use crate::post_refresh::on_snapshots_updated;
+use crate::tray::TrayTitleMode;
 use crate::usage::aggregator;
 use crate::usage::models::{
     CostEntry, ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry,
@@ -24,7 +25,8 @@ use crate::usage::models::{
 };
 use crate::usage_scanners;
 use crate::{
-    clear_persisted_api_key, persist_api_key, resolve_log_dir, restart_scheduler, AppState,
+    clear_persisted_api_key, persist_api_key, resolve_log_dir, restart_per_provider_scheduler,
+    restart_scheduler, AppState,
 };
 
 // ───────────────────────── Updater ─────────────────────────
@@ -99,9 +101,10 @@ pub async fn get_cost_history(
 #[tauri::command]
 pub async fn get_usage_trends(
     provider: ProviderId,
+    days: u32,
     state: State<'_, AppState>,
 ) -> Result<TrendData, String> {
-    state.store.get_usage_trends(provider, 30)
+    state.store.get_usage_trends(provider, days.max(1))
 }
 
 #[tauri::command]
@@ -135,9 +138,30 @@ pub async fn export_usage_report(
         model_breakdowns.extend(state.store.get_model_breakdown(provider, days.max(1))?);
     }
 
+    // Build alerts per-provider so a user's custom threshold ladder applies to
+    // reports (falling back to the fixed 75/90/95 ladder when a provider has no
+    // configured thresholds).
+    let thresholds = state
+        .per_provider_thresholds
+        .lock()
+        .map_err(|_| "thresholds lock poisoned")?;
+    let mut alerts = Vec::new();
+    for provider in ProviderId::all() {
+        let provider_snapshots: Vec<_> = snapshots
+            .iter()
+            .filter(|snapshot| snapshot.provider == provider)
+            .cloned()
+            .collect();
+        let config = thresholds
+            .get(&provider)
+            .cloned()
+            .unwrap_or_else(ThresholdConfig::default);
+        alerts.extend(build_alerts_with_thresholds(&provider_snapshots, &config));
+    }
+
     Ok(UsageReport {
         generated_at: Utc::now(),
-        alerts: build_alerts(&snapshots),
+        alerts,
         snapshots,
         model_breakdowns,
     })
@@ -161,7 +185,7 @@ pub async fn refresh_provider(
     .await?;
     let _ = app.emit("usage-updated", snapshot.clone());
     if let Ok(all) = state.store.get_all_snapshots() {
-        update_tray_tooltip(&app, &all);
+        on_snapshots_updated(&app, &all);
     }
     Ok(snapshot)
 }
@@ -174,7 +198,7 @@ pub async fn refresh_all(
     usage_scanners::invalidate_activity_cache();
     let snapshots =
         aggregator::refresh_all(&state.registry, &state.store, &state.fetch_context()).await?;
-    update_tray_tooltip(&app, &snapshots);
+    on_snapshots_updated(&app, &snapshots);
     let _ = app.emit("usage-updated", snapshots.clone());
     Ok(snapshots)
 }
@@ -277,6 +301,40 @@ pub async fn set_refresh_cadence(
 }
 
 #[tauri::command]
+pub async fn set_per_provider_cadence(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    provider: ProviderId,
+    cadence: RefreshCadence,
+) -> Result<(), String> {
+    {
+        let mut cadence_slot = state
+            .per_provider_cadence
+            .lock()
+            .map_err(|_| "cadence lock poisoned".to_string())?;
+        cadence_slot.insert(provider, cadence);
+    }
+    let app_handle = app.clone();
+    restart_per_provider_scheduler(&app_handle, &state);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_per_provider_cadence(
+    provider: ProviderId,
+    state: State<'_, AppState>,
+) -> Result<RefreshCadence, String> {
+    let cadence = state
+        .per_provider_cadence
+        .lock()
+        .map_err(|_| "cadence lock poisoned".to_string())?
+        .get(&provider)
+        .copied()
+        .unwrap_or(*state.cadence.lock().map_err(|_| "cadence lock poisoned".to_string())?);
+    Ok(cadence)
+}
+
+#[tauri::command]
 pub async fn get_launch_at_startup(app: AppHandle) -> Result<bool, String> {
     launch_at_startup_enabled(&app)
 }
@@ -289,5 +347,40 @@ pub async fn set_launch_at_startup(enabled: bool, app: AppHandle) -> Result<bool
 #[tauri::command]
 pub async fn quit_app(app: AppHandle) -> Result<(), String> {
     app.exit(0);
+    Ok(())
+}
+
+// ───────────────────────── Menu bar & notifications ─────────────────────────
+
+#[tauri::command]
+pub fn set_tray_title_mode(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    mode: TrayTitleMode,
+) -> Result<(), String> {
+    *state
+        .tray_title_mode
+        .lock()
+        .map_err(|_| "tray title lock poisoned")? = mode;
+    crate::post_refresh::rerender_tray_title(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_tray_title_mode(state: State<'_, AppState>) -> Result<TrayTitleMode, String> {
+    Ok(*state
+        .tray_title_mode
+        .lock()
+        .map_err(|_| "tray title lock poisoned")?)
+}
+
+/// Backend notifications (threshold escalations, pace and budget warnings)
+/// honour this switch; see `alert_engine`.
+#[tauri::command]
+pub fn set_notifications_enabled(state: State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    *state
+        .notifications_enabled
+        .lock()
+        .map_err(|_| "notifications lock poisoned")? = enabled;
     Ok(())
 }

@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 use rusqlite::{params, Connection};
 
 use crate::usage::models::{
-    CostEntry, ModelBreakdownEntry, ProviderId, TrendData, TrendPoint, UsageSnapshot,
+    CostEntry, HistorySample, ModelBreakdownEntry, ProviderId, TrendData, TrendPoint,
+    UsageSnapshot, WindowType,
 };
 
 #[derive(Clone)]
@@ -64,7 +65,7 @@ impl UsageStore {
     /// means a build carrying the new version constant but not yet the new step
     /// marks the work done without doing it, stranding the database.
     fn migrate(&self) -> Result<(), String> {
-        const LATEST_VERSION: i64 = 2;
+        const LATEST_VERSION: i64 = 3;
 
         let conn = self
             .conn
@@ -132,6 +133,26 @@ impl UsageStore {
                 .map_err(|e| e.to_string())?;
         }
 
+        if version < 3 {
+            // v3 — utilization history. `snapshots` only keeps the latest row
+            // per provider, so nothing could say how fast a window is filling.
+            // One row per window per fresh fetch feeds the time-to-limit
+            // forecast; `append_snapshot_history` prunes it to 30 days.
+            conn.execute_batch(
+                "CREATE TABLE IF NOT EXISTS snapshot_history (
+                   provider TEXT NOT NULL,
+                   window_type TEXT NOT NULL,
+                   ts INTEGER NOT NULL,
+                   utilization REAL NOT NULL,
+                   used INTEGER,
+                   resets_at INTEGER,
+                   PRIMARY KEY(provider, window_type, ts)
+                 );
+                 PRAGMA user_version = 3;",
+            )
+            .map_err(|e| e.to_string())?;
+        }
+
         debug_assert_eq!(
             conn.query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
                 .map_err(|e| e.to_string())?,
@@ -192,6 +213,77 @@ impl UsageStore {
             if let Ok(snapshot) = serde_json::from_str::<UsageSnapshot>(&payload) {
                 out.push(snapshot);
             }
+        }
+        Ok(out)
+    }
+
+    /// Append one history row per window of a freshly fetched snapshot, then
+    /// drop this provider's rows older than 30 days. A repeat of the same
+    /// `fetched_at` is ignored.
+    pub fn append_snapshot_history(&self, snapshot: &UsageSnapshot) -> Result<(), String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
+        let ts = snapshot.fetched_at.timestamp();
+        for window in &snapshot.windows {
+            conn.execute(
+                "INSERT OR IGNORE INTO snapshot_history
+                   (provider, window_type, ts, utilization, used, resets_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    snapshot.provider.as_str(),
+                    window.window_type.as_str(),
+                    ts,
+                    window.utilization,
+                    window.used.map(|v| v as i64),
+                    window.resets_at.map(|d| d.timestamp()),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        let cutoff = chrono::Utc::now().timestamp() - 30 * 24 * 60 * 60;
+        conn.execute(
+            "DELETE FROM snapshot_history WHERE provider = ?1 AND ts < ?2",
+            params![snapshot.provider.as_str(), cutoff],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// History rows for one provider window at or after `since_unix`, oldest first.
+    pub fn get_snapshot_history(
+        &self,
+        provider: ProviderId,
+        window_type: WindowType,
+        since_unix: i64,
+    ) -> Result<Vec<HistorySample>, String> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT ts, utilization, used, resets_at
+                 FROM snapshot_history
+                 WHERE provider = ?1 AND window_type = ?2 AND ts >= ?3
+                 ORDER BY ts ASC",
+            )
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query(params![provider.as_str(), window_type.as_str(), since_unix])
+            .map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            out.push(HistorySample {
+                ts: row.get(0).map_err(|e| e.to_string())?,
+                utilization: row.get(1).map_err(|e| e.to_string())?,
+                used: row
+                    .get::<_, Option<i64>>(2)
+                    .map_err(|e| e.to_string())?
+                    .map(|v| v.max(0) as u64),
+                resets_at: row.get(3).map_err(|e| e.to_string())?,
+            });
         }
         Ok(out)
     }
@@ -341,6 +433,7 @@ impl UsageStore {
                     cache_write_tokens: 0,
                     total_tokens: 0,
                     estimated_cost_usd: 0.0,
+                    cache_savings_usd: 0.0,
                 });
             slot.input_tokens = slot.input_tokens.saturating_add(entry.input_tokens);
             slot.output_tokens = slot.output_tokens.saturating_add(entry.output_tokens);
@@ -355,6 +448,10 @@ impl UsageStore {
         }
 
         let mut out: Vec<_> = by_model.into_values().collect();
+        for entry in &mut out {
+            entry.cache_savings_usd =
+                crate::pricing::cache_savings_usd(provider, &entry.model, entry.cache_read_tokens);
+        }
         out.sort_by(|a, b| {
             b.estimated_cost_usd
                 .partial_cmp(&a.estimated_cost_usd)
@@ -539,5 +636,68 @@ mod tests {
         assert_eq!(trend.points[0].date, "2026-03-01");
         assert_eq!(trend.points[0].total_tokens, 21);
         assert!((trend.points[0].cost_usd - 1.2).abs() < f64::EPSILON);
+    }
+
+    fn history_snapshot(secs_ago: i64, utilization: f64) -> UsageSnapshot {
+        use crate::usage::models::{
+            DataProvenance, DataSource, UsageUnit, UsageWindow, WindowAccuracy,
+        };
+        UsageSnapshot {
+            provider: ProviderId::Claude,
+            windows: vec![UsageWindow {
+                window_type: WindowType::FiveHour,
+                utilization,
+                used: None,
+                limit: None,
+                remaining: None,
+                resets_at: None,
+                reset_countdown_secs: None,
+                unit: UsageUnit::Percent,
+                accuracy: WindowAccuracy::PercentOnly,
+                note: None,
+            }],
+            credits: None,
+            plan: None,
+            fetched_at: chrono::Utc::now() - chrono::Duration::seconds(secs_ago),
+            source: DataSource::Oauth,
+            provenance: DataProvenance::Official,
+            stale: false,
+        }
+    }
+
+    #[test]
+    fn snapshot_history_round_trips_and_ignores_duplicate_ts() {
+        let store = temp_store("history-roundtrip");
+        let older = history_snapshot(120, 10.0);
+        let mut duplicate = older.clone();
+        duplicate.windows[0].utilization = 99.0;
+        store.append_snapshot_history(&older).unwrap();
+        store.append_snapshot_history(&duplicate).unwrap();
+        store.append_snapshot_history(&history_snapshot(0, 20.0)).unwrap();
+
+        let rows = store
+            .get_snapshot_history(ProviderId::Claude, WindowType::FiveHour, 0)
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].utilization, 10.0);
+        assert_eq!(rows[1].utilization, 20.0);
+        assert!(store
+            .get_snapshot_history(ProviderId::Claude, WindowType::SevenDay, 0)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn snapshot_history_prunes_rows_older_than_30_days() {
+        let store = temp_store("history-prune");
+        store
+            .append_snapshot_history(&history_snapshot(40 * 24 * 3600, 5.0))
+            .unwrap();
+        store.append_snapshot_history(&history_snapshot(0, 7.0)).unwrap();
+        let rows = store
+            .get_snapshot_history(ProviderId::Claude, WindowType::FiveHour, 0)
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].utilization, 7.0);
     }
 }

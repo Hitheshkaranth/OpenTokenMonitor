@@ -1,6 +1,6 @@
 export type ProviderId = 'claude' | 'codex' | 'antigravity';
 export type ProviderTab = ProviderId | 'overview' | 'projects';
-export type PageId = 'overview' | 'projects' | ProviderId | 'settings';
+export type PageId = 'overview' | 'projects' | ProviderId | 'comparison' | 'settings';
 
 export type DataSource = 'oauth' | 'cookie' | 'cli' | 'local_log';
 export type DataProvenance = 'official' | 'internal' | 'derived_local';
@@ -11,6 +11,106 @@ export type WindowAccuracy = 'exact' | 'approximate' | 'percent_only';
 export type AlertSeverity = 'warning' | 'high' | 'critical';
 
 export type RefreshCadence = 'manual' | 'every30s' | 'every1m' | 'every2m' | 'every5m' | 'every15m';
+
+// Preset windows offered by the trend-period selector. `custom` is handled by
+// the store as a free-form `customDays` number rather than a preset value.
+export type TrendPreset = 7 | 30 | 90;
+
+// Per-provider utilization alert lines (percent) backing the A1 notifications.
+export interface PerProviderThresholds {
+  warning: number;
+  high: number;
+  critical: number;
+}
+
+// File format for the on-disk export report. Serialized lowercase to match the
+// backend ExportFormat enum ("csv" | "json" | "pdf").
+export type ExportFormat = 'csv' | 'json' | 'pdf';
+
+// Per-provider spend cap backing the A3 budgets.
+export interface Budget {
+  amount_usd: number;
+  period_days: number;
+}
+
+// Backend budget entry returned by get_budgets; carries its provider so the
+// frontend can key it the same way it tracks budgets locally.
+export interface BudgetConfig {
+  provider: ProviderId;
+  amount_usd: number;
+  period_days: number;
+}
+
+// Backend forecast for a provider's budget over a period (get_forecast).
+export interface BudgetForecast {
+  provider: ProviderId;
+  period_days: number;
+  spend_to_date_usd: number;
+  budget_usd: number | null;
+  remaining_usd: number | null;
+  daily_average_usd: number;
+  projected_spend_usd: number;
+  projected_exceeds_budget: boolean;
+  utilization_percent: number;
+}
+
+// What the macOS menu-bar title shows next to the tray icon.
+export type TrayTitleMode = 'off' | 'percent' | 'cost';
+
+// Backend time-to-limit projection for one provider window (get_limit_forecasts).
+export interface WindowForecast {
+  provider: ProviderId;
+  window_type: WindowType;
+  utilization: number;
+  // Percentage points per hour over the last 30 minutes.
+  rate_per_hour: number | null;
+  eta_to_full_secs: number | null;
+  resets_in_secs: number | null;
+  will_hit_before_reset: boolean;
+  sample_count: number;
+}
+
+export interface ModelCost {
+  model: string;
+  cost_usd: number;
+}
+
+// Exact usage of one CLI session (one log file) in the selected period
+// (get_session_usage). Claude + Codex only. Timestamps are unix seconds.
+export interface SessionUsage {
+  provider: ProviderId;
+  session_id: string;
+  cwd: string | null;
+  first_ts: number | null;
+  last_ts: number | null;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  models: ModelCost[];
+  today_cost_usd: number;
+}
+
+// Sessions rolled up by working directory (get_project_usage).
+export interface ProjectUsage {
+  project_id: string;
+  label: string;
+  path: string | null;
+  providers: ProviderId[];
+  session_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  today_cost_usd: number;
+  last_ts: number | null;
+  models: ModelCost[];
+  cache_hit_ratio: number;
+}
 
 export interface UsageWindow {
   window_type: WindowType;
@@ -71,6 +171,8 @@ export interface ModelBreakdownEntry {
   cache_write_tokens: number;
   total_tokens: number;
   estimated_cost_usd: number;
+  // Saved by prompt caching versus the full input rate.
+  cache_savings_usd?: number;
 }
 
 export interface RecentActivityEntry {

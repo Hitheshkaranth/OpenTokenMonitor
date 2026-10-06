@@ -1,7 +1,7 @@
 import ProviderLogo from '@/components/providers/ProviderLogo';
 import Sparkline from '@/components/charts/Sparkline';
 import WidgetGauge, { arcColor } from '@/components/meters/WidgetGauge';
-import ResetCountdown from '@/components/meters/ResetCountdown';
+import LimitEta, { forecastFor } from '@/components/meters/LimitEta';
 import {
   ModelBreakdownEntry,
   ProviderId,
@@ -61,6 +61,7 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
   const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
   const costToday = trend?.points[trend.points.length - 1]?.cost_usd ?? 0;
   const authState = useUsageStore((s) => s.authStates[provider]);
+  const forecasts = useUsageStore((s) => s.forecasts[provider]);
   const access = getProviderAccessState(status, snapshot, authState);
   const healthClass = providerAccessDotClass(access.health);
 
@@ -102,7 +103,7 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
                     {primaryPct.toFixed(0)}%
                   </span>
                 </div>
-                <ResetCountdown resetsAt={primary?.resets_at} className="overview-card-reset" />
+                <LimitEta replacesReset resetsAt={primary?.resets_at} forecast={forecastFor(forecasts, primary)} className="overview-card-reset" />
               </div>
               {secondaryPct != null && secondary && (
                 <div className="overview-card-window">
@@ -114,7 +115,7 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
                       {secondaryPct.toFixed(0)}%
                     </span>
                   </div>
-                  <ResetCountdown resetsAt={secondary?.resets_at} className="overview-card-reset" />
+                  <LimitEta replacesReset resetsAt={secondary?.resets_at} forecast={forecastFor(forecasts, secondary)} className="overview-card-reset" />
                 </div>
               )}
             </>

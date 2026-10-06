@@ -19,7 +19,7 @@ const GlassToggle = ({ checked, onChange, label = 'Toggle', color }: GlassToggle
       aria-pressed={checked}
       aria-label={label}
     >
-      <span style={{ fontSize: 12 }}>{label}</span>
+      <span style={{ fontSize: 5 }}>{label}</span>
       <span
         style={{
           width: 24,

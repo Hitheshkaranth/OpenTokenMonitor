@@ -1,4 +1,5 @@
-import { FolderKanban, Home, RefreshCw, Settings2 } from 'lucide-react';
+import { GitCompareArrows, FolderKanban, Home, RefreshCw, Settings2 } from 'lucide-react';
+import { useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import ProviderLogo from '@/components/providers/ProviderLogo';
@@ -27,6 +28,11 @@ const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy, onWidget }: Na
   const statuses = useUsageStore((s) => s.statuses);
   const snapshots = useUsageStore((s) => s.snapshots);
   const authStates = useUsageStore((s) => s.authStates);
+
+  const enabledProvidersFiltered = useMemo(
+    () => providers.filter(({ id }) => enabledProviders[id]),
+    [enabledProviders]
+  );
 
   return (
     <div className="nav-bar" data-tauri-drag-region>
@@ -66,9 +72,9 @@ const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy, onWidget }: Na
         </div>
       </div>
 
-      {/* Row 2: navigation — left pages | center providers | right settings */}
+      {/* Row 2: navigation — left pages | right providers + settings */}
       <nav className="nav-pill-row" data-tauri-drag-region>
-        <div className="nav-pill-group">
+        <div className="nav-pill-group nav-pill-group-left">
           <button
             className={`nav-pill ${activePage === 'overview' ? 'nav-pill-active' : ''}`}
             onClick={() => onNavigate('overview')}
@@ -83,9 +89,18 @@ const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy, onWidget }: Na
           >
             <FolderKanban size={13} />
           </button>
+          {enabledProvidersFiltered.length >= 2 ? (
+            <button
+              className={`nav-pill ${activePage === 'comparison' ? 'nav-pill-active' : ''}`}
+              onClick={() => onNavigate('comparison')}
+              title="Compare sources"
+            >
+              <GitCompareArrows size={13} />
+            </button>
+          ) : null}
         </div>
 
-        <div className="nav-pill-group">
+        <div className="nav-pill-group nav-pill-group-right">
           {providers.map(({ id, label, tint }) => {
             if (!enabledProviders[id]) return null;
             const access = getProviderAccessState(statuses[id], snapshots[id], authStates[id]);
@@ -102,9 +117,6 @@ const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy, onWidget }: Na
               </button>
             );
           })}
-        </div>
-
-        <div className="nav-pill-group">
           <button
             className={`nav-pill ${activePage === 'settings' ? 'nav-pill-active' : ''}`}
             onClick={() => onNavigate('settings')}

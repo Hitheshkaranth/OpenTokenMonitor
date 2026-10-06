@@ -125,18 +125,14 @@
   gap: 2px;
 }
 
-/* Left and right groups pin to edges, center gets remaining space */
-.nav-pill-group:first-child {
+/* Left group pins to the left; right group pushes providers + settings to the far right */
+.nav-pill-group-left {
   flex-shrink: 0;
 }
 
-.nav-pill-group:nth-child(2) {
-  flex: 1;
-  justify-content: center;
-}
-
-.nav-pill-group:last-child {
+.nav-pill-group-right {
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* Compact pill bar (widget mode) */
@@ -1414,6 +1410,13 @@
   color: var(--text-secondary);
 }
 
+/* Time-to-limit pill (LimitEta): same chrome as the reset pills above, only the label differs. */
+.pcard-reset.limit-eta::before,
+.overview-card-reset.limit-eta::before,
+.widget-provider-reset.limit-eta::before {
+  content: 'FULL IN';
+}
+
 /* Usage panel */
 .pcard-usage-panel {
   display: flex;
@@ -1486,7 +1489,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px 6px;
 }
 
 .pcard-section-title {
@@ -1555,6 +1559,39 @@
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Insights: model spend mix (UsageInsights) */
+.pcard-mix-bar {
+  display: flex;
+  gap: 1px;
+  height: 5px;
+  margin-top: 2px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--meter-track);
+}
+
+.pcard-mix-seg {
+  height: 100%;
+  min-width: 2px;
+}
+
+.pcard-mix-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.pcard-insight-pills {
+  flex-wrap: wrap;
+}
+
+.pcard-mix-hint {
+  font-size: 7.5px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 /* Active badge */
@@ -1740,6 +1777,15 @@
   overflow: auto;
   padding: 8px 10px 10px;
   min-height: 0;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 2px 10px 0;
+  flex-shrink: 0;
 }
 
 @media (prefers-reduced-transparency: reduce) {

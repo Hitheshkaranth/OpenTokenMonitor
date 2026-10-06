@@ -7,7 +7,7 @@ type ResetCountdownProps = {
 
 type CountdownUrgency = 'none' | 'normal' | 'soon' | 'warning' | 'critical' | 'expired';
 
-const formatRemaining = (seconds: number): string => {
+export const formatRemaining = (seconds: number): string => {
   if (seconds <= 0) return 'resetting';
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);

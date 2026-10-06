@@ -5,6 +5,9 @@ import RecentActivitySlides from '@/components/activity/RecentActivitySlides';
 import ProviderLogo from '@/components/providers/ProviderLogo';
 import WidgetGauge, { arcColor } from '@/components/meters/WidgetGauge';
 import ResetCountdown from '@/components/meters/ResetCountdown';
+import LimitEta, { forecastFor } from '@/components/meters/LimitEta';
+import UsageInsights from '@/components/insights/UsageInsights';
+import { useUsageStore } from '@/stores/usageStore';
 import UsageBar from '@/components/meters/UsageBar';
 import {
   CostEntry,
@@ -80,6 +83,7 @@ const ProviderCard = ({
   const access = getProviderAccessState(status, snapshot, authState);
 
   const providerId = snapshot?.provider;
+  const forecasts = useUsageStore((s) => (providerId ? s.forecasts[providerId] : undefined));
 
   // Build project summaries filtered for this provider
   const providerProjects = useMemo(() => {
@@ -99,6 +103,39 @@ const ProviderCard = ({
       maxCommandsPerProject: 4,
     });
   }, [providerId, allRecentActivity, costHistory]);
+
+  // Claude and Codex get exact per-project numbers from their session logs;
+  // Antigravity logs no working directory, so it keeps the activity estimate.
+  const exactProjects = useUsageStore((s) => (providerId ? s.providerProjectUsage[providerId] : undefined));
+  const projectCards = useMemo(() => {
+    const activeCutoff = Date.now() - 15 * 60 * 1000;
+    if (providerId !== 'antigravity' && exactProjects && exactProjects.length > 0) {
+      return exactProjects.slice(0, 12).map((project) => ({
+        id: project.project_id,
+        label: project.label,
+        path: project.path ?? undefined,
+        costUsd: project.cost_usd,
+        tokens: project.total_tokens,
+        models: project.models.map((m) => m.model),
+        lastSeen: project.last_ts != null ? new Date(project.last_ts * 1000).toISOString() : undefined,
+        count: project.session_count,
+        countLabel: project.session_count === 1 ? 'session' : 'sessions',
+        isActive: project.last_ts != null && project.last_ts * 1000 > activeCutoff,
+      }));
+    }
+    return providerProjects.map((project) => ({
+      id: project.id,
+      label: project.label,
+      path: project.path,
+      costUsd: project.estimated_cost_usd,
+      tokens: project.estimated_tokens,
+      models: project.models,
+      lastSeen: project.latest_timestamp,
+      count: project.commands.length,
+      countLabel: 'requests',
+      isActive: project.commands.some((c) => new Date(c.timestamp).getTime() > activeCutoff),
+    }));
+  }, [providerId, exactProjects, providerProjects]);
 
   // Count active sessions (entries in last 15 minutes)
   const activeSessionCount = useMemo(() => {
@@ -185,6 +222,7 @@ const ProviderCard = ({
                   {primaryPct.toFixed(0)}%
                 </span>
                 <ResetCountdown resetsAt={primary?.resets_at} className="pcard-reset" />
+                <LimitEta forecast={forecastFor(forecasts, primary)} className="pcard-reset" />
               </div>
               {secondary && secondaryPct != null && (
                 <div className="pcard-window-compact">
@@ -193,6 +231,7 @@ const ProviderCard = ({
                     {secondaryPct.toFixed(0)}%
                   </span>
                   <ResetCountdown resetsAt={secondary?.resets_at} className="pcard-reset" />
+                  <LimitEta forecast={forecastFor(forecasts, secondary)} className="pcard-reset" />
                 </div>
               )}
             </div>
@@ -236,11 +275,15 @@ const ProviderCard = ({
               <span className="pcard-section-title">Cost</span>
               <div className="pcard-cost-pills">
                 <span className="pcard-cost-chip">Today ${costToday.toFixed(2)}</span>
-                <span className="pcard-cost-chip">30d ${trend?.total_cost_usd.toFixed(2) ?? '0.00'}</span>
+                <span className="pcard-cost-chip">
+                  {trend?.days ?? 30}d ${(trend?.total_cost_usd ?? 0) >= 1000 ? Math.round(trend?.total_cost_usd ?? 0).toLocaleString() : (trend?.total_cost_usd ?? 0).toFixed(2)}
+                </span>
               </div>
             </div>
             <CostTrendChart points={trend?.points ?? []} color={meta.color} compact />
           </div>
+
+          <UsageInsights provider={providerId} breakdown={breakdown} />
 
           <div className="pcard-section-panel">
             <span className="pcard-section-title">Models</span>
@@ -266,65 +309,57 @@ const ProviderCard = ({
       <div className="pcard-section-panel pcard-projects-section">
         <div className="pcard-section-head">
           <span className="pcard-section-title">Projects</span>
-          <span className="pcard-cost-chip">{providerProjects.length} projects</span>
+          <span className="pcard-cost-chip">{projectCards.length} projects</span>
         </div>
-        {providerProjects.length === 0 ? (
+        {projectCards.length === 0 ? (
           <div className="pcard-proj-empty">No project activity detected for this provider yet.</div>
         ) : (
           <div className="pcard-proj-grid soft-scroll">
-            {providerProjects.map((project) => {
-              const providerCommands = project.commands;
-              const providerCost = project.estimated_cost_usd;
-              // Check if project has recent activity (last 15 min)
-              const cutoff = Date.now() - 15 * 60 * 1000;
-              const isActive = providerCommands.some((c) => new Date(c.timestamp).getTime() > cutoff);
-
-              return (
-                <div key={project.id} className="pcard-proj-card">
-                  <div className="pcard-proj-header">
-                    <div className="pcard-proj-title-col">
-                      <div className="pcard-proj-title-row">
-                        <span className="pcard-proj-title">{project.label}</span>
-                        {isActive && (
-                          <span className="pcard-proj-active-dot" title="Active in last 15 min" />
-                        )}
-                      </div>
-                      <span className="pcard-proj-path" title={project.path ?? ''}>
-                        {project.path ?? 'session activity'}
-                      </span>
+            {projectCards.map((project) => (
+              <div key={project.id} className="pcard-proj-card">
+                <div className="pcard-proj-header">
+                  <div className="pcard-proj-title-col">
+                    <div className="pcard-proj-title-row">
+                      <span className="pcard-proj-title">{project.label}</span>
+                      {project.isActive && (
+                        <span className="pcard-proj-active-dot" title="Active in last 15 min" />
+                      )}
                     </div>
-                    <span className="pcard-proj-cost">${providerCost.toFixed(2)}</span>
-                  </div>
-
-                  <div className="pcard-proj-stats">
-                    <span className="pcard-proj-stat">
-                      <span className="pcard-proj-stat-val">{providerCommands.length}</span>
-                      <span className="pcard-proj-stat-label">requests</span>
-                    </span>
-                    <span className="pcard-proj-stat">
-                      <span className="pcard-proj-stat-val">{formatTokens(project.estimated_tokens)}</span>
-                      <span className="pcard-proj-stat-label">tokens</span>
-                    </span>
-                    <span className="pcard-proj-stat">
-                      <span className="pcard-proj-stat-val">{project.models.length}</span>
-                      <span className="pcard-proj-stat-label">models</span>
-                    </span>
-                    <span className="pcard-proj-stat">
-                      <span className="pcard-proj-stat-val">{formatAge(project.latest_timestamp)}</span>
-                      <span className="pcard-proj-stat-label">last seen</span>
+                    <span className="pcard-proj-path" title={project.path ?? ''}>
+                      {project.path ?? 'session activity'}
                     </span>
                   </div>
-
-                  {project.models.length > 0 && (
-                    <div className="pcard-proj-models">
-                      {project.models.slice(0, 3).map((model) => (
-                        <span key={model} className="pcard-proj-model-chip" title={model}>{model}</span>
-                      ))}
-                    </div>
-                  )}
+                  <span className="pcard-proj-cost">${project.costUsd.toFixed(2)}</span>
                 </div>
-              );
-            })}
+
+                <div className="pcard-proj-stats">
+                  <span className="pcard-proj-stat">
+                    <span className="pcard-proj-stat-val">{project.count}</span>
+                    <span className="pcard-proj-stat-label">{project.countLabel}</span>
+                  </span>
+                  <span className="pcard-proj-stat">
+                    <span className="pcard-proj-stat-val">{formatTokens(project.tokens)}</span>
+                    <span className="pcard-proj-stat-label">tokens</span>
+                  </span>
+                  <span className="pcard-proj-stat">
+                    <span className="pcard-proj-stat-val">{project.models.length}</span>
+                    <span className="pcard-proj-stat-label">models</span>
+                  </span>
+                  <span className="pcard-proj-stat">
+                    <span className="pcard-proj-stat-val">{project.lastSeen ? formatAge(project.lastSeen) : '—'}</span>
+                    <span className="pcard-proj-stat-label">last seen</span>
+                  </span>
+                </div>
+
+                {project.models.length > 0 && (
+                  <div className="pcard-proj-models">
+                    {project.models.slice(0, 3).map((model) => (
+                      <span key={model} className="pcard-proj-model-chip" title={model}>{model}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>

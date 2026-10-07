@@ -1,0 +1,3 @@
+# Package manifests are consumed by Linux/macOS tooling (makepkg, brew, winget
+# validation); keep them LF even on a Windows checkout.
+packaging/** text eol=lf

@@ -17,42 +17,42 @@ Live usage limits, exact per-project costs, and time-to-limit alerts for **Claud
 [![React](https://img.shields.io/badge/React-19-20232A?logo=react&logoColor=61DAFB)](https://react.dev/)
 
 [**Download**](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest) ·
+[What it does](#-what-it-does) ·
 [Features](#-features) ·
 [How it works](#-how-it-works) ·
-[Screens](#-screens) ·
 [Privacy](#-privacy) ·
 [FAQ](#-faq)
 
 <br/>
 
-<img src="./docs/images/menubar-0.4.0.png" alt="OpenToken Monitor in the macOS menu bar" width="760" />
+<img src="./docs/images/demo-0.4.1.gif" alt="30-second demo of OpenToken Monitor 0.4.1: menu-bar usage rings, provider detail, overview, projects and compare" width="720" />
 
-<sub>Each provider's logo sits inside its usage rings — outer ring: primary window (Claude 5-hour), inner ring: secondary window (Claude 7-day). Click a ring to open that provider.</sub>
-
-<br/><br/>
-
-<table>
-  <tr>
-    <td align="center" width="33%"><img src="./docs/images/overview-0.4.0.png" alt="Overview" width="260" /><br/><b>Overview</b></td>
-    <td align="center" width="33%"><img src="./docs/images/provider-detail-0.4.0.png" alt="Provider detail" width="260" /><br/><b>Provider detail</b></td>
-    <td align="center" width="33%"><img src="./docs/images/compare-0.4.0.png" alt="Compare" width="260" /><br/><b>Compare</b></td>
-  </tr>
-</table>
+<sub>30 seconds of v0.4.1 on macOS, running on real usage.</sub>
 
 </div>
 
 ---
 
-## ✨ Why
+## 🎯 What it does
 
-You run more than one coding agent. Each has its own quota window, its own reset timer, and its own pricing page — and none of them tells you *you're about to hit the wall* until you do.
+You run more than one coding agent. Each has its own quota window, its own reset timer and its own pricing page, and none of them tells you *you're about to hit the wall* until you do. OpenToken Monitor watches all of them from your menu bar.
 
-OpenToken Monitor is a small tray app that watches all of them at once:
+Here is what the demo above walks through:
 
-- **Know before you hit a limit.** It learns your burn rate and warns when a window will fill *before* it resets.
-- **Know where the money went.** Exact cost per project and per session, straight from your CLI session logs.
-- **Glance, don't open.** Usage rings live in the menu bar; the window is there when you need detail.
-- **Keep your data.** Everything is computed on your machine. No account, no telemetry, no proxy.
+1. **Rings in the menu bar.** Each provider gets its logo wrapped in two usage rings: the outer ring is its primary window (Claude 5-hour, Codex session, Antigravity 5-hour), the inner ring its secondary window (Claude 7-day, Codex weekly, Antigravity daily). They turn green → amber → red as you burn through them, so a glance is usually enough.
+2. **Click a ring to open that provider.** You land on its detail page: every quota window with a reset countdown, a **FULL IN** forecast when your current pace will hit 100 % before the reset, today's and 30-day cost, cache-hit rate and how much prompt caching saved you.
+3. **Overview.** Claude Code, Codex and Antigravity side by side, with live/local status, usage and a cost sparkline for each.
+4. **Projects.** Exact spend per working directory and per CLI session, read from the session logs your CLIs already write.
+5. **Compare.** Spend share across providers plus side-by-side usage, spend, tokens and burn.
+6. **All of it local.** The numbers are computed on your machine from your own logs and your CLIs' own sign-ins. No account, no telemetry, no proxy.
+
+When the window is closed, the app keeps working in the background: the rings stay current and **alerts** fire before a window fills or a budget overruns.
+
+### Get started in a minute
+
+1. **[Download](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/latest)** the installer for macOS, Windows or Linux ([details](#-install)).
+2. **Use the CLIs you already have.** Sign in to `claude`, `codex` or Antigravity as usual; OpenToken Monitor finds their logs and credentials on its own.
+3. **Look at your menu bar.** The rings appear on first launch. There is nothing to configure.
 
 ---
 
@@ -197,7 +197,18 @@ When a live fetch fails, the last good snapshot stays on screen marked *stale*, 
 
 ## 📸 Screens
 
+<p align="center">
+<img src="./docs/images/menubar-0.4.0.png" alt="OpenToken Monitor in the macOS menu bar" width="760" />
+<br/>
+<sub>Each provider's logo sits inside its usage rings — outer ring: primary window (Claude 5-hour), inner ring: secondary window (Claude 7-day). Click a ring to open that provider.</sub>
+</p>
+
 <table>
+  <tr>
+    <td align="center" width="33%"><img src="./docs/images/overview-0.4.0.png" alt="Overview" width="260" /><br/><b>Overview</b><br/><sub>every provider at a glance</sub></td>
+    <td align="center" width="33%"><img src="./docs/images/provider-detail-0.4.0.png" alt="Provider detail" width="260" /><br/><b>Provider detail</b><br/><sub>windows, resets, forecast, cost</sub></td>
+    <td align="center" width="33%"><img src="./docs/images/compare-0.4.0.png" alt="Compare" width="260" /><br/><b>Compare</b><br/><sub>spend share and burn side by side</sub></td>
+  </tr>
   <tr>
     <td align="center" width="33%"><img src="./docs/images/sessions-0.4.0.png" alt="Sessions" width="260" /><br/><b>Sessions</b><br/><sub>exact cost per CLI session</sub></td>
     <td align="center" width="33%"><img src="./docs/images/settings-0.4.0.png" alt="Settings" width="260" /><br/><b>Settings</b><br/><sub>theme, refresh, alerts, budgets, menu bar</sub></td>

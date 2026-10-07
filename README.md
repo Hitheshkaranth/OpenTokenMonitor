@@ -215,6 +215,12 @@ When a live fetch fails, the last good snapshot stays on screen marked *stale*, 
 <img src="./docs/images/menubar-full-0.4.0.png" alt="Full macOS menu bar with OpenToken Monitor running" />
 </details>
 
+<details>
+<summary><b>The Windows taskbar</b></summary>
+<br/>
+<img src="./docs/images/tray-windows-0.4.1.png" alt="Windows 11 taskbar with Antigravity, Codex and Claude ring badges beside the Wi-Fi, volume and battery icons" width="600" />
+</details>
+
 ---
 
 ## 📦 Install
@@ -314,7 +320,7 @@ A least-squares fit of the window's utilization over the last 30 minutes of the 
 <details>
 <summary><b>Does it work on Windows and Linux?</b></summary>
 
-Yes — dashboard, widget, alerts, exports and the tray icon all work. Tray titles are a macOS feature, so *Today's cost* in the tray is macOS-only. Per-provider tray badges sized for Windows' 16 px tray are on the roadmap.
+Yes — dashboard, widget, alerts and exports all work. On Windows each provider gets its own ring badge in the taskbar, next to the clock and battery; the app moves them out of the hidden-icons flyout on first launch (if you hide one yourself, that choice is kept). Tray titles are a macOS feature, so *Today's cost* in the tray is macOS-only.
 </details>
 
 <details>
@@ -360,7 +366,8 @@ Antigravity's 3.6–3.8 Flash input rate is promotional and doubles on 2027-01-0
 - [x] Menu-bar ring badges
 - [ ] Keep project history beyond Claude Code's 30-day log cleanup
 - [ ] Claude Code statusline integration and a local CLI / JSON state file
-- [ ] Per-provider tray badges on Windows and Linux
+- [x] Per-provider tray badges on Windows
+- [ ] Per-provider tray badges on Linux
 - [ ] OpenCode, Gemini CLI, Copilot CLI and Cursor adapters
 
 Have an idea? [Open an issue](https://github.com/Hitheshkaranth/OpenTokenMonitor/issues/new).

@@ -414,6 +414,38 @@ section { padding: 0; border-top: 1px solid var(--line); }
 .shot-feats li:last-child { border-bottom: 1px solid var(--line); }
 .shot-feats li .k { color: var(--ink-3); letter-spacing: 0.04em; }
 
+/* ============== GLANCE (tray screenshots) ============== */
+.glance {
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.glance-row {
+  background: var(--bg);
+  padding: 40px 48px;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 40px;
+  align-items: center;
+}
+@media (max-width: 800px) { .glance-row { grid-template-columns: 1fr; gap: 20px; padding: 32px 24px; } }
+.glance-label p {
+  font-size: 13px;
+  color: var(--ink-1);
+  line-height: 1.55;
+  margin: 12px 0 0;
+}
+.glance-img { min-width: 0; }
+.glance-img img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+}
+
 /* ============== FEATURES (capability grid) ============== */
 .feats {
   display: grid;

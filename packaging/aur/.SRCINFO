@@ -1,0 +1,27 @@
+pkgbase = opentokenmonitor-bin
+	pkgdesc = Usage limit and cost monitor for Claude Code, Codex and Antigravity
+	pkgver = 0.4.1
+	pkgrel = 1
+	url = https://github.com/Hitheshkaranth/OpenTokenMonitor
+	arch = x86_64
+	license = MIT
+	depends = cairo
+	depends = gdk-pixbuf2
+	depends = glib2
+	depends = glibc
+	depends = gtk3
+	depends = hicolor-icon-theme
+	depends = libayatana-appindicator
+	depends = libsoup3
+	depends = webkit2gtk-4.1
+	provides = opentokenmonitor
+	conflicts = opentokenmonitor
+	noextract = opentokenmonitor-bin-0.4.1.deb
+	options = !strip
+	options = !debug
+	source = opentokenmonitor-bin-0.4.1.deb::https://github.com/Hitheshkaranth/OpenTokenMonitor/releases/download/v0.4.1/OpenTokenMonitor_0.4.1_amd64.deb
+	source = LICENSE-0.4.1::https://raw.githubusercontent.com/Hitheshkaranth/OpenTokenMonitor/v0.4.1/LICENSE
+	sha256sums = 353aedc5c2d859576d1a0b03ad09233f99809b605800d79d8fd4ff1769129e4d
+	sha256sums = 91aabf15c2adc47e2b79433e599cb96d49fd7daaac9a3b379805a8af609c2d99
+
+pkgname = opentokenmonitor-bin

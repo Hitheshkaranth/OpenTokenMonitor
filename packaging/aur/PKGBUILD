@@ -1,0 +1,44 @@
+# Maintainer: Hithesh Karanth <karanth dot hithesh at gmail dot com>
+
+pkgname=opentokenmonitor-bin
+_pkgname=open-token-monitor
+pkgver=0.4.1
+pkgrel=1
+pkgdesc="Usage limit and cost monitor for Claude Code, Codex and Antigravity"
+arch=('x86_64')
+url="https://github.com/Hitheshkaranth/OpenTokenMonitor"
+license=('MIT')
+depends=(
+  'cairo'
+  'gdk-pixbuf2'
+  'glib2'
+  'glibc'
+  'gtk3'
+  'hicolor-icon-theme'
+  'libayatana-appindicator' # tray icon; loaded at runtime (dlopen)
+  'libsoup3'
+  'webkit2gtk-4.1'
+)
+provides=('opentokenmonitor')
+conflicts=('opentokenmonitor')
+options=('!strip' '!debug')
+source=(
+  "${pkgname}-${pkgver}.deb::${url}/releases/download/v${pkgver}/OpenTokenMonitor_${pkgver}_amd64.deb"
+  "LICENSE-${pkgver}::https://raw.githubusercontent.com/Hitheshkaranth/OpenTokenMonitor/v${pkgver}/LICENSE"
+)
+noextract=("${pkgname}-${pkgver}.deb")
+sha256sums=('353aedc5c2d859576d1a0b03ad09233f99809b605800d79d8fd4ff1769129e4d'
+            '91aabf15c2adc47e2b79433e599cb96d49fd7daaac9a3b379805a8af609c2d99')
+
+package() {
+  bsdtar -xOf "${pkgname}-${pkgver}.deb" 'data.tar.*' | bsdtar -xf - -C "${pkgdir}"
+
+  # Tauri names the HiDPI icon directory "256x256@2"; the icon theme spec
+  # calls it "256x256@2x".
+  local hidpi="${pkgdir}/usr/share/icons/hicolor/256x256@2"
+  if [[ -d "${hidpi}" ]]; then
+    mv "${hidpi}" "${hidpi}x"
+  fi
+
+  install -Dm644 "LICENSE-${pkgver}" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

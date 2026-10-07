@@ -310,3 +310,76 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           draft: false
+
+  # Push the published release to winget, the Homebrew tap and the AUR. Each
+  # step runs only when its secret is set (see packaging/README.md), so a
+  # missing token skips that channel instead of failing the release.
+  package-managers:
+    name: Update package managers
+    runs-on: ubuntu-latest
+    needs: publish-release
+    env:
+      HAS_WINGET_TOKEN: ${{ secrets.WINGET_TOKEN != '' }}
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+      HAS_AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: winget
+        if: ${{ !cancelled() && env.HAS_WINGET_TOKEN == 'true' }}
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: Hitheshkaranth.OpenTokenMonitor
+          release-tag: ${{ github.ref_name }}
+          installers-regex: '_x64-setup\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Homebrew tap
+        if: ${{ !cancelled() && env.HAS_TAP_TOKEN == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          digest() {
+            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
+              --jq ".assets[] | select(.name | endswith(\"$1\")) | .digest | sub(\"^sha256:\"; \"\")"
+          }
+          arm="$(digest _arm64.dmg)"
+          intel="$(digest _x86_64.dmg)"
+          [[ ${#arm} -eq 64 && ${#intel} -eq 64 ]] || { echo "::error::missing .dmg digests"; exit 1; }
+
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/Hitheshkaranth/homebrew-tap.git" tap
+          cask=tap/Casks/opentokenmonitor.rb
+          sed -i -E \
+            -e "s/^  version \".*\"/  version \"${version}\"/" \
+            -e "s/(arm: +\")[0-9a-f]{64}/\1${arm}/" \
+            -e "s/(intel: +\")[0-9a-f]{64}/\1${intel}/" \
+            "$cask"
+          git -C tap diff --stat
+          git -C tap -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -am "opentokenmonitor ${version}"
+          git -C tap push
+
+      - name: Prepare AUR PKGBUILD
+        if: ${{ !cancelled() && env.HAS_AUR_KEY == 'true' }}
+        run: |
+          sed -i -E \
+            -e "s/^pkgver=.*/pkgver=${GITHUB_REF_NAME#v}/" \
+            -e "s/^pkgrel=.*/pkgrel=1/" \
+            packaging/aur/PKGBUILD
+
+      - name: AUR
+        if: ${{ !cancelled() && env.HAS_AUR_KEY == 'true' }}
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
+        with:
+          pkgname: opentokenmonitor-bin
+          pkgbuild: packaging/aur/PKGBUILD
+          updpkgsums: true
+          commit_username: Hitheshkaranth
+          commit_email: ${{ secrets.AUR_COMMIT_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update to ${{ github.ref_name }}

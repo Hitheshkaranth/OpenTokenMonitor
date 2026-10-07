@@ -1,0 +1,41 @@
+name: Test casks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15-intel]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tap this checkout
+        run: |
+          mkdir -p "$(brew --repository)/Library/Taps/hitheshkaranth"
+          ln -s "$GITHUB_WORKSPACE" "$(brew --repository)/Library/Taps/hitheshkaranth/homebrew-tap"
+
+      - name: Style
+        run: brew style hitheshkaranth/tap
+
+      - name: Audit
+        run: brew audit --cask --strict --online hitheshkaranth/tap/opentokenmonitor
+
+      - name: Install
+        run: brew install --cask hitheshkaranth/tap/opentokenmonitor
+
+      - name: Verify app bundle
+        run: |
+          test -d /Applications/OpenTokenMonitor.app
+          codesign --verify --deep --strict /Applications/OpenTokenMonitor.app && echo "codesign OK"
+          spctl -a -t exec -vv /Applications/OpenTokenMonitor.app || true
+
+      - name: Uninstall
+        run: brew uninstall --cask --zap hitheshkaranth/tap/opentokenmonitor

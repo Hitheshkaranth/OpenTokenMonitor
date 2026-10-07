@@ -34,6 +34,12 @@ pub struct TrayState {
     /// Providers currently drawn in the badge strip, in display order, with
     /// the rounded percentages it was last rendered at.
     pub badges: Mutex<Vec<(ProviderId, (i64, i64))>>,
+    /// Windows only: one tray icon per provider. Notification-area icons are
+    /// fixed squares there, so a wide strip would be squashed into one slot;
+    /// separate icons sit side by side instead. Created once at startup in a
+    /// fixed order so Explorer keeps recognising (and promoting) them across
+    /// launches; shown/hidden rather than recreated. Empty elsewhere.
+    pub provider_icons: Vec<(ProviderId, tauri::tray::TrayIcon)>,
 }
 
 /// Build the tooltip line shown on tray hover. Always lists all three
@@ -167,6 +173,10 @@ pub fn sync_provider_badges(app: &AppHandle, badges: &[ProviderBadge], title: Op
         Err(_) => return,
     };
 
+    if changed && !tray_state.provider_icons.is_empty() {
+        sync_split_badges(&icon, &tray_state.provider_icons, badges, tray_slot_px(app));
+        return;
+    }
     if changed {
         let image = if badges.is_empty() {
             tray_state.default_icon.clone()
@@ -188,6 +198,50 @@ pub fn sync_provider_badges(app: &AppHandle, badges: &[ProviderBadge], title: Op
         let lines: Vec<&str> = badges.iter().map(|b| b.tooltip.as_str()).collect();
         let _ = icon.set_tooltip(Some(format!("OpenTokenMonitor\n{}", lines.join("\n"))));
     }
+}
+
+/// Per-provider icons (Windows): show a badge for each provider that has
+/// one and hide the rest. The app icon is hidden while any badge is up —
+/// every badge carries the same menu — and comes back when badges go away.
+fn sync_split_badges(
+    main: &tauri::tray::TrayIcon,
+    provider_icons: &[(ProviderId, tauri::tray::TrayIcon)],
+    badges: &[ProviderBadge],
+    slot_px: u32,
+) {
+    for (provider, icon) in provider_icons {
+        match badges.iter().find(|b| b.provider == *provider) {
+            Some(badge) => {
+                let img = crate::tray_badges::render_tray_badge(
+                    *provider,
+                    badge.primary,
+                    badge.secondary,
+                    slot_px,
+                );
+                let (w, h) = img.dimensions();
+                // Show first: on Windows icon/tooltip updates modify the
+                // existing tray entry and fail while it's hidden.
+                let _ = icon.set_visible(true);
+                let _ = icon.set_icon(Some(Image::new_owned(img.into_raw(), w, h)));
+                let _ = icon.set_tooltip(Some(badge.tooltip.clone()));
+            }
+            None => {
+                let _ = icon.set_visible(false);
+            }
+        }
+    }
+    let _ = main.set_visible(badges.is_empty());
+}
+
+/// Edge length of a notification-area icon: 16px scaled by the primary
+/// display's DPI (the taskbar's home), e.g. 20px at 125%.
+fn tray_slot_px(app: &AppHandle) -> u32 {
+    let scale = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map_or(1.0, |m| m.scale_factor());
+    (16.0 * scale).round() as u32
 }
 
 /// Left-click: on a badge strip, open the provider under the cursor;
@@ -315,14 +369,62 @@ pub fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
         })
         .build(app)?;
 
+    #[cfg(target_os = "windows")]
+    let provider_icons = build_provider_icons(app, &tray_menu)?;
+    #[cfg(not(target_os = "windows"))]
+    let provider_icons = Vec::new();
+
     app.manage(TrayState {
         icon: Mutex::new(Some(tray_icon)),
         default_icon,
         badges: Mutex::new(Vec::new()),
+        provider_icons,
     });
     update_tray_tooltip(app.handle(), &[]);
 
+    #[cfg(target_os = "windows")]
+    crate::tray_promote::promote_in_background();
+
     Ok(())
+}
+
+/// One hidden tray icon per provider, in the fixed order Claude, Codex,
+/// Antigravity. They share the app menu, whose handler is registered once on
+/// the main icon (Tauri menu handlers are global). Left-click opens that
+/// provider. Each starts as its provider's logo with empty rings, never the
+/// app icon, until the first refresh fills the rings in.
+#[cfg(target_os = "windows")]
+fn build_provider_icons(
+    app: &tauri::App,
+    menu: &Menu<tauri::Wry>,
+) -> tauri::Result<Vec<(ProviderId, tauri::tray::TrayIcon)>> {
+    let slot_px = tray_slot_px(app.handle());
+    ProviderId::all()
+        .into_iter()
+        .map(|provider| {
+            let empty = crate::tray_badges::render_tray_badge(provider, 0.0, None, slot_px);
+            let (w, h) = empty.dimensions();
+            let icon =
+                tauri::tray::TrayIconBuilder::with_id(format!("badge-{}", provider.as_str()))
+                    .icon(Image::new_owned(empty.into_raw(), w, h))
+                    .tooltip(provider_name(provider))
+                    .menu(menu)
+                    .show_menu_on_left_click(false)
+                    .on_tray_icon_event(move |tray, event| {
+                        if let tauri::tray::TrayIconEvent::Click {
+                            button: tauri::tray::MouseButton::Left,
+                            button_state: tauri::tray::MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            open_provider(tray.app_handle(), provider);
+                        }
+                    })
+                    .build(app)?;
+            icon.set_visible(false)?;
+            Ok((provider, icon))
+        })
+        .collect()
 }
 
 #[cfg(test)]

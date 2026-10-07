@@ -9,7 +9,7 @@
 //! CPU into a small RGBA buffer, so no font or vector dependency is needed.
 
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use image::imageops::{self, FilterType};
 use image::{Rgba, RgbaImage};
@@ -21,12 +21,36 @@ pub const BADGE_SIZE: u32 = 44;
 /// Horizontal gap between badges in the strip, in pixels.
 pub const STRIP_GAP: u32 = 8;
 
-const OUTER_RING: (f32, f32) = (18.6, 22.0); // inner/outer radius
-const INNER_RING: (f32, f32) = (14.8, 17.6);
-const LOGO_RADIUS: f32 = 13.4;
-/// Track opacity; higher than the in-app 0.18 so the empty ring stays
-/// visible on both light and dark menu bars.
-const TRACK_ALPHA: f32 = 0.34;
+/// Ring and logo geometry, in pixels of the `BADGE_SIZE` canvas.
+#[derive(Debug, Clone, Copy)]
+pub struct BadgeLayout {
+    outer_ring: (f32, f32), // inner/outer radius
+    inner_ring: (f32, f32),
+    logo_radius: f32,
+    /// Track opacity; higher than the in-app 0.18 so the empty ring stays
+    /// visible on both light and dark menu bars.
+    track_alpha: f32,
+}
+
+/// macOS menu bar.
+pub const MENU_BAR_LAYOUT: BadgeLayout = BadgeLayout {
+    outer_ring: (18.6, 22.0),
+    inner_ring: (14.8, 17.6),
+    logo_radius: 13.4,
+    track_alpha: 0.34,
+};
+
+/// Windows notification area. Icons there are a fixed 16px square (at 100%
+/// scaling), where the menu-bar layout leaves a ~9px logo that reads smaller
+/// than the neighbouring icons. The logo is 10% larger, the rings slimmer
+/// and pushed to the edge, and the tracks more opaque so an empty ring still
+/// shows on the dark taskbar.
+pub const TRAY_LAYOUT: BadgeLayout = BadgeLayout {
+    outer_ring: (19.4, 22.0),
+    inner_ring: (16.0, 18.6),
+    logo_radius: 14.8,
+    track_alpha: 0.5,
+};
 
 fn logo_bytes(provider: ProviderId) -> &'static [u8] {
     match provider {
@@ -36,22 +60,19 @@ fn logo_bytes(provider: ProviderId) -> &'static [u8] {
     }
 }
 
-/// Logos decoded and scaled to the badge's centre disc, once per process.
-fn logos() -> &'static HashMap<ProviderId, RgbaImage> {
-    static LOGOS: OnceLock<HashMap<ProviderId, RgbaImage>> = OnceLock::new();
-    LOGOS.get_or_init(|| {
-        let side = (LOGO_RADIUS * 2.0).round() as u32;
-        ProviderId::all()
-            .into_iter()
-            .filter_map(|p| {
-                let img =
-                    image::load_from_memory_with_format(logo_bytes(p), image::ImageFormat::Png)
-                        .ok()?
-                        .to_rgba8();
-                Some((p, fit_square(&img, side)))
-            })
-            .collect()
-    })
+/// The logo decoded and scaled to a `side`-px disc, cached per size.
+fn logo(provider: ProviderId, side: u32) -> Option<RgbaImage> {
+    static LOGOS: OnceLock<Mutex<HashMap<(ProviderId, u32), RgbaImage>>> = OnceLock::new();
+    let mut cache = LOGOS.get_or_init(Default::default).lock().ok()?;
+    if let Some(img) = cache.get(&(provider, side)) {
+        return Some(img.clone());
+    }
+    let img = image::load_from_memory_with_format(logo_bytes(provider), image::ImageFormat::Png)
+        .ok()?
+        .to_rgba8();
+    let scaled = fit_square(&img, side);
+    cache.insert((provider, side), scaled.clone());
+    Some(scaled)
 }
 
 /// Scale into a `side`×`side` square, preserving aspect ratio, centred.
@@ -106,7 +127,7 @@ fn band_coverage(r: f32, (inner, outer): (f32, f32)) -> f32 {
 }
 
 /// Draw one ring: a tinted track, then the progress arc clockwise from 12 o'clock.
-fn draw_ring(img: &mut RgbaImage, band: (f32, f32), pct: Option<f64>) {
+fn draw_ring(img: &mut RgbaImage, band: (f32, f32), track_alpha: f32, pct: Option<f64>) {
     let c = BADGE_SIZE as f32 / 2.0;
     let (color, fraction) = match pct {
         Some(p) => (arc_color(p), (p.clamp(0.0, 100.0) / 100.0) as f32),
@@ -121,7 +142,7 @@ fn draw_ring(img: &mut RgbaImage, band: (f32, f32), pct: Option<f64>) {
         if coverage <= 0.0 {
             continue;
         }
-        blend(px, color, coverage * TRACK_ALPHA);
+        blend(px, color, coverage * track_alpha);
         if fraction <= 0.0 {
             continue;
         }
@@ -138,19 +159,19 @@ fn draw_ring(img: &mut RgbaImage, band: (f32, f32), pct: Option<f64>) {
 }
 
 /// Composite the logo, masked to a circle, at the badge centre.
-fn draw_logo(img: &mut RgbaImage, provider: ProviderId) {
-    let Some(logo) = logos().get(&provider) else {
+fn draw_logo(img: &mut RgbaImage, provider: ProviderId, radius: f32) {
+    let Some(logo) = logo(provider, (radius * 2.0).round() as u32) else {
         return;
     };
     let c = BADGE_SIZE as f32 / 2.0;
-    let offset = (c - LOGO_RADIUS).round() as u32;
+    let offset = (c - radius).round() as u32;
     for (lx, ly, src) in logo.enumerate_pixels() {
         let (x, y) = (lx + offset, ly + offset);
         if x >= BADGE_SIZE || y >= BADGE_SIZE {
             continue;
         }
         let (dx, dy) = (x as f32 + 0.5 - c, y as f32 + 0.5 - c);
-        let mask = (LOGO_RADIUS - (dx * dx + dy * dy).sqrt() + 0.5).clamp(0.0, 1.0);
+        let mask = (radius - (dx * dx + dy * dy).sqrt() + 0.5).clamp(0.0, 1.0);
         let alpha = src[3] as f32 / 255.0 * mask;
         blend(img.get_pixel_mut(x, y), [src[0], src[1], src[2]], alpha);
     }
@@ -159,11 +180,41 @@ fn draw_logo(img: &mut RgbaImage, provider: ProviderId) {
 /// Render the badge. `secondary` is `None` for providers with one window,
 /// which leaves the inner ring as an empty neutral track.
 pub fn render_badge(provider: ProviderId, primary: f64, secondary: Option<f64>) -> RgbaImage {
+    render_badge_with(MENU_BAR_LAYOUT, provider, primary, secondary)
+}
+
+fn render_badge_with(
+    layout: BadgeLayout,
+    provider: ProviderId,
+    primary: f64,
+    secondary: Option<f64>,
+) -> RgbaImage {
     let mut img = RgbaImage::new(BADGE_SIZE, BADGE_SIZE);
-    draw_ring(&mut img, OUTER_RING, Some(primary));
-    draw_ring(&mut img, INNER_RING, secondary);
-    draw_logo(&mut img, provider);
+    draw_ring(
+        &mut img,
+        layout.outer_ring,
+        layout.track_alpha,
+        Some(primary),
+    );
+    draw_ring(&mut img, layout.inner_ring, layout.track_alpha, secondary);
+    draw_logo(&mut img, provider, layout.logo_radius);
     img
+}
+
+/// A badge for the Windows notification area, downscaled here to the slot's
+/// exact `size` px: the shell's own resampling of the 44px badge is coarse
+/// and leaves the rings jagged.
+pub fn render_tray_badge(
+    provider: ProviderId,
+    primary: f64,
+    secondary: Option<f64>,
+    size: u32,
+) -> RgbaImage {
+    let img = render_badge_with(TRAY_LAYOUT, provider, primary, secondary);
+    if size == 0 || size >= BADGE_SIZE {
+        return img;
+    }
+    imageops::resize(&img, size, size, FilterType::Lanczos3)
 }
 
 /// Lay `badges` (provider, primary %, secondary %) out left to right in one
@@ -200,7 +251,8 @@ mod tests {
     /// Pixel on the outer ring's centre line at `deg` clockwise from 12 o'clock.
     fn outer_ring_px(img: &RgbaImage, deg: f32) -> Rgba<u8> {
         let c = BADGE_SIZE as f32 / 2.0;
-        let r = (OUTER_RING.0 + OUTER_RING.1) / 2.0;
+        let (inner, outer) = MENU_BAR_LAYOUT.outer_ring;
+        let r = (inner + outer) / 2.0;
         let a = deg.to_radians();
         let (x, y) = (c + r * a.sin(), c - r * a.cos());
         *img.get_pixel(x as u32, y as u32)
@@ -267,6 +319,19 @@ mod tests {
         // The gap between badges stays transparent.
         assert_eq!(strip.get_pixel(BADGE_SIZE + STRIP_GAP / 2, mid)[3], 0);
     }
+
+    #[test]
+    fn tray_badge_is_slot_sized_with_a_larger_logo() {
+        let img = render_tray_badge(ProviderId::Claude, 40.0, Some(10.0), 16);
+        assert_eq!(img.dimensions(), (16, 16));
+        assert!(alpha_at(&img, 8, 8) > 0);
+    }
+
+    // Tray logo at least 10% larger; rings overlap neither the logo nor
+    // each other.
+    const _: () = assert!(TRAY_LAYOUT.logo_radius >= MENU_BAR_LAYOUT.logo_radius * 1.1);
+    const _: () = assert!(TRAY_LAYOUT.inner_ring.0 > TRAY_LAYOUT.logo_radius);
+    const _: () = assert!(TRAY_LAYOUT.outer_ring.0 > TRAY_LAYOUT.inner_ring.1);
 
     #[test]
     fn click_position_maps_to_badge() {

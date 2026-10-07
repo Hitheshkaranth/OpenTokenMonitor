@@ -8,7 +8,7 @@
 
 Live usage limits, exact per-project costs, and time-to-limit alerts for **Claude Code**, **Codex**, and **Antigravity** — read from your own machine, never a SaaS dashboard.
 
-[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#-install)
 [![Local-first](https://img.shields.io/badge/data-local--first-success.svg)](#-privacy)

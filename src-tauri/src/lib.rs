@@ -44,6 +44,8 @@ mod providers;
 mod session_usage;
 mod tray;
 mod tray_badges;
+#[cfg(target_os = "windows")]
+mod tray_promote;
 mod usage;
 mod usage_scanners;
 mod watchers;

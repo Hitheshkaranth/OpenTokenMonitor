@@ -2755,7 +2755,7 @@ dependencies = [
 
 [[package]]
 name = "open-token-monitor"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -2786,6 +2786,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "winreg 0.55.0",
 ]
 
 [[package]]

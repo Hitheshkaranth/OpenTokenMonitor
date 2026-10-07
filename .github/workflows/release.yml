@@ -380,6 +380,6 @@ jobs:
           pkgbuild: packaging/aur/PKGBUILD
           updpkgsums: true
           commit_username: Hitheshkaranth
-          commit_email: ${{ secrets.AUR_COMMIT_EMAIL }}
+          commit_email: 35370548+Hitheshkaranth@users.noreply.github.com
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           commit_message: Update to ${{ github.ref_name }}

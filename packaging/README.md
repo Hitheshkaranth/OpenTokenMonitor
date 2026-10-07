@@ -57,7 +57,7 @@ release is published. Each channel is skipped until its secret exists.
 
 3. Save a private key that the AUR accepts as the `AUR_SSH_PRIVATE_KEY` secret
    (a dedicated deploy key is safer than your personal one — add its public half to
-   your AUR account too), and your AUR account email as `AUR_COMMIT_EMAIL`.
+   your AUR account too). AUR commits are authored with your GitHub no-reply address.
 
 ## Notes
 

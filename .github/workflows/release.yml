@@ -311,6 +311,16 @@ jobs:
           tag_name: ${{ github.ref_name }}
           draft: false
 
+  # The installers as a package under this repo's "Packages" (ghcr.io).
+  github-packages:
+    needs: publish-release
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-packages.yml
+    with:
+      tag: ${{ github.ref_name }}
+
   # Push the published release to winget, the Homebrew tap and the AUR. Each
   # step runs only when its secret is set (see packaging/README.md), so a
   # missing token skips that channel instead of failing the release.

@@ -1,0 +1,74 @@
+name: Publish packages
+
+# Pushes a release's installers to the GitHub Container Registry as an OCI
+# artifact, so each version shows under this repo's "Packages".
+# Pull one with:  oras pull ghcr.io/hitheshkaranth/opentokenmonitor:<version>
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v0.4.1)
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  ghcr:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
+
+      - name: Download release installers
+        run: |
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D dist \
+            -p '*.dmg' -p '*.exe' -p '*.deb' -p '*.rpm' -p '*.AppImage'
+          ls -l dist
+
+      - name: Push to ghcr.io
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/opentokenmonitor"
+          echo "${GH_TOKEN}" | oras login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+
+          files=()
+          for f in *; do
+            case "$f" in
+              *.dmg) type=application/x-apple-diskimage ;;
+              *.exe) type=application/vnd.microsoft.portable-executable ;;
+              *.deb) type=application/vnd.debian.binary-package ;;
+              *.rpm) type=application/x-rpm ;;
+              *) type=application/octet-stream ;;
+            esac
+            files+=("${f}:${type}")
+          done
+
+          oras push "${image}:${version}" \
+            --artifact-type application/vnd.opentokenmonitor.installers \
+            --annotation "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --annotation "org.opencontainers.image.title=OpenTokenMonitor" \
+            --annotation "org.opencontainers.image.description=OpenTokenMonitor ${version} installers for macOS, Windows and Linux" \
+            --annotation "org.opencontainers.image.version=${version}" \
+            --annotation "org.opencontainers.image.licenses=MIT" \
+            "${files[@]}"
+          oras tag "${image}:${version}" latest
+
+          {
+            echo "### Published \`${image}:${version}\`"
+            echo '```'
+            echo "oras pull ${image}:${version}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

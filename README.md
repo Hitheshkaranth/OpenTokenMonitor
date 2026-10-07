@@ -237,7 +237,13 @@ Then just sign in to the CLIs you already use (`claude`, `codex`, Antigravity). 
 <details>
 <summary><b>First launch on macOS</b></summary>
 
-Release builds are signed with a Developer ID certificate and notarized by Apple, so they open normally. If you built from source, the bundle is ad-hoc signed and macOS will say it *"cannot verify the developer"* — right-click the app, choose **Open**, then **Open** again. You only need to do this once.
+The macOS builds are not notarized by Apple yet, so the first launch is blocked with *"cannot verify the developer"* (or *"is damaged"* on newer macOS). Either open **System Settings → Privacy & Security** and click **Open Anyway**, or run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/OpenTokenMonitor.app
+```
+
+You only need to do this once per install.
 </details>
 
 <details>

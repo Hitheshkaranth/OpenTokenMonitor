@@ -19,6 +19,11 @@ cask "opentokenmonitor" do
 
   app "OpenTokenMonitor.app"
 
+  caveats <<~EOS
+    #{token} is not notarized by Apple yet. If macOS refuses to open it, run:
+      xattr -dr com.apple.quarantine "#{appdir}/OpenTokenMonitor.app"
+  EOS
+
   zap trash: [
     "~/Library/Application Support/com.opentokenmonitor.desktop",
     "~/Library/Application Support/OpenTokenMonitor",

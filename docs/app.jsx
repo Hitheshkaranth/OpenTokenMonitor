@@ -442,9 +442,10 @@ const Install = ({ os, release }) => (
         <div className="install-card">
           <h3>Releases<span className="meta">v{release.version}</span></h3>
           <p>
-            Direct downloads from GitHub Releases. macOS builds are signed and
-            notarized; the Windows installer is per-user (no admin prompt) and
-            bundles WebView2 so it works offline.
+            Direct downloads from GitHub Releases. macOS builds aren't notarized
+            yet — on first launch use Privacy &amp; Security → Open Anyway. The
+            Windows installer is per-user (no admin prompt) and bundles WebView2
+            so it works offline.
           </p>
           <ul className="install-list">
             {DOWNLOADS.map(d => {

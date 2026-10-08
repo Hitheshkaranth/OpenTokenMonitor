@@ -306,13 +306,17 @@ pub fn restart_per_provider_scheduler(app: &AppHandle, state: &AppState) {
         let last_refresh = last_refresh.clone();
         tauri::async_runtime::spawn(async move {
             let state = app_inner.state::<AppState>();
-            let cadence = state
+            // Read each mutex separately so the two guards are never held together.
+            let per_provider = state
                 .per_provider_cadence
                 .lock()
                 .map_err(|e| e.to_string())?
                 .get(&provider)
-                .copied()
-                .unwrap_or(*state.cadence.lock().map_err(|e| e.to_string())?);
+                .copied();
+            let cadence = match per_provider {
+                Some(c) => c,
+                None => *state.cadence.lock().map_err(|e| e.to_string())?,
+            };
             if cadence == RefreshCadence::Manual {
                 return Ok::<(), String>(());
             }

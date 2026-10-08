@@ -156,11 +156,11 @@ const App = () => {
         warning: thresholds.warning,
         high: thresholds.high,
         critical: thresholds.critical,
-      }).catch(() => undefined);
+      }).catch((err) => console.warn('set_thresholds sync failed', err));
       invoke('set_per_provider_cadence', {
         provider,
         cadence: settings.perProviderCadence[provider],
-      }).catch(() => undefined);
+      }).catch((err) => console.warn('set_per_provider_cadence sync failed', err));
     });
   }, [settingsHydrated]);
 
@@ -180,12 +180,16 @@ const App = () => {
   // they work while the window is hidden); the UI only forwards the switch.
   useEffect(() => {
     if (!settingsHydrated) return;
-    invoke('set_notifications_enabled', { enabled: notificationsEnabled }).catch(() => undefined);
+    invoke('set_notifications_enabled', { enabled: notificationsEnabled }).catch((err) =>
+      console.warn('set_notifications_enabled sync failed', err)
+    );
   }, [settingsHydrated, notificationsEnabled]);
 
   useEffect(() => {
     if (!settingsHydrated) return;
-    invoke('set_tray_title_mode', { mode: trayTitleMode }).catch(() => undefined);
+    invoke('set_tray_title_mode', { mode: trayTitleMode }).catch((err) =>
+      console.warn('set_tray_title_mode sync failed', err)
+    );
   }, [settingsHydrated, trayTitleMode]);
 
   const refreshEverything = async () => {
@@ -199,6 +203,7 @@ const App = () => {
         (['claude', 'codex', 'antigravity'] as ProviderId[]).flatMap((p) => [
           fetchCostHistory(p, trendDays),
           fetchTrend(p, trendDays),
+          fetchModelBreakdown(p, trendDays),
           fetchRecentActivity(p, 120),
         ])
       ));
@@ -295,12 +300,14 @@ const App = () => {
           status={statuses[currentProvider]}
           authState={authStates[currentProvider]}
           onRefresh={() => {
-            refreshProvider(currentProvider);
-            fetchCostHistory(currentProvider, trendDays);
-            fetchTrend(currentProvider, trendDays);
-            fetchModelBreakdown(currentProvider, trendDays);
-            fetchRecentActivity(currentProvider, 120);
-            fetchUsageReport(trendDays);
+            Promise.all([
+              refreshProvider(currentProvider),
+              fetchCostHistory(currentProvider, trendDays),
+              fetchTrend(currentProvider, trendDays),
+              fetchModelBreakdown(currentProvider, trendDays),
+              fetchRecentActivity(currentProvider, 120),
+              fetchUsageReport(trendDays),
+            ]).catch((err) => console.warn(`refresh ${currentProvider} failed`, err));
           }}
         />
       </ErrorBoundary>

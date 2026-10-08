@@ -17,11 +17,13 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     this.state = { hasError: false, message: '' };
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, message: error.message || 'Unexpected UI error' };
+  // React passes whatever was thrown, which is not always an Error.
+  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
+    const message = error instanceof Error ? error.message : error != null ? String(error) : '';
+    return { hasError: true, message: message || 'Unexpected UI error' };
   }
 
-  componentDidCatch(error: Error) {
+  componentDidCatch(error: unknown) {
     console.error('Error boundary caught component crash', error);
   }
 

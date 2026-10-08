@@ -101,8 +101,7 @@ const NavBar = ({ activePage, onNavigate, onRefresh, refreshBusy, onWidget }: Na
         </div>
 
         <div className="nav-pill-group nav-pill-group-right">
-          {providers.map(({ id, label, tint }) => {
-            if (!enabledProviders[id]) return null;
+          {enabledProvidersFiltered.map(({ id, label, tint }) => {
             const access = getProviderAccessState(statuses[id], snapshots[id], authStates[id]);
             const healthClass = providerAccessDotClass(access.health);
             return (

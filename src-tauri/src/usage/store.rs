@@ -39,12 +39,21 @@ impl UsageStore {
             .conn
             .lock()
             .map_err(|_| "store lock poisoned".to_string())?;
+        // Derive the allowlist from ProviderId so a newly added provider's
+        // history is never purged by a stale hardcoded list.
+        let known = ProviderId::all()
+            .iter()
+            .map(|p| format!("'{}'", p.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ");
         let removed = conn
             .execute(
-                "DELETE FROM cost_entries
-                  WHERE model IN ('claude-opus', 'claude-sonnet', 'claude-haiku')
-                     OR model LIKE '%/%'
-                     OR provider NOT IN ('claude', 'codex', 'antigravity')",
+                &format!(
+                    "DELETE FROM cost_entries
+                      WHERE model IN ('claude-opus', 'claude-sonnet', 'claude-haiku')
+                         OR model LIKE '%/%'
+                         OR provider NOT IN ({known})"
+                ),
                 [],
             )
             .map_err(|e| e.to_string())?;
@@ -238,8 +247,9 @@ impl UsageStore {
         let mut out = Vec::new();
         while let Some(row) = rows.next().map_err(|e| e.to_string())? {
             let payload: String = row.get(0).map_err(|e| e.to_string())?;
-            if let Ok(snapshot) = serde_json::from_str::<UsageSnapshot>(&payload) {
-                out.push(snapshot);
+            match serde_json::from_str::<UsageSnapshot>(&payload) {
+                Ok(snapshot) => out.push(snapshot),
+                Err(e) => tracing::warn!("[store] skipping unreadable snapshot row: {e}"),
             }
         }
         Ok(out)

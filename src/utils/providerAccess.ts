@@ -80,7 +80,7 @@ export const getProviderAccessState = (
     }
 
     return {
-      health: 'active',
+      health: 'waiting',
       label: 'Local — fetch failed',
       detail: authState?.last_error || 'live fetch unavailable, retrying',
       color: providerAccessColor('waiting'),

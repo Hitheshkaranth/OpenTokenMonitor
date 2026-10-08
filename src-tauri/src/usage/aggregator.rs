@@ -124,6 +124,9 @@ pub async fn refresh_all(
             errors.join(" | ")
         ));
     }
+    if !errors.is_empty() {
+        tracing::warn!("partial refresh failure: {}", errors.join(" | "));
+    }
 
     Ok(out)
 }

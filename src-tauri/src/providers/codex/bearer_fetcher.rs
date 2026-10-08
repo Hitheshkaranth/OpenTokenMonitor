@@ -36,7 +36,7 @@ pub async fn fetch_usage(access_token: &str) -> Result<CodexBearerWindow, String
         .build()
         .map_err(|e| e.to_string())?;
 
-    // Retry up to 2 times for transient failures
+    // Two attempts: retry once on transport errors or 429; other HTTP errors fail fast
     let mut last_err = String::new();
     for attempt in 0..2 {
         if attempt > 0 {

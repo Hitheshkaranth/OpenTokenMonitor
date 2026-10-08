@@ -18,11 +18,22 @@ pub struct ProviderDescriptor {
     pub brand_color: &'static str,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct FetchContext {
     pub api_keys: HashMap<ProviderId, String>,
     pub allow_cookie_strategy: bool,
     pub allow_cli_strategy: bool,
+}
+
+// Hand-written so an accidental `{:?}` of the context never logs API keys.
+impl std::fmt::Debug for FetchContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FetchContext")
+            .field("api_keys", &self.api_keys.keys().collect::<Vec<_>>())
+            .field("allow_cookie_strategy", &self.allow_cookie_strategy)
+            .field("allow_cli_strategy", &self.allow_cli_strategy)
+            .finish()
+    }
 }
 
 impl FetchContext {

@@ -19,8 +19,10 @@
 //! - Codex rate tuple:  `(input, cached_input, output)`
 //! - Antigravity rate tuple: `(input, cached_input, output)`
 //!
-//! Every table normalizes `.` to `-` before matching, so `opus-4.5` and
-//! `opus-4-5` resolve identically no matter how the log spelled the id.
+//! The Claude and Antigravity tables normalize `.` to `-` before matching, so
+//! `opus-4.5` and `opus-4-5` resolve identically. The Codex table matches
+//! OpenAI's dotted ids (`gpt-5.3`) as-is: dashing them would make dated
+//! snapshots like `gpt-5-2025-08-07` collide with `gpt-5-2`.
 //!
 //! ### Adding a new model
 //!
@@ -386,11 +388,6 @@ pub fn antigravity_cost_usd(model: &str, input: u64, cached: u64, output: u64) -
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Convert a token count + per-million rate into a USD amount.
-///
-/// Centralizing this keeps the unit conversion (and any future numerical
-/// guards) in exactly one spot.
-#[inline]
 /// What prompt caching saved: `cache_read_tokens` billed at the full input
 /// rate minus what they actually cost at the cache-read rate. 0 for models
 /// with no known rates.
@@ -408,6 +405,11 @@ pub fn cache_savings_usd(provider: ProviderId, model: &str, cache_read_tokens: u
         .unwrap_or(0.0)
 }
 
+/// Convert a token count + per-million rate into a USD amount.
+///
+/// Centralizing this keeps the unit conversion (and any future numerical
+/// guards) in exactly one spot.
+#[inline]
 fn per_million(tokens: u64, usd_per_1m: f64) -> f64 {
     (tokens as f64 / 1_000_000.0) * usd_per_1m
 }

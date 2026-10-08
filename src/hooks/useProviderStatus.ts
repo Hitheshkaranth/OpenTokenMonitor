@@ -12,7 +12,9 @@ export const useProviderStatus = () => {
   useEffect(() => {
     const run = () => {
       PROVIDERS.forEach((provider) => {
-        fetchStatus(provider).catch(() => undefined);
+        fetchStatus(provider).catch((error) => {
+          console.warn(`[status] ${provider} status check failed`, error);
+        });
       });
     };
 

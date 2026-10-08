@@ -178,7 +178,7 @@ const ComparisonView = ({
         fetchUsageReport(trendDays),
       ]);
     };
-    run().catch(() => undefined);
+    run().catch((err) => console.warn('comparison data fetch failed', err));
   }, [fetchSnapshot, fetchCostHistory, fetchStatus, fetchUsageReport, trendDays]);
 
   const rows = providers.map((provider) => ({

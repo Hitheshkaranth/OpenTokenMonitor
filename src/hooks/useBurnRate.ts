@@ -53,31 +53,20 @@ export const useBurnRate = (snapshot?: UsageSnapshot): BurnReadout => {
   }
 
   const readout = useMemo<BurnReadout>(() => {
-const currentTokens = snapshotTokenTotal(snapshot);
-  if (currentTokens == null) {
-    return {
-      currentTokens: null,
-      hasSamples: false,
-      tokPerSec: null,
-      tokensPerMin: null,
-      tokensStarted: null,
-      tokensEnded: null,
-      windowSeconds: null,
-      rising: null,
-    };
-  }
-  if (!snapshot) {
-    return {
-      currentTokens: null,
-      hasSamples: false,
-      tokPerSec: null,
-      tokensPerMin: null,
-      tokensStarted: null,
-      tokensEnded: null,
-      windowSeconds: null,
-      rising: null,
-    };
-  }
+    const currentTokens = snapshotTokenTotal(snapshot);
+    // `!snapshot` is implied by a null total; it is repeated to narrow the type.
+    if (currentTokens == null || !snapshot) {
+      return {
+        currentTokens: null,
+        hasSamples: false,
+        tokPerSec: null,
+        tokensPerMin: null,
+        tokensStarted: null,
+        tokensEnded: null,
+        windowSeconds: null,
+        rising: null,
+      };
+    }
 
     const history = ring.current;
     if (history.length < 2) {

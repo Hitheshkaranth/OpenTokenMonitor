@@ -27,7 +27,7 @@ const PeriodSelector = () => {
             <GlassPill
               key={option.days}
               active={active}
-              onClick={() => setTrendPreset(option.days as never)}
+              onClick={() => setTrendPreset(option.days)}
             >
               {option.label}
             </GlassPill>

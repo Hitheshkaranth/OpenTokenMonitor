@@ -21,12 +21,9 @@ const basename = (value: string) => {
   return parts[parts.length - 1] ?? value;
 };
 
-const localIsoDay = (date: Date) => {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+// Cost rows from the backend are bucketed by UTC day (`YYYY-MM-DD`), so the
+// activity keys that are matched against them must use the UTC day as well.
+const utcIsoDay = (date: Date) => date.toISOString().slice(0, 10);
 
 const projectFromEntry = (entry: RecentActivityEntry) => {
   if (entry.cwd?.trim()) {
@@ -66,10 +63,10 @@ const projectFromEntry = (entry: RecentActivityEntry) => {
 const isoDay = (value: string) => {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return '';
-  return localIsoDay(date);
+  return utcIsoDay(date);
 };
 
-const todayIsoDay = () => localIsoDay(new Date());
+const todayIsoDay = () => utcIsoDay(new Date());
 
 const normalizedModel = (value?: string) => {
   const trimmed = value?.trim();

@@ -186,8 +186,10 @@ pub fn evaluate(app: &AppHandle, snapshots: &[UsageSnapshot]) {
                         fc.eta_to_full_secs,
                         fc.will_hit_before_reset,
                     ) {
-                        next.eta_notified = true;
+                        // A stale (cached) snapshot must not consume the one-time
+                        // pace warning, or a later fresh poll could never fire it.
                         if !snapshot.stale {
+                            next.eta_notified = true;
                             let eta = format_eta_minutes(fc.eta_to_full_secs.unwrap_or(0));
                             pending.push(PendingNotification {
                                 title: format!("OpenTokenMonitor — {name} pace warning"),

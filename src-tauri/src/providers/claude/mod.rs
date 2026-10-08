@@ -145,6 +145,7 @@ impl UsageProvider for ClaudeProvider {
                             );
                             return Ok(stale);
                         }
+                        drop(guard);
                         info!("[claude] within backoff window, falling back to local logs");
                         return self.local_log_snapshot();
                     }
@@ -212,7 +213,7 @@ impl UsageProvider for ClaudeProvider {
                     }
 
                     let credits = oauth.extra_usage.as_ref().map(|eu| CreditsInfo {
-                        balance_usd: Some(eu.monthly_limit_usd - eu.used_credits_usd),
+                        balance_usd: Some((eu.monthly_limit_usd - eu.used_credits_usd).max(0.0)),
                         spent_usd: Some(eu.used_credits_usd),
                     });
 

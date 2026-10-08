@@ -1810,3 +1810,13 @@
     animation: none;
   }
 }
+
+/* Keyboard focus ring for sidebar/card buttons — matches .glass-pill:focus-visible */
+.nav-pill:focus-visible,
+.window-btn:focus-visible,
+.nav-action-btn:focus-visible,
+.pcard-action-btn:focus-visible {
+  outline: 2px solid var(--text-secondary); /* fallback for engines without color-mix() */
+  outline: 2px solid color-mix(in srgb, var(--text-secondary) 55%, transparent);
+  outline-offset: 2px;
+}

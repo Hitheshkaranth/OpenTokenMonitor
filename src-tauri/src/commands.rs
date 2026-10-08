@@ -212,12 +212,21 @@ pub async fn set_api_key(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut keys = state
-        .api_keys
-        .lock()
-        .map_err(|_| "api key lock poisoned".to_string())?;
-    if key.trim().is_empty() {
-        keys.remove(&provider);
+    // Only the in-memory map update holds the lock; persistence (a blocking
+    // file write) happens after it is released so refreshes aren't stalled.
+    let clear = key.trim().is_empty();
+    {
+        let mut keys = state
+            .api_keys
+            .lock()
+            .map_err(|_| "api key lock poisoned".to_string())?;
+        if clear {
+            keys.remove(&provider);
+        } else {
+            keys.insert(provider, key.clone());
+        }
+    }
+    if clear {
         if let Err(err) = clear_persisted_api_key(&app, provider) {
             warn!(
                 "failed to clear persisted api key for {}: {err}",
@@ -227,7 +236,6 @@ pub async fn set_api_key(
         return Ok(());
     }
 
-    keys.insert(provider, key.clone());
     if let Err(err) = persist_api_key(&app, provider, &key) {
         warn!("failed to persist api key for {}: {err}", provider.as_str());
     }
@@ -240,11 +248,11 @@ pub async fn clear_api_key(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut keys = state
+    state
         .api_keys
         .lock()
-        .map_err(|_| "api key lock poisoned".to_string())?;
-    keys.remove(&provider);
+        .map_err(|_| "api key lock poisoned".to_string())?
+        .remove(&provider);
     if let Err(err) = clear_persisted_api_key(&app, provider) {
         warn!(
             "failed to clear persisted api key for {}: {err}",
@@ -324,19 +332,19 @@ pub async fn get_per_provider_cadence(
     provider: ProviderId,
     state: State<'_, AppState>,
 ) -> Result<RefreshCadence, String> {
-    let cadence = state
+    let per_provider = state
         .per_provider_cadence
         .lock()
         .map_err(|_| "cadence lock poisoned".to_string())?
         .get(&provider)
-        .copied()
-        .unwrap_or(
-            *state
-                .cadence
-                .lock()
-                .map_err(|_| "cadence lock poisoned".to_string())?,
-        );
-    Ok(cadence)
+        .copied();
+    match per_provider {
+        Some(cadence) => Ok(cadence),
+        None => Ok(*state
+            .cadence
+            .lock()
+            .map_err(|_| "cadence lock poisoned".to_string())?),
+    }
 }
 
 #[tauri::command]

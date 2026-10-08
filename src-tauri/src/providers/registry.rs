@@ -8,7 +8,7 @@ use crate::providers::DynProvider;
 use crate::providers::ProviderDescriptor;
 use crate::usage::models::ProviderId;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ProviderRegistry {
     providers: HashMap<ProviderId, DynProvider>,
 }

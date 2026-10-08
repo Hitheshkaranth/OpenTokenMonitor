@@ -122,8 +122,12 @@ fn discover_port_from_file(path: &Path) -> Option<u16> {
         }
         let rest = &line[idx + "listening on random port at ".len()..];
         let port: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+        // The server binds a random ephemeral port, so anything below 1024
+        // (including 0) is a malformed line rather than a real endpoint.
         if let Ok(p) = port.parse::<u16>() {
-            found = Some(p); // keep the last (most recent) match
+            if p >= 1024 {
+                found = Some(p); // keep the last (most recent) match
+            }
         }
     }
     found

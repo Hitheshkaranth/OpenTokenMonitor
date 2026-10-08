@@ -49,15 +49,17 @@ export function UpdateChecker() {
   const startInstall = async () => {
     setInstalling(true);
     setProgress(null);
+    setError(null);
     try {
+      // The total size only arrives on `Started`; `Progress` carries chunk sizes.
       let downloaded = 0;
+      let total = 0;
       await update.downloadAndInstall((event: DownloadEvent) => {
-        if (event.event === 'Progress') {
+        if (event.event === 'Started') {
+          total = event.data.contentLength ?? 0;
+        } else if (event.event === 'Progress') {
           downloaded += event.data.chunkLength;
-          setProgress({
-            downloaded,
-            total: event.data.contentLength ?? 0,
-          });
+          setProgress({ downloaded, total });
         }
       });
       await relaunch();
@@ -71,12 +73,17 @@ export function UpdateChecker() {
     <div className="update-banner" role="status" aria-live="polite">
       <span>Update {update.version} is available.</span>
       {!installing ? (
-        <button type="button" onClick={startInstall}>Install now</button>
+        <>
+          {error && <span>Update failed — try again.</span>}
+          <button type="button" onClick={startInstall}>Install now</button>
+        </>
       ) : (
         <span>
-          {progress
-            ? `Downloading… ${Math.round((progress.downloaded / Math.max(progress.total, 1)) * 100)}%`
-            : 'Preparing…'}
+          {progress && progress.total > 0
+            ? `Downloading… ${Math.min(100, Math.round((progress.downloaded / progress.total) * 100))}%`
+            : progress
+              ? 'Downloading…'
+              : 'Preparing…'}
         </span>
       )}
     </div>

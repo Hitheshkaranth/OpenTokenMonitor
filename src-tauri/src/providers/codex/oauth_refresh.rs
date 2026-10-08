@@ -42,7 +42,6 @@ pub fn jwt_expires_at_unix_secs(jwt: &str) -> Option<u64> {
     value.get("exp")?.as_u64()
 }
 
-#[allow(dead_code)]
 pub fn is_jwt_expired_with_skew(jwt: &str, skew_secs: u64) -> bool {
     let now = Utc::now().timestamp();
     if now < 0 {

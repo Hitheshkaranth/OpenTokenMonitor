@@ -54,7 +54,10 @@ pub(crate) fn load_budgets(app: &AppHandle) -> Vec<BudgetConfig> {
         .get(BUDGETS_STORE_KEY)
         .and_then(|v| v.as_str().map(str::to_string))
     {
-        Some(json) => serde_json::from_str(&json).unwrap_or_default(),
+        Some(json) => serde_json::from_str(&json).unwrap_or_else(|e| {
+            tracing::warn!("[budgets] ignoring unreadable budgets.json: {e}");
+            Vec::new()
+        }),
         None => Vec::new(),
     }
 }
@@ -160,6 +163,9 @@ pub async fn set_budget(
 ) -> Result<(), String> {
     if !is_valid_provider(provider) {
         return Err(format!("invalid provider: {}", provider.as_str()));
+    }
+    if !amount_usd.is_finite() || amount_usd < 0.0 {
+        return Err(format!("invalid budget amount: {amount_usd}"));
     }
     let budgets = upsert_budget(load_budgets(&app), provider, amount_usd, period_days);
     save_budgets(&app, &budgets)

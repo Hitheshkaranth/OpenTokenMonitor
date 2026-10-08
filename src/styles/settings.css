@@ -959,3 +959,14 @@
 .stg-pp-field-select .glass-pill input {
   font-size: 5px;
 }
+
+/* Keyboard focus ring for settings controls — matches .glass-pill:focus-visible */
+.stg-toggle-btn:focus-visible,
+.stg-theme-card:focus-visible,
+.stg-cadence-card:focus-visible,
+.stg-cadence-select:focus-visible,
+.stg-pp-export-btn:focus-visible {
+  outline: 2px solid var(--text-secondary); /* fallback for engines without color-mix() */
+  outline: 2px solid color-mix(in srgb, var(--text-secondary) 55%, transparent);
+  outline-offset: 2px;
+}

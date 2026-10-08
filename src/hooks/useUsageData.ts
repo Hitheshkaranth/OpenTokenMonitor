@@ -4,6 +4,8 @@ import { ProviderId, UsageSnapshot } from '@/types';
 import { useUsageStore } from '@/stores/usageStore';
 import { isTauriRuntime } from '@/utils/runtime';
 
+const PROVIDERS: ProviderId[] = ['claude', 'codex', 'antigravity'];
+
 // Bridges the backend event stream into the frontend store. On startup it tries
 // to fetch fresh snapshots, then keeps the store in sync with `usage-updated`
 // events emitted by the Rust backend.
@@ -13,7 +15,6 @@ export const useUsageData = () => {
   const fetchRecentActivity = useUsageStore((s) => s.fetchRecentActivity);
   const fetchAllAuthStates = useUsageStore((s) => s.fetchAllAuthStates);
   const upsertSnapshot = useUsageStore((s) => s.upsertSnapshot);
-  const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -21,12 +22,13 @@ export const useUsageData = () => {
         // Prefer a backend refresh so the UI starts from current provider state
         // rather than only whatever happened to be persisted locally.
         await refreshAll();
-      } catch {
+      } catch (error) {
         // If a live refresh fails, cached snapshots still let the app render
         // instead of presenting a blank dashboard.
+        console.warn('[usage] startup refresh failed; showing cached snapshots', error);
         await fetchAll();
       } finally {
-        providers.forEach((provider) => {
+        PROVIDERS.forEach((provider) => {
           fetchRecentActivity(provider, 120).catch(() => undefined);
         });
         fetchAllAuthStates().catch(() => undefined);

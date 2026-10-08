@@ -1,11 +1,11 @@
-import { PropsWithChildren } from 'react';
+import { CSSProperties, PropsWithChildren } from 'react';
 
 type GlassPillProps = PropsWithChildren<{
   onClick?: () => void;
   active?: boolean;
   title?: string;
   className?: string;
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 }>;
 
 const GlassPill = ({ children, onClick, active = false, title, className = '', style }: GlassPillProps) => {

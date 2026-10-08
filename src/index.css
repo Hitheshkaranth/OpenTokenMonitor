@@ -14,6 +14,13 @@
   -webkit-user-drag: none;
 }
 
+input,
+textarea,
+[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 html,
 body,
 #root {

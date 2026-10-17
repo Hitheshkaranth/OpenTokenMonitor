@@ -4,10 +4,12 @@
 
 const { useState, useEffect } = React;
 
-const VERSION = "0.4.1";
+const VERSION = "0.4.2";
 const REPO = "https://github.com/Hitheshkaranth/OpenTokenMonitor";
 const RELEASES = REPO + "/releases/latest";
-const LATEST_API = "https://api.github.com/repos/Hitheshkaranth/OpenTokenMonitor/releases/latest";
+const PRODUCT_HUNT = "https://www.producthunt.com/products/opentoken-monitor?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-opentoken-monitor";
+const PRODUCT_HUNT_BADGE = "https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1281703&theme=dark";
+const LATEST_API ="https://api.github.com/repos/Hitheshkaranth/OpenTokenMonitor/releases/latest";
 
 /* Release asset names carry the version (OpenTokenMonitor_0.4.1_arm64.dmg),
  * so links are resolved against the latest release at runtime. Until that
@@ -116,6 +118,9 @@ const Hero = ({ os, release }) => {
             <div className="hero-fineprint">
               No account · No telemetry · Reads <Path>~/.claude</Path> <Path>~/.codex</Path> and Antigravity's logs
             </div>
+            <a className="hero-ph" href={PRODUCT_HUNT} target="_blank" rel="noreferrer">
+              <img src={PRODUCT_HUNT_BADGE} alt="OpenToken Monitor on Product Hunt" width="250" height="54"/>
+            </a>
           </div>
           <div className="hero-shot">
             <span className="corner tr1"/><span className="corner tr2"/>

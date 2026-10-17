@@ -236,6 +236,9 @@ section { padding: 0; border-top: 1px solid var(--line); }
   letter-spacing: 0.02em;
 }
 
+.hero-ph { display: inline-block; margin-top: 20px; line-height: 0; }
+.hero-ph img { max-width: 100%; height: auto; }
+
 /* Hero shot — flat, centered, no chrome, no glow. */
 .hero-shot {
   position: relative;

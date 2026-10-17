@@ -8,7 +8,7 @@
 
 Live usage limits, exact per-project costs, and time-to-limit alerts for **Claude Code**, **Codex**, and **Antigravity** — read from your own machine, never a SaaS dashboard.
 
-[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
+[![Version](https://img.shields.io/badge/version-0.4.2-blue.svg)](https://github.com/Hitheshkaranth/OpenTokenMonitor/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#-install)
 [![Local-first](https://img.shields.io/badge/data-local--first-success.svg)](#-privacy)
@@ -25,9 +25,18 @@ Live usage limits, exact per-project costs, and time-to-limit alerts for **Claud
 
 <br/>
 
+<a href="https://www.producthunt.com/products/opentoken-monitor?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-opentoken-monitor" target="_blank">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1281703&theme=dark" />
+    <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1281703&theme=light" alt="OpenToken Monitor on Product Hunt" width="250" height="54" />
+  </picture>
+</a>
+
+<br/>
+
 <img src="./docs/images/demo-0.4.1.gif" alt="30-second demo of OpenToken Monitor 0.4.1: menu-bar usage rings, provider detail, overview, projects and compare" width="720" />
 
-<sub>30 seconds of v0.4.1 on macOS, running on real usage.</sub>
+<sub>30 seconds of v0.4.1 on macOS, running on real usage · watch in HD: <a href="./docs/videos/demo-0.4.1.mp4">full demo (30 s)</a> · <a href="./docs/videos/demo-0.4.1-short.mp4">short clip (12 s)</a></sub>
 
 </div>
 

@@ -20,7 +20,7 @@ use crate::providers::auth::AuthState;
 use crate::tray::TrayTitleMode;
 use crate::usage::aggregator;
 use crate::usage::models::{
-    CostEntry, ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry,
+    CacheInsights, CostEntry, ModelBreakdownEntry, ProviderId, ProviderStatus, RecentActivityEntry,
     RefreshCadence, TrendData, UsageReport, UsageSnapshot,
 };
 use crate::usage_scanners;
@@ -114,6 +114,16 @@ pub async fn get_model_breakdown(
     state: State<'_, AppState>,
 ) -> Result<Vec<ModelBreakdownEntry>, String> {
     state.store.get_model_breakdown(provider, days)
+}
+
+#[tauri::command]
+pub async fn get_cache_insights(
+    provider: ProviderId,
+    state: State<'_, AppState>,
+) -> Result<CacheInsights, String> {
+    state
+        .store
+        .get_cache_insights(provider, Utc::now().date_naive())
 }
 
 #[tauri::command]

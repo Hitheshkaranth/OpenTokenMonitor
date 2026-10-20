@@ -175,6 +175,20 @@ export interface ModelBreakdownEntry {
   cache_savings_usd?: number;
 }
 
+// Is prompt caching paying off? (get_cache_insights)
+export interface CacheInsights {
+  provider: ProviderId;
+  month_cost_usd: number;
+  // Same month's tokens billed at the full input rate.
+  month_uncached_cost_usd: number;
+  hit_ratio_7d: number | null;
+  break_even_hit_ratio: number | null;
+  // Prompt tokens per UTC day, last 7 days, oldest first.
+  daily_prompt_tokens_7d: number[];
+  // Blended [input, cache_read, cache_write] USD per 1M tokens.
+  rates_per_m: [number, number, number] | null;
+}
+
 export interface RecentActivityEntry {
   provider: ProviderId;
   prompt: string;

@@ -392,17 +392,35 @@ pub fn antigravity_cost_usd(model: &str, input: u64, cached: u64, output: u64) -
 /// rate minus what they actually cost at the cache-read rate. 0 for models
 /// with no known rates.
 pub fn cache_savings_usd(provider: ProviderId, model: &str, cache_read_tokens: u64) -> f64 {
-    let rates = match provider {
-        ProviderId::Claude => claude_rates(model).map(|(input, read, _, _)| (input, read)),
-        ProviderId::Codex => codex_rates(model).map(|(input, cached, _)| (input, cached)),
+    cache_rates(provider, model)
+        .map(|(input, read, _)| per_million(cache_read_tokens, (input - read).max(0.0)))
+        .unwrap_or(0.0)
+}
+
+/// `(input, cache_read, cache_write)` per 1M tokens. Only Claude charges a
+/// premium to write the cache; Codex and Antigravity bill a miss at the plain
+/// input rate, so their write rate is the input rate. `None` for unknown ids.
+pub fn cache_rates(provider: ProviderId, model: &str) -> Option<(f64, f64, f64)> {
+    match provider {
+        ProviderId::Claude => {
+            claude_rates(model).map(|(input, read, write, _)| (input, read, write))
+        }
+        ProviderId::Codex => codex_rates(model).map(|(input, cached, _)| (input, cached, input)),
         ProviderId::Antigravity => {
             let (input, cached, _) = antigravity_rates(model);
-            Some((input, cached))
+            Some((input, cached, input))
         }
-    };
-    rates
-        .map(|(input, read)| per_million(cache_read_tokens, (input - read).max(0.0)))
-        .unwrap_or(0.0)
+    }
+}
+
+/// Lowest cache hit rate at which caching is cheaper than not caching, taking
+/// every miss as a cache write: `input ≥ h·read + (1−h)·write`. 0 when writes
+/// carry no premium (caching always wins).
+pub fn cache_break_even_ratio(input: f64, read: f64, write: f64) -> f64 {
+    if write <= input || write <= read {
+        return 0.0;
+    }
+    ((write - input) / (write - read)).clamp(0.0, 1.0)
 }
 
 /// Convert a token count + per-million rate into a USD amount.
@@ -552,5 +570,17 @@ mod tests {
             cache_savings_usd(ProviderId::Codex, "unknown-model-xyz", 1_000_000),
             0.0
         );
+    }
+
+    #[test]
+    fn cache_break_even_follows_write_premium() {
+        // Claude: write 1.25x, read 0.1x -> caching wins above 0.25 / 1.15.
+        let (i, r, w) = cache_rates(ProviderId::Claude, "claude-haiku-4-5").unwrap();
+        let h = cache_break_even_ratio(i, r, w);
+        assert!((h - 0.25 / 1.15).abs() < 1e-9, "break-even {h}");
+        // No write premium: caching always wins.
+        let (i, r, w) = cache_rates(ProviderId::Antigravity, "gemini-3-flash").unwrap();
+        assert_eq!(w, i);
+        assert_eq!(cache_break_even_ratio(i, r, w), 0.0);
     }
 }

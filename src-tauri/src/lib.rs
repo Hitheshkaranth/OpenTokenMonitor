@@ -510,6 +510,7 @@ pub fn run() {
             commands::get_cost_history,
             commands::get_usage_trends,
             commands::get_model_breakdown,
+            commands::get_cache_insights,
             commands::get_recent_activity,
             commands::export_usage_report,
             commands::refresh_provider,

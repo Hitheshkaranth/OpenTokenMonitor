@@ -275,6 +275,25 @@ pub struct ModelBreakdownEntry {
     pub cache_savings_usd: f64,
 }
 
+/// Is prompt caching paying off? Month-to-date spend with and without caching,
+/// the real 7-day hit rate, and the hit rate caching has to beat.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheInsights {
+    pub provider: ProviderId,
+    /// What this month actually cost, with caching.
+    pub month_cost_usd: f64,
+    /// The same month's tokens billed at the full input rate, with no cache.
+    pub month_uncached_cost_usd: f64,
+    /// Cache reads over prompt tokens across the last 7 UTC days; `None` with no prompt tokens.
+    pub hit_ratio_7d: Option<f64>,
+    /// Hit rate above which caching beats not caching; `None` when no model rates are known.
+    pub break_even_hit_ratio: Option<f64>,
+    /// Prompt tokens per UTC day for the last 7 days, oldest first.
+    pub daily_prompt_tokens_7d: Vec<u64>,
+    /// Prompt-token-weighted `(input, cache_read, cache_write)` USD per 1M over the last 7 days.
+    pub rates_per_m: Option<(f64, f64, f64)>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecentActivityEntry {
     pub provider: ProviderId,

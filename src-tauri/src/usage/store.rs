@@ -4,8 +4,8 @@ use std::sync::{Arc, Mutex};
 use rusqlite::{params, Connection};
 
 use crate::usage::models::{
-    CostEntry, HistorySample, ModelBreakdownEntry, ProviderId, TrendData, TrendPoint,
-    UsageSnapshot, WindowType,
+    CacheInsights, CostEntry, HistorySample, ModelBreakdownEntry, ProviderId, TrendData,
+    TrendPoint, UsageSnapshot, WindowType,
 };
 
 #[derive(Clone)]
@@ -499,6 +499,111 @@ impl UsageStore {
         });
         Ok(out)
     }
+
+    /// Cache payoff for `provider` as of `today` (a UTC day, matching how cost
+    /// rows are keyed): this month with vs without caching, plus the last 7 days'
+    /// hit rate, prompt volume and blended rates.
+    pub fn get_cache_insights(
+        &self,
+        provider: ProviderId,
+        today: chrono::NaiveDate,
+    ) -> Result<CacheInsights, String> {
+        use chrono::Datelike;
+
+        let month_start = today.with_day(1).unwrap_or(today);
+        let week_start = today - chrono::Duration::days(6);
+        let since = month_start.min(week_start).format("%Y-%m-%d").to_string();
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| "store lock poisoned".to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT day, model, input_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_usd
+                 FROM cost_entries
+                 WHERE provider = ?1 AND day >= ?2",
+            )
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query(params![provider.as_str(), since])
+            .map_err(|e| e.to_string())?;
+
+        // Claude logs cache reads and writes beside input; Codex and Antigravity
+        // count cached tokens inside input.
+        let claude = provider == ProviderId::Claude;
+        let per_m = |tokens: u64, rate: f64| tokens as f64 / 1_000_000.0 * rate;
+
+        let mut month_cost = 0.0f64;
+        let mut month_uncached = 0.0f64;
+        let mut daily = [0u64; 7];
+        let (mut hits, mut prompt_7d) = (0u64, 0u64);
+        let (mut rated_tokens, mut w_in, mut w_read, mut w_write) = (0f64, 0f64, 0f64, 0f64);
+
+        while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            let day: String = row.get(0).map_err(|e| e.to_string())?;
+            let model: String = row.get(1).map_err(|e| e.to_string())?;
+            let input: u64 = row.get(2).map_err(|e| e.to_string())?;
+            let read: u64 = row.get(3).map_err(|e| e.to_string())?;
+            let write: u64 = row.get(4).map_err(|e| e.to_string())?;
+            let cost: f64 = row.get(5).map_err(|e| e.to_string())?;
+            let Ok(date) = chrono::NaiveDate::parse_from_str(&day, "%Y-%m-%d") else {
+                continue;
+            };
+            let rates = crate::pricing::cache_rates(provider, &model);
+            let prompt = if claude {
+                input.saturating_add(read).saturating_add(write)
+            } else {
+                input
+            };
+
+            if date >= month_start && date <= today {
+                month_cost += cost;
+                // Undo the cache: reads and writes billed at the plain input rate.
+                let delta = rates.map_or(0.0, |(r_in, r_read, r_write)| {
+                    per_m(read, r_in - r_read)
+                        + if claude {
+                            per_m(write, r_in - r_write)
+                        } else {
+                            0.0
+                        }
+                });
+                month_uncached += cost + delta;
+            }
+
+            if date >= week_start && date <= today {
+                let slot = (date - week_start).num_days() as usize;
+                daily[slot] = daily[slot].saturating_add(prompt);
+                hits = hits.saturating_add(read);
+                prompt_7d = prompt_7d.saturating_add(prompt);
+                if let Some((r_in, r_read, r_write)) = rates {
+                    let t = prompt as f64;
+                    rated_tokens += t;
+                    w_in += t * r_in;
+                    w_read += t * r_read;
+                    w_write += t * r_write;
+                }
+            }
+        }
+
+        let rates_per_m = (rated_tokens > 0.0).then(|| {
+            (
+                w_in / rated_tokens,
+                w_read / rated_tokens,
+                w_write / rated_tokens,
+            )
+        });
+        Ok(CacheInsights {
+            provider,
+            month_cost_usd: month_cost,
+            month_uncached_cost_usd: month_uncached,
+            hit_ratio_7d: (prompt_7d > 0).then(|| hits as f64 / prompt_7d as f64),
+            break_even_hit_ratio: rates_per_m
+                .map(|(i, r, w)| crate::pricing::cache_break_even_ratio(i, r, w)),
+            daily_prompt_tokens_7d: daily.to_vec(),
+            rates_per_m,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -800,5 +905,44 @@ mod tests {
             .unwrap();
         assert_eq!(gemini, 0);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn cache_insights_split_month_and_week() {
+        let store = temp_store("cache-insights");
+        let row = |day: &str, input, read, write, cost| CostEntry {
+            date: day.to_string(),
+            provider: ProviderId::Claude,
+            model: "claude-haiku-4-5".to_string(),
+            input_tokens: input,
+            output_tokens: 0,
+            cache_read_tokens: read,
+            cache_write_tokens: write,
+            estimated_cost_usd: cost,
+        };
+        store
+            .save_cost_entries(&[
+                // Last month, inside the 7-day window only.
+                row("2026-09-30", 0, 1_000_000, 0, 0.10),
+                // This month.
+                row("2026-10-02", 1_000_000, 3_000_000, 0, 1.30),
+                // Older than both windows.
+                row("2026-08-01", 5_000_000, 0, 0, 5.00),
+            ])
+            .unwrap();
+
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 10, 3).unwrap();
+        let ci = store.get_cache_insights(ProviderId::Claude, today).unwrap();
+
+        // Month: $1.30 with caching; 3M reads at full input adds 3 x $0.90.
+        assert!((ci.month_cost_usd - 1.30).abs() < 1e-9);
+        assert!((ci.month_uncached_cost_usd - 4.00).abs() < 1e-9);
+        // Week: 4M reads over 5M prompt tokens.
+        assert!((ci.hit_ratio_7d.unwrap() - 0.8).abs() < 1e-9);
+        assert_eq!(
+            ci.daily_prompt_tokens_7d,
+            vec![0, 0, 0, 1_000_000, 0, 4_000_000, 0]
+        );
+        assert!((ci.break_even_hit_ratio.unwrap() - 0.25 / 1.15).abs() < 1e-9);
     }
 }

@@ -7,6 +7,7 @@ import WidgetGauge, { arcColor } from '@/components/meters/WidgetGauge';
 import ResetCountdown from '@/components/meters/ResetCountdown';
 import LimitEta, { forecastFor } from '@/components/meters/LimitEta';
 import UsageInsights from '@/components/insights/UsageInsights';
+import CacheInsights from '@/components/insights/CacheInsights';
 import { useUsageStore } from '@/stores/usageStore';
 import UsageBar from '@/components/meters/UsageBar';
 import {
@@ -284,7 +285,9 @@ const ProviderCard = ({
             <CostTrendChart points={trend?.points ?? []} color={meta.color} compact />
           </div>
 
-          <UsageInsights provider={providerId} breakdown={breakdown} />
+          <CacheInsights provider={providerId} refreshKey={breakdown} />
+
+          <UsageInsights breakdown={breakdown} />
 
           <div className="pcard-section-panel">
             <span className="pcard-section-title">Models</span>

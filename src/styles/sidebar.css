@@ -1820,3 +1820,154 @@
   outline: 2px solid color-mix(in srgb, var(--text-secondary) 55%, transparent);
   outline-offset: 2px;
 }
+
+/* Caching: cached vs uncached month, break-even, assumed hit rate (CacheInsights) */
+.pcard-cache-toggle-btn {
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.pcard-cache-toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.pcard-cache-toggle-btn.is-active {
+  border-color: rgb(var(--widget-accent) / 0.45);
+  background: rgb(var(--widget-accent) / 0.16);
+  color: var(--text-primary);
+}
+
+.pcard-cache-toggle-btn:focus-visible {
+  outline: 1px solid rgb(var(--widget-accent) / 0.8);
+  outline-offset: 1px;
+}
+
+.pcard-cache-month {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+}
+
+.pcard-cache-amount {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.pcard-cache-sub {
+  font-size: 7.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.pcard-cache-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.pcard-cache-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 6px;
+  border-radius: 9px;
+  background: var(--widget-card-chip-bg);
+  min-width: 0;
+}
+
+.pcard-cache-stat-k {
+  font-size: 7px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pcard-cache-stat-v {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.pcard-cache-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pcard-cache-track {
+  position: relative;
+  flex: 1;
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.pcard-cache-track input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  margin: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    rgb(var(--widget-accent) / 0.85) var(--fill, 0%),
+    var(--meter-track) var(--fill, 0%)
+  );
+  cursor: pointer;
+}
+
+.pcard-cache-track input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--toggle-knob);
+  border: 1.5px solid rgb(var(--widget-accent));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.pcard-cache-track input[type='range']::-moz-range-thumb {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--toggle-knob);
+  border: 1.5px solid rgb(var(--widget-accent));
+}
+
+.pcard-cache-track input[type='range']:focus-visible {
+  outline: 1px solid rgb(var(--widget-accent) / 0.8);
+  outline-offset: 3px;
+}
+
+/* Break-even marker on the slider track. */
+.pcard-cache-tick {
+  position: absolute;
+  top: 50%;
+  width: 1.5px;
+  height: 8px;
+  transform: translate(-50%, -50%);
+  border-radius: 1px;
+  background: var(--text-muted);
+  pointer-events: none;
+}
+
+.pcard-cache-slider-label,
+.pcard-cache-slider-value {
+  font-size: 7.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

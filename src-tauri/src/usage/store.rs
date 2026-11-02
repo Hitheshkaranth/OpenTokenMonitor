@@ -546,9 +546,11 @@ impl UsageStore {
             .query(params![provider.as_str(), since])
             .map_err(|e| e.to_string())?;
 
-        // Claude logs cache reads and writes beside input; Codex and Antigravity
-        // count cached tokens inside input.
+        // Claude and Codex rows store cache reads/writes beside the uncached
+        // input (Codex since store migration v4); Antigravity counts cached
+        // tokens inside input.
         let claude = provider == ProviderId::Claude;
+        let cache_beside_input = provider != ProviderId::Antigravity;
         let per_m = |tokens: u64, rate: f64| tokens as f64 / 1_000_000.0 * rate;
 
         let mut month_cost = 0.0f64;
@@ -568,7 +570,7 @@ impl UsageStore {
                 continue;
             };
             let rates = crate::pricing::cache_rates(provider, &model);
-            let prompt = if claude {
+            let prompt = if cache_beside_input {
                 input.saturating_add(read).saturating_add(write)
             } else {
                 input

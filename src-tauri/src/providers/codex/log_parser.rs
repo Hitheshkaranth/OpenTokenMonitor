@@ -14,7 +14,10 @@ pub fn cost_history(days: u32) -> Vec<CostEntry> {
             date: p.day,
             provider: ProviderId::Codex,
             model: p.model,
-            input_tokens: p.input_tokens,
+            // Codex reports `input_tokens` *including* the cached part. Store
+            // only the uncached remainder (as Claude rows do) so summing
+            // input + cache_read doesn't count cached tokens twice.
+            input_tokens: p.input_tokens.saturating_sub(p.cached_input_tokens),
             output_tokens: p.output_tokens,
             cache_read_tokens: p.cached_input_tokens,
             cache_write_tokens: 0,

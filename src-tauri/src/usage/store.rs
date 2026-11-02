@@ -102,7 +102,7 @@ impl UsageStore {
     /// means a build carrying the new version constant but not yet the new step
     /// marks the work done without doing it, stranding the database.
     fn migrate(&self) -> Result<(), String> {
-        const LATEST_VERSION: i64 = 3;
+        const LATEST_VERSION: i64 = 4;
 
         let conn = self
             .conn
@@ -186,6 +186,24 @@ impl UsageStore {
                    PRIMARY KEY(provider, window_type, ts)
                  );
                  PRAGMA user_version = 3;",
+            )
+            .map_err(|e| e.to_string())?;
+        }
+
+        if version < 4 {
+            // v4 — Codex rows stored `input_tokens` including the cached part
+            // while `cache_read_tokens` held that same cached part, so every
+            // token total (input + cache_read + ...) counted cached input
+            // twice. New scans store the uncached remainder; this corrects rows
+            // a refresh won't rewrite (it only rescans recent days). Runs in
+            // one transaction with the version stamp so it can't apply twice.
+            conn.execute_batch(
+                "BEGIN;
+                 UPDATE cost_entries
+                    SET input_tokens = MAX(input_tokens - cache_read_tokens, 0)
+                  WHERE provider = 'codex';
+                 PRAGMA user_version = 4;
+                 COMMIT;",
             )
             .map_err(|e| e.to_string())?;
         }
@@ -359,11 +377,20 @@ impl UsageStore {
         Ok(())
     }
 
+    /// Cost rows from the last `days` calendar days (UTC, today included),
+    /// oldest first. This is a calendar window, not "the last N days that had
+    /// activity": the latter let a "7d" view reach back weeks for an idle
+    /// provider, so token totals and spend covered different periods.
     pub fn get_cost_history(
         &self,
         provider: ProviderId,
         days: u32,
     ) -> Result<Vec<CostEntry>, String> {
+        let since_day = (chrono::Utc::now().date_naive()
+            - chrono::Duration::days(i64::from(days.max(1)) - 1))
+        .format("%Y-%m-%d")
+        .to_string();
+
         let conn = self
             .conn
             .lock()
@@ -372,23 +399,13 @@ impl UsageStore {
             .prepare(
                 "SELECT day, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_usd
                  FROM cost_entries
-                 WHERE provider = ?1
-                   AND day IN (
-                     SELECT day
-                     FROM (
-                       SELECT DISTINCT day
-                       FROM cost_entries
-                       WHERE provider = ?1
-                       ORDER BY day DESC
-                       LIMIT ?2
-                     )
-                   )
+                 WHERE provider = ?1 AND day >= ?2
                  ORDER BY day DESC, model ASC",
             )
             .map_err(|e| e.to_string())?;
 
         let mut rows = stmt
-            .query(params![provider.as_str(), days.max(1)])
+            .query(params![provider.as_str(), since_day])
             .map_err(|e| e.to_string())?;
 
         let mut out = Vec::new();
@@ -626,7 +643,7 @@ mod tests {
         let store = temp_store("migration-v1");
 
         let entry = |model: &str| CostEntry {
-            date: "2026-09-04".to_string(),
+            date: day_ago(1),
             provider: ProviderId::Claude,
             model: model.to_string(),
             input_tokens: 10,
@@ -703,6 +720,39 @@ mod tests {
         assert_eq!(remaining, 0);
     }
 
+    #[test]
+    fn migration_v4_stops_double_counting_codex_cached_input() {
+        let store = temp_store("migration-v4");
+        let row = |provider: ProviderId| CostEntry {
+            date: day_ago(1),
+            provider,
+            model: "gpt-5".to_string(),
+            // Legacy Codex shape: input includes the 200 cached tokens.
+            input_tokens: 1_000,
+            output_tokens: 50,
+            cache_read_tokens: 200,
+            cache_write_tokens: 0,
+            estimated_cost_usd: 1.0,
+        };
+        store
+            .save_cost_entries(&[row(ProviderId::Codex), row(ProviderId::Claude)])
+            .expect("seed rows");
+        {
+            let conn = store.conn.lock().expect("lock");
+            conn.execute_batch("PRAGMA user_version = 3")
+                .expect("rewind version");
+        }
+        store.migrate().expect("migrate");
+        store.migrate().expect("migrate again is a no-op");
+
+        let codex = store.get_cost_history(ProviderId::Codex, 30).unwrap();
+        assert_eq!(codex[0].input_tokens, 800);
+        assert_eq!(codex[0].cache_read_tokens, 200);
+        // Claude rows were already stored uncached-only; leave them alone.
+        let claude = store.get_cost_history(ProviderId::Claude, 30).unwrap();
+        assert_eq!(claude[0].input_tokens, 1_000);
+    }
+
     fn sample_entry(
         day: &str,
         model: &str,
@@ -722,13 +772,20 @@ mod tests {
         }
     }
 
+    /// UTC calendar day `n` days before today, in the store's `day` format.
+    fn day_ago(n: i64) -> String {
+        (chrono::Utc::now().date_naive() - chrono::Duration::days(n))
+            .format("%Y-%m-%d")
+            .to_string()
+    }
+
     #[test]
-    fn cost_history_limits_by_distinct_days_not_rows() {
+    fn cost_history_keeps_every_model_row_in_window() {
         let store = temp_store("distinct-days");
         let entries = vec![
-            sample_entry("2026-03-01", "gpt-5", 10, 5, 1.0),
-            sample_entry("2026-03-01", "gpt-5-mini", 4, 2, 0.2),
-            sample_entry("2026-03-02", "gpt-5", 8, 4, 0.8),
+            sample_entry(&day_ago(1), "gpt-5", 10, 5, 1.0),
+            sample_entry(&day_ago(1), "gpt-5-mini", 4, 2, 0.2),
+            sample_entry(&day_ago(0), "gpt-5", 8, 4, 0.8),
         ];
         store
             .save_cost_entries(&entries)
@@ -741,12 +798,33 @@ mod tests {
     }
 
     #[test]
+    fn cost_history_uses_calendar_days_not_active_days() {
+        let store = temp_store("calendar-window");
+        // Only two active days, but one is outside a 7-day window. The old
+        // "last N distinct days" query returned both.
+        let entries = vec![
+            sample_entry(&day_ago(20), "gpt-5", 100, 50, 10.0),
+            sample_entry(&day_ago(6), "gpt-5", 10, 5, 1.0),
+            sample_entry(&day_ago(7), "gpt-5", 1, 1, 0.1),
+        ];
+        store
+            .save_cost_entries(&entries)
+            .expect("save cost entries");
+
+        let history = store
+            .get_cost_history(ProviderId::Codex, 7)
+            .expect("load cost history");
+        let days: Vec<String> = history.into_iter().map(|e| e.date).collect();
+        assert_eq!(days, vec![day_ago(6)]);
+    }
+
+    #[test]
     fn model_breakdown_aggregates_rows_per_model() {
         let store = temp_store("breakdown");
         let entries = vec![
-            sample_entry("2026-03-01", "gpt-5", 10, 5, 1.0),
-            sample_entry("2026-03-02", "gpt-5", 12, 6, 1.2),
-            sample_entry("2026-03-02", "gpt-5-mini", 4, 2, 0.2),
+            sample_entry(&day_ago(1), "gpt-5", 10, 5, 1.0),
+            sample_entry(&day_ago(0), "gpt-5", 12, 6, 1.2),
+            sample_entry(&day_ago(0), "gpt-5-mini", 4, 2, 0.2),
         ];
         store
             .save_cost_entries(&entries)
@@ -765,8 +843,8 @@ mod tests {
     fn usage_trends_aggregate_multiple_models_into_one_day() {
         let store = temp_store("trends");
         let entries = vec![
-            sample_entry("2026-03-01", "gpt-5", 10, 5, 1.0),
-            sample_entry("2026-03-01", "gpt-5-mini", 4, 2, 0.2),
+            sample_entry(&day_ago(1), "gpt-5", 10, 5, 1.0),
+            sample_entry(&day_ago(1), "gpt-5-mini", 4, 2, 0.2),
         ];
         store
             .save_cost_entries(&entries)
@@ -776,7 +854,7 @@ mod tests {
             .get_usage_trends(ProviderId::Codex, 30)
             .expect("load usage trends");
         assert_eq!(trend.points.len(), 1);
-        assert_eq!(trend.points[0].date, "2026-03-01");
+        assert_eq!(trend.points[0].date, day_ago(1));
         assert_eq!(trend.points[0].total_tokens, 21);
         assert!((trend.points[0].cost_usd - 1.2).abs() < f64::EPSILON);
     }
@@ -859,7 +937,7 @@ mod tests {
         ));
         let store = UsageStore::open(&path).unwrap();
         let entry = |provider: ProviderId, model: &str| CostEntry {
-            date: "2026-09-04".to_string(),
+            date: day_ago(1),
             provider,
             model: model.to_string(),
             input_tokens: 10,

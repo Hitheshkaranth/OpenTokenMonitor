@@ -4,7 +4,7 @@
 
 const { useState, useEffect } = React;
 
-const VERSION = "0.4.2";
+const VERSION = "0.4.3";
 const REPO = "https://github.com/Hitheshkaranth/OpenTokenMonitor";
 const RELEASES = REPO + "/releases/latest";
 const PRODUCT_HUNT = "https://www.producthunt.com/products/opentoken-monitor?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-opentoken-monitor";

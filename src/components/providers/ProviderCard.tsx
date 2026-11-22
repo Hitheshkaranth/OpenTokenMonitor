@@ -24,7 +24,7 @@ import {
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { displayWindows, windowLabel, windowValueLabel } from '@/utils/usageWindows';
 import { buildProjectSummaries } from '@/utils/projectActivity';
-import { formatUsd } from '@/utils/format';
+import { formatUsd, todayCostUsd } from '@/utils/format';
 
 const providerMeta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'antigravity'; color: string; accent: string }> = {
   claude: { name: 'Claude', tint: 'claude', color: '#d97757', accent: '217 119 87' },
@@ -33,9 +33,9 @@ const providerMeta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' 
 };
 
 const severityColor: Record<UsageAlert['severity'], string> = {
-  warning: '#f59e0b',
-  high: '#f97316',
-  critical: '#ef4444',
+  warning: 'var(--severity-warning)',
+  high: 'var(--severity-high)',
+  critical: 'var(--severity-critical)',
 };
 
 const formatTokens = (value: number) => {
@@ -166,7 +166,7 @@ const ProviderCard = ({
   const [primary, secondary] = displayWindows(snapshot);
   const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
   const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
-  const costToday = trend?.points[trend.points.length - 1]?.cost_usd ?? 0;
+  const costToday = todayCostUsd(trend?.points);
 
   return (
     <div

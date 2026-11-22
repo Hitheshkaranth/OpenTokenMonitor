@@ -13,7 +13,8 @@ import {
 import { getProviderAccessState, providerAccessDotClass } from '@/utils/providerAccess';
 import { displayWindows } from '@/utils/usageWindows';
 import { useUsageStore } from '@/stores/usageStore';
-import { formatUsd } from '@/utils/format';
+import { formatUsd, todayCostUsd } from '@/utils/format';
+import { activateOnKey } from '@/components/glass/GlassPanel';
 
 const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'antigravity'; color: string }> = {
   claude: { label: 'Claude', tint: 'claude', color: '#d97757' },
@@ -34,9 +35,9 @@ const widgetWindowLabel = (windowType?: string) => {
 };
 
 const severityColor: Record<UsageAlert['severity'], string> = {
-  warning: '#f59e0b',
-  high: '#f97316',
-  critical: '#ef4444',
+  warning: 'var(--severity-warning)',
+  high: 'var(--severity-high)',
+  critical: 'var(--severity-critical)',
 };
 
 const formatTokens = (value: number) => {
@@ -60,7 +61,7 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
   const [primary, secondary] = displayWindows(snapshot);
   const primaryPct = Math.max(0, Math.min(100, primary?.utilization ?? 0));
   const secondaryPct = secondary ? Math.max(0, Math.min(100, secondary.utilization ?? 0)) : undefined;
-  const costToday = trend?.points[trend.points.length - 1]?.cost_usd ?? 0;
+  const costToday = todayCostUsd(trend?.points);
   const authState = useUsageStore((s) => s.authStates[provider]);
   const forecasts = useUsageStore((s) => s.forecasts[provider]);
   const access = getProviderAccessState(status, snapshot, authState);
@@ -70,6 +71,10 @@ const OverviewCard = ({ provider, snapshot, trend, breakdown = [], alerts = [], 
     <div
       className={`overview-card-v2 glass-${meta.tint}`}
       onClick={onClick}
+      onKeyDown={activateOnKey(onClick)}
+      role="button"
+      tabIndex={0}
+      aria-label={`${meta.label} details`}
       title={access.detail}
     >
       {/* Left: Gauge */}

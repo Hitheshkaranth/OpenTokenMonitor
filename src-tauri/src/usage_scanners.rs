@@ -61,20 +61,6 @@ pub struct ClaudeOauthCredentials {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-pub struct CodexCostSnapshot {
-    pub source: String,
-    pub input_tokens: u64,
-    pub cached_input_tokens: u64,
-    pub output_tokens: u64,
-    pub total_tokens: u64,
-    pub total_cost_usd: f64,
-    pub files_scanned: u64,
-    pub sessions_counted: u64,
-    pub scan_errors: Vec<String>,
-    pub last_scan_at: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct CodexDailyUsagePoint {
     pub day: String,
     pub input_tokens: u64,
@@ -380,62 +366,51 @@ pub fn read_claude_oauth_credentials() -> ClaudeOauthCredentials {
     ClaudeOauthCredentials::default()
 }
 
-pub fn scan_codex_cost_snapshot() -> CodexCostSnapshot {
-    let cache = CODEX_CACHE.get_or_init(|| Mutex::new(CodexScannerCache::default()));
-    let mut guard = cache.lock().expect("codex scanner cache lock poisoned");
-    guard.refresh_codex();
-    guard.codex_snapshot()
-}
-
 pub fn scan_codex_daily_usage() -> Vec<CodexDailyUsagePoint> {
     let cache = CODEX_CACHE.get_or_init(|| Mutex::new(CodexScannerCache::default()));
-    let mut guard = cache.lock().expect("codex scanner cache lock poisoned");
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     guard.refresh_codex();
     guard.codex_daily()
 }
 
 pub fn scan_codex_model_daily_usage() -> Vec<CodexModelDailyUsagePoint> {
     let cache = CODEX_CACHE.get_or_init(|| Mutex::new(CodexScannerCache::default()));
-    let mut guard = cache.lock().expect("codex scanner cache lock poisoned");
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     guard.refresh_codex();
     guard.codex_model_daily()
 }
 
 pub fn scan_claude_cost_snapshot() -> ClaudeCostSnapshot {
     let cache = CLAUDE_CACHE.get_or_init(|| Mutex::new(ClaudeScannerCache::default()));
-    let mut guard = cache.lock().expect("claude scanner cache lock poisoned");
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     guard.refresh_claude();
     guard.claude_snapshot()
 }
 
 pub fn scan_claude_daily_usage() -> Vec<ClaudeDailyUsagePoint> {
     let cache = CLAUDE_CACHE.get_or_init(|| Mutex::new(ClaudeScannerCache::default()));
-    let mut guard = cache.lock().expect("claude scanner cache lock poisoned");
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     guard.refresh_claude();
     guard.claude_daily()
 }
 
 pub fn scan_claude_model_daily_usage() -> Vec<ClaudeModelDailyUsagePoint> {
     let cache = CLAUDE_CACHE.get_or_init(|| Mutex::new(ClaudeScannerCache::default()));
-    let mut guard = cache.lock().expect("claude scanner cache lock poisoned");
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     guard.refresh_claude();
     guard.claude_model_daily()
 }
 
 pub fn scan_antigravity_daily_usage() -> Vec<AntigravityDailyUsagePoint> {
     let cache = ANTIGRAVITY_CACHE.get_or_init(|| Mutex::new(AntigravityScannerCache::default()));
-    let mut guard = cache
-        .lock()
-        .expect("antigravity scanner cache lock poisoned");
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     guard.refresh_antigravity();
     guard.antigravity_daily()
 }
 
 pub fn scan_antigravity_model_daily_usage() -> Vec<AntigravityModelDailyUsagePoint> {
     let cache = ANTIGRAVITY_CACHE.get_or_init(|| Mutex::new(AntigravityScannerCache::default()));
-    let mut guard = cache
-        .lock()
-        .expect("antigravity scanner cache lock poisoned");
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     guard.refresh_antigravity();
     guard.antigravity_model_daily()
 }
@@ -525,8 +500,12 @@ pub fn scan_session_usage(since_day: &str, today: &str) -> Vec<SessionUsage> {
 
     {
         let cache = CLAUDE_CACHE.get_or_init(|| Mutex::new(ClaudeScannerCache::default()));
-        let mut guard = cache.lock().expect("claude scanner cache lock poisoned");
+        let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
         guard.refresh_claude();
+        // Subagent transcripts (`<session>/subagents/agent-*.jsonl`) carry the
+        // parent's sessionId; merge them into one row per session so counts
+        // and UI keys stay unique.
+        let mut by_session = HashMap::<String, (SessionUsage, HashMap<String, f64>)>::new();
         for (key, file) in &guard.files {
             let c = &file.contribution;
             let session_id = c.session_id.clone().unwrap_or_else(|| {
@@ -536,14 +515,21 @@ pub fn scan_session_usage(since_day: &str, today: &str) -> Vec<SessionUsage> {
                     .unwrap_or(key)
                     .to_string()
             });
-            let mut session = SessionUsage::new(
-                ProviderId::Claude,
-                session_id,
-                c.cwd.clone(),
-                c.first_ts,
-                c.last_ts,
-            );
-            let mut model_costs = HashMap::<String, f64>::new();
+            let (session, model_costs) =
+                by_session.entry(session_id.clone()).or_insert_with(|| {
+                    (
+                        SessionUsage::new(ProviderId::Claude, session_id, None, None, None),
+                        HashMap::new(),
+                    )
+                });
+            if session.cwd.is_none() {
+                session.cwd = c.cwd.clone();
+            }
+            session.first_ts = match (session.first_ts, c.first_ts) {
+                (Some(a), Some(b)) => Some(a.min(b)),
+                (a, b) => a.or(b),
+            };
+            session.last_ts = session.last_ts.max(c.last_ts);
             for point in c
                 .daily_by_model
                 .values()
@@ -560,13 +546,15 @@ pub fn scan_session_usage(since_day: &str, today: &str) -> Vec<SessionUsage> {
                 }
                 *model_costs.entry(point.model.clone()).or_default() += point.cost_usd;
             }
+        }
+        for (session, model_costs) in by_session.into_values() {
             out.extend(session.finish(model_costs));
         }
     }
 
     {
         let cache = CODEX_CACHE.get_or_init(|| Mutex::new(CodexScannerCache::default()));
-        let mut guard = cache.lock().expect("codex scanner cache lock poisoned");
+        let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
         guard.refresh_codex();
         let contributions = dedupe_codex_contributions(
             guard
@@ -762,16 +750,14 @@ fn scan_claude_recent_activity(limit: usize) -> Vec<RecentActivityEntry> {
         let Ok(file) = File::open(path) else {
             continue;
         };
-        let reader = BufReader::new(file);
-        let mut messages = Vec::<Value>::new();
-        for line in reader.lines().map_while(Result::ok) {
-            let Ok(json) = serde_json::from_str::<Value>(&line) else {
-                continue;
-            };
-            messages.push(json);
-        }
+        // Stream lines straight into the collector instead of materialising
+        // every line of a (possibly multi-hundred-MB) transcript as Values.
+        let messages = BufReader::new(file)
+            .lines()
+            .map_while(Result::ok)
+            .filter_map(|line| serde_json::from_str::<Value>(&line).ok());
 
-        out.extend(collect_claude_recent_entries(&messages));
+        out.extend(collect_claude_recent_entries(messages));
     }
 
     sort_and_limit_recent(out, limit)
@@ -983,14 +969,20 @@ fn prompt_text_from_claude_message(json: &Value) -> Option<String> {
     }
 }
 
-fn collect_claude_recent_entries(messages: &[Value]) -> Vec<RecentActivityEntry> {
+fn collect_claude_recent_entries<I>(messages: I) -> Vec<RecentActivityEntry>
+where
+    I: IntoIterator,
+    I::Item: std::borrow::Borrow<Value>,
+{
+    use std::borrow::Borrow;
     let mut out = Vec::<RecentActivityEntry>::new();
     let mut pending: Option<RecentActivityEntry> = None;
 
     // Claude sessions often emit several assistant records per turn
     // (thinking, tool use, then a visible text reply). Keep the latest
     // visible assistant text attached to the most recent user prompt.
-    for json in messages {
+    for item in messages {
+        let json: &Value = item.borrow();
         match json.get("type").and_then(|value| value.as_str()) {
             Some("user") => {
                 let Some(prompt) = prompt_text_from_claude_message(json) else {
@@ -1043,9 +1035,13 @@ fn extract_cwd_from_antigravity_session(v: &Value, project_name: &str) -> Option
         match val {
             Value::String(s) => {
                 let normalized = s.replace('\\', "/");
-                let norm_lower = normalized.to_lowercase();
+                // ASCII-only lowercasing keeps byte offsets identical to
+                // `normalized`/`s`; full Unicode lowercasing can shrink or
+                // grow chars (e.g. KELVIN SIGN) and make the slice below
+                // land off a char boundary and panic.
+                let norm_lower = normalized.to_ascii_lowercase();
                 if let Some(idx) = norm_lower.find(proj_name_lower) {
-                    let before_ok = idx == 0 || normalized.chars().nth(idx - 1) == Some('/');
+                    let before_ok = idx == 0 || normalized[..idx].ends_with('/');
                     let is_absolute = normalized.starts_with('/')
                         || (normalized.len() >= 3
                             && normalized.chars().nth(1) == Some(':')
@@ -1053,7 +1049,7 @@ fn extract_cwd_from_antigravity_session(v: &Value, project_name: &str) -> Option
 
                     if before_ok && is_absolute {
                         let end_idx = idx + proj_name_lower.len();
-                        return Some(s[..end_idx].to_string());
+                        return s.get(..end_idx).map(str::to_string);
                     }
                 }
                 None
@@ -1078,7 +1074,7 @@ fn extract_cwd_from_antigravity_session(v: &Value, project_name: &str) -> Option
         }
     }
 
-    let proj_name_lower = project_name.to_lowercase();
+    let proj_name_lower = project_name.to_ascii_lowercase();
     search(v, &proj_name_lower)
 }
 
@@ -1451,30 +1447,6 @@ impl CodexScannerCache {
         self.files.retain(|k, _| keep.contains(k));
     }
 
-    fn codex_snapshot(&self) -> CodexCostSnapshot {
-        let mut snap = CodexCostSnapshot {
-            source: "cli-derived".to_string(),
-            last_scan_at: epoch_ms_now(),
-            ..CodexCostSnapshot::default()
-        };
-        let deduped = dedupe_codex_contributions(
-            self.files
-                .values()
-                .map(|f| f.contribution.clone())
-                .collect(),
-        );
-        for item in deduped {
-            snap.input_tokens = snap.input_tokens.saturating_add(item.input);
-            snap.cached_input_tokens = snap.cached_input_tokens.saturating_add(item.cached_input);
-            snap.output_tokens = snap.output_tokens.saturating_add(item.output);
-            snap.total_tokens = snap.total_tokens.saturating_add(item.total);
-            snap.total_cost_usd += item.cost;
-            snap.sessions_counted = snap.sessions_counted.saturating_add(1);
-        }
-        snap.files_scanned = self.files.len() as u64;
-        snap
-    }
-
     fn codex_daily(&self) -> Vec<CodexDailyUsagePoint> {
         let mut merged = HashMap::<String, CodexDailyUsagePoint>::new();
         for item in dedupe_codex_contributions(
@@ -1572,6 +1544,25 @@ impl ClaudeScannerCache {
         self.files.retain(|k, _| keep.contains(k));
     }
 
+    /// Messages that appear in more than one transcript (resumed / continued
+    /// sessions copy prior turns into the new .jsonl). Per-file dedupe can't
+    /// see these, so the aggregators subtract every copy after the first.
+    /// Files are visited in sorted order so the kept copy is stable.
+    fn cross_file_duplicates(&self) -> Vec<&ClaudeStreamEntry> {
+        let mut keys: Vec<&String> = self.files.keys().collect();
+        keys.sort();
+        let mut seen = HashSet::<&str>::new();
+        let mut dups = Vec::new();
+        for key in keys {
+            for (id, entry) in &self.files[key].seen_stream_ids {
+                if !seen.insert(id.as_str()) {
+                    dups.push(entry);
+                }
+            }
+        }
+        dups
+    }
+
     fn claude_snapshot(&self) -> ClaudeCostSnapshot {
         let mut snap = ClaudeCostSnapshot {
             source: "cli-derived".to_string(),
@@ -1591,6 +1582,18 @@ impl ClaudeScannerCache {
             snap.total_tokens = snap.total_tokens.saturating_add(c.total);
             snap.total_cost_usd += c.cost;
             snap.deduped_chunks = snap.deduped_chunks.saturating_add(c.deduped_chunks);
+        }
+        for d in self.cross_file_duplicates() {
+            snap.input_tokens = snap.input_tokens.saturating_sub(d.input);
+            snap.cache_read_input_tokens =
+                snap.cache_read_input_tokens.saturating_sub(d.cache_read);
+            snap.cache_creation_input_tokens = snap
+                .cache_creation_input_tokens
+                .saturating_sub(d.cache_create);
+            snap.output_tokens = snap.output_tokens.saturating_sub(d.output);
+            snap.total_tokens = snap.total_tokens.saturating_sub(stream_entry_total(d));
+            snap.total_cost_usd = (snap.total_cost_usd - d.cost).max(0.0);
+            snap.deduped_chunks = snap.deduped_chunks.saturating_add(1);
         }
         snap.files_scanned = self.files.len() as u64;
         snap
@@ -1616,6 +1619,19 @@ impl ClaudeScannerCache {
                 slot.output_tokens = slot.output_tokens.saturating_add(point.output_tokens);
                 slot.total_tokens = slot.total_tokens.saturating_add(point.total_tokens);
                 slot.cost_usd += point.cost_usd;
+            }
+        }
+        for d in self.cross_file_duplicates() {
+            if let Some(slot) = merged.get_mut(&d.day) {
+                slot.input_tokens = slot.input_tokens.saturating_sub(d.input);
+                slot.cache_read_input_tokens =
+                    slot.cache_read_input_tokens.saturating_sub(d.cache_read);
+                slot.cache_creation_input_tokens = slot
+                    .cache_creation_input_tokens
+                    .saturating_sub(d.cache_create);
+                slot.output_tokens = slot.output_tokens.saturating_sub(d.output);
+                slot.total_tokens = slot.total_tokens.saturating_sub(stream_entry_total(d));
+                slot.cost_usd = (slot.cost_usd - d.cost).max(0.0);
             }
         }
         let mut out: Vec<_> = merged.into_values().collect();
@@ -1647,11 +1663,33 @@ impl ClaudeScannerCache {
                 slot.cost_usd += point.cost_usd;
             }
         }
+        for d in self.cross_file_duplicates() {
+            if let Some(slot) = merged.get_mut(&format!("{}|{}", d.day, d.model)) {
+                slot.input_tokens = slot.input_tokens.saturating_sub(d.input);
+                slot.cache_read_input_tokens =
+                    slot.cache_read_input_tokens.saturating_sub(d.cache_read);
+                slot.cache_creation_input_tokens = slot
+                    .cache_creation_input_tokens
+                    .saturating_sub(d.cache_create);
+                slot.output_tokens = slot.output_tokens.saturating_sub(d.output);
+                slot.total_tokens = slot.total_tokens.saturating_sub(stream_entry_total(d));
+                slot.cost_usd = (slot.cost_usd - d.cost).max(0.0);
+            }
+        }
         let mut out: Vec<_> = merged.into_values().collect();
         out.sort_by(|a, b| a.day.cmp(&b.day).then(a.model.cmp(&b.model)));
         out
     }
 }
+
+/// Token total a single Claude message contributed (matches the per-line
+/// `total`: cache reads are not counted toward it).
+fn stream_entry_total(e: &ClaudeStreamEntry) -> u64 {
+    e.input
+        .saturating_add(e.cache_create)
+        .saturating_add(e.output)
+}
+
 impl AntigravityScannerCache {
     fn refresh_antigravity(&mut self) {
         let mut files = Vec::<PathBuf>::new();
@@ -1742,6 +1780,19 @@ impl AntigravityScannerCache {
     }
 }
 
+/// Length of the prefix of `buf` made of complete JSONL lines. A trailing
+/// fragment after the last newline is included only if it is already a
+/// complete JSON value (a final line written without a newline).
+fn complete_jsonl_len(buf: &[u8]) -> usize {
+    let end = buf.iter().rposition(|&b| b == b'\n').map_or(0, |p| p + 1);
+    let tail = &buf[end..];
+    if !tail.is_empty() && serde_json::from_slice::<serde::de::IgnoredAny>(tail).is_ok() {
+        buf.len()
+    } else {
+        end
+    }
+}
+
 fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
     let Ok(mut file) = File::open(path) else {
         return;
@@ -1753,10 +1804,11 @@ fn parse_codex_file_incremental(path: &Path, cache: &mut CodexFileCache) {
     if file.read_to_end(&mut buf).is_err() {
         return;
     }
-    let Ok(new_offset) = file.stream_position() else {
-        return;
-    };
-    cache.parsed_bytes = new_offset;
+    // Only consume complete lines: a line the CLI is still appending must be
+    // re-read whole next time, not skipped half-parsed.
+    let consumed = complete_jsonl_len(&buf);
+    buf.truncate(consumed);
+    cache.parsed_bytes = cache.parsed_bytes.saturating_add(consumed as u64);
 
     let reader = BufReader::new(buf.as_slice());
     for line in reader.lines().map_while(Result::ok) {
@@ -1921,10 +1973,11 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
     if file.read_to_end(&mut buf).is_err() {
         return;
     }
-    let Ok(new_offset) = file.stream_position() else {
-        return;
-    };
-    cache.parsed_bytes = new_offset;
+    // Only consume complete lines: a line the CLI is still appending must be
+    // re-read whole next time, not skipped half-parsed.
+    let consumed = complete_jsonl_len(&buf);
+    buf.truncate(consumed);
+    cache.parsed_bytes = cache.parsed_bytes.saturating_add(consumed as u64);
 
     let reader = BufReader::new(buf.as_slice());
     for line in reader.lines().map_while(Result::ok) {
@@ -1982,8 +2035,14 @@ fn parse_claude_file_incremental(path: &Path, cache: &mut ClaudeFileCache) {
             &[&["requestId"], &["request_id"], &["request", "id"]],
         )
         .unwrap_or_default();
-        if !message_id.is_empty() && !request_id.is_empty() {
-            let dedupe_key = format!("{message_id}:{request_id}");
+        // Lines without a requestId still dedupe on message.id alone so their
+        // streaming chunks are not each added in full.
+        if !message_id.is_empty() {
+            let dedupe_key = if request_id.is_empty() {
+                message_id.clone()
+            } else {
+                format!("{message_id}:{request_id}")
+            };
             if let Some(prev) = cache.seen_stream_ids.get(&dedupe_key) {
                 // Subtract previous chunk's contribution before adding the new one
                 cache.contribution.deduped_chunks =
@@ -2458,7 +2517,7 @@ fn day_from_json_or_now(json: &Value) -> String {
 fn try_iso_to_day(s: &str) -> Option<String> {
     // Expect at least "YYYY-MM-DD" (10 chars) with dashes at positions 4 and 7
     if s.len() >= 10 && s.as_bytes()[4] == b'-' && s.as_bytes()[7] == b'-' {
-        let date_part = &s[..10];
+        let date_part = s.get(..10)?;
         // Basic validation: all other chars should be digits
         let valid = date_part.bytes().enumerate().all(|(i, b)| {
             if i == 4 || i == 7 {
@@ -2547,6 +2606,77 @@ mod tests {
     use super::*;
     use std::fs::{create_dir_all, remove_dir_all, OpenOptions};
     use std::io::Write;
+
+    #[test]
+    fn extract_cwd_survives_case_folding_that_changes_byte_length() {
+        // U+212A KELVIN SIGN is 3 bytes but lowercases to 1-byte 'k'.
+        let v = serde_json::json!({ "text": "/\u{212A}\u{212A}\u{212A}\u{212A}\u{212A}\u{212A}/ab/myproj" });
+        let _ = extract_cwd_from_antigravity_session(&v, "myproj");
+        let v = serde_json::json!({ "cwd": "/Users/me/MyProj/src" });
+        assert_eq!(
+            extract_cwd_from_antigravity_session(&v, "myproj").as_deref(),
+            Some("/Users/me/MyProj")
+        );
+    }
+
+    #[test]
+    fn iso_to_day_rejects_non_ascii_without_panicking() {
+        assert_eq!(try_iso_to_day("2026-01-1\u{e9}"), None);
+        assert_eq!(
+            try_iso_to_day("2026-01-16T18:10:57Z").as_deref(),
+            Some("2026-01-16")
+        );
+    }
+
+    #[test]
+    fn complete_jsonl_len_leaves_partial_trailing_line() {
+        assert_eq!(complete_jsonl_len(b"{\"a\":1}\n{\"b\":"), 8);
+        assert_eq!(complete_jsonl_len(b"{\"a\":1}\n{\"b\":2}"), 15);
+        assert_eq!(complete_jsonl_len(b"{\"a\""), 0);
+    }
+
+    #[test]
+    fn claude_aggregates_dedupe_messages_across_files() {
+        let entry = ClaudeStreamEntry {
+            input: 100,
+            cache_read: 10,
+            cache_create: 5,
+            output: 50,
+            cost: 1.0,
+            day: "2026-01-01".into(),
+            model: "claude-sonnet-5".into(),
+        };
+        let mut file = ClaudeFileCache::default();
+        file.seen_stream_ids.insert("m1:r1".into(), entry.clone());
+        file.contribution.input = 100;
+        file.contribution.cache_read_input = 10;
+        file.contribution.cache_creation_input = 5;
+        file.contribution.output = 50;
+        file.contribution.total = 155;
+        file.contribution.cost = 1.0;
+        file.contribution.daily.insert(
+            "2026-01-01".into(),
+            ClaudeDailyUsagePoint {
+                day: "2026-01-01".into(),
+                input_tokens: 100,
+                cache_read_input_tokens: 10,
+                cache_creation_input_tokens: 5,
+                output_tokens: 50,
+                total_tokens: 155,
+                cost_usd: 1.0,
+            },
+        );
+        let mut cache = ClaudeScannerCache::default();
+        cache.files.insert("a.jsonl".into(), file.clone());
+        cache.files.insert("b.jsonl".into(), file);
+
+        let snap = cache.claude_snapshot();
+        assert_eq!(snap.input_tokens, 100);
+        assert_eq!(snap.total_tokens, 155);
+        assert!((snap.total_cost_usd - 1.0).abs() < 1e-9);
+        let daily = cache.claude_daily();
+        assert_eq!(daily[0].total_tokens, 155);
+    }
 
     #[test]
     fn codex_vendor_prefix_does_not_shadow_size_suffix() {

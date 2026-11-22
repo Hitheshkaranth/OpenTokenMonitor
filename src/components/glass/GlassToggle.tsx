@@ -2,10 +2,12 @@ type GlassToggleProps = {
   checked: boolean;
   onChange: (next: boolean) => void;
   label?: string;
+  /** Static accessible name (what the toggle controls); the visible label is the state text. */
+  ariaLabel?: string;
   color?: string;
 };
 
-const GlassToggle = ({ checked, onChange, label = 'Toggle', color }: GlassToggleProps) => {
+const GlassToggle = ({ checked, onChange, label = 'Toggle', ariaLabel, color }: GlassToggleProps) => {
   return (
     <button
       type="button"
@@ -17,9 +19,9 @@ const GlassToggle = ({ checked, onChange, label = 'Toggle', color }: GlassToggle
         cursor: 'pointer',
       }}
       aria-pressed={checked}
-      aria-label={label}
+      aria-label={ariaLabel ?? label}
     >
-      <span style={{ fontSize: 5 }}>{label}</span>
+      <span style={{ fontSize: 9 }} aria-hidden={ariaLabel ? true : undefined}>{label}</span>
       <span
         style={{
           width: 24,

@@ -9,7 +9,7 @@
 //! - OpenAI:     <https://developers.openai.com/api/docs/pricing>
 //! - Google AI:  <https://ai.google.dev/gemini-api/docs/pricing>
 //!
-//! Rates last reviewed: **2026-09**. Prices reflect the standard / ≤200K-context
+//! Rates last reviewed: **2026-11**. Prices reflect the standard / ≤200K-context
 //! tier; long-context surcharges are not tracked because we don't capture
 //! context size from local logs.
 //!
@@ -48,10 +48,12 @@ use crate::usage::models::ProviderId;
 ///
 /// Tiers (Sept 2026):
 /// - Fable / Mythos 5.x     →  $10   / $50
+/// - Opus 5.5                       →  $4 / $20 (cache read $0.20)
 /// - Opus 4.5 / 4.6 / 4.7 / 4.8 / 5  →  $5 / $25
 /// - Opus 4 / 4.1 / 3 (legacy)       →  $15 / $75
 /// - Sonnet 5                        →  $2 / $10
 /// - Sonnet 3.5 / 3.7 / 4 / 4.5 / 4.6 → $3 / $15
+/// - Haiku 5.5              →  $0.10 / $0.50 (≤100K prompt tier)
 /// - Haiku 4.5              →  $1    / $5
 /// - Haiku 3.5              →  $0.80 / $4
 /// - Haiku 3                →  $0.25 / $1.25
@@ -65,10 +67,12 @@ pub fn claude_rates(model: &str) -> Option<(f64, f64, f64, f64)> {
     // as a wall of magic numbers.
     const FABLE_5_1: (f64, f64, f64, f64) = (10.00, 0.25, 12.50, 50.00);
     const FABLE: (f64, f64, f64, f64) = (10.00, 1.00, 12.50, 50.00);
+    const OPUS_5_5: (f64, f64, f64, f64) = (4.00, 0.20, 5.00, 20.00);
     const OPUS_CURRENT: (f64, f64, f64, f64) = (5.00, 0.50, 6.25, 25.00);
     const OPUS_LEGACY: (f64, f64, f64, f64) = (15.00, 1.50, 18.75, 75.00);
     const SONNET_CURRENT: (f64, f64, f64, f64) = (2.00, 0.20, 2.50, 10.00);
     const SONNET_LEGACY: (f64, f64, f64, f64) = (3.00, 0.30, 3.75, 15.00);
+    const HAIKU_5_5: (f64, f64, f64, f64) = (0.10, 0.01, 0.125, 0.50);
     const HAIKU_CURRENT: (f64, f64, f64, f64) = (1.00, 0.10, 1.25, 5.00);
     const HAIKU_3_5: (f64, f64, f64, f64) = (0.80, 0.08, 1.00, 4.00);
     const HAIKU_3: (f64, f64, f64, f64) = (0.25, 0.03, 0.30, 1.25);
@@ -106,6 +110,10 @@ pub fn claude_rates(model: &str) -> Option<(f64, f64, f64, f64)> {
         if m.contains("opus-4-0") || m.contains("opus-4-1") || m.ends_with("opus-4") {
             return Some(OPUS_LEGACY);
         }
+        // Opus 5.5 cut list price to $4/$20 and cache reads to $0.20.
+        if m.contains("opus-5-5") {
+            return Some(OPUS_5_5);
+        }
         return Some(OPUS_CURRENT);
     }
 
@@ -122,6 +130,11 @@ pub fn claude_rates(model: &str) -> Option<(f64, f64, f64, f64)> {
     }
 
     if m.contains("haiku") {
+        // Haiku 5.5 is $0.10/$0.50 for prompts ≤100K tokens (5× above that;
+        // we can't see prompt size per request, so the short tier is used).
+        if m.contains("haiku-5-5") {
+            return Some(HAIKU_5_5);
+        }
         // Most specific first: "haiku-3-5" also contains "haiku-3".
         if m.contains("haiku-3-5") {
             return Some(HAIKU_3_5);
@@ -162,6 +175,9 @@ pub fn claude_cost_usd(
 ///
 /// Tiers (Sept 2026, OpenAI public list):
 /// - gpt-6-astra    →  $10.00 / $1.00  / $50.00
+/// - gpt-6.1-sol    →  $2.00  / $0.10  / $10.00
+/// - gpt-6-sol      →  $2.00  / $0.20  / $10.00
+/// - gpt-6-luna     →  $0.10  / $0.01  / $0.50
 /// - gpt-5.6-sol    →  $4.00  / $0.40  / $20.00
 /// - gpt-5.6-terra  →  $2.00  / $0.20  / $12.00
 /// - gpt-5.6-luna   →  $0.20  / $0.02  / $1.20
@@ -185,8 +201,28 @@ pub fn claude_cost_usd(
 pub fn codex_rates(model: &str) -> Option<(f64, f64, f64)> {
     let m = model.to_ascii_lowercase();
 
+    // GPT-6 Sol / Luna (Sept 2026) and GPT-6.1 Sol. Standard ≤272K tier.
+    if m.contains("gpt-6") && m.contains("luna") {
+        return Some((0.10, 0.01, 0.50));
+    }
+    if m.contains("gpt-6.1") && m.contains("sol") {
+        return Some((2.00, 0.10, 10.00));
+    }
+    if m.contains("gpt-6") && m.contains("sol") {
+        return Some((2.00, 0.20, 10.00));
+    }
     if m.contains("gpt-6") {
         return Some((10.00, 1.00, 50.00));
+    }
+
+    // Mini / nano variants of any GPT-5.x release (e.g. gpt-5.1-codex-mini)
+    // bill at the small-model tiers. Check them before the per-release
+    // branches below, or they'd be billed at the full model's rate.
+    if m.contains("gpt-5") && m.contains("nano") {
+        return Some((0.05, 0.005, 0.40));
+    }
+    if m.contains("gpt-5") && m.contains("mini") {
+        return Some((0.25, 0.025, 2.00));
     }
 
     // GPT-5.6 variants are named, not sized — match the name.
@@ -225,14 +261,7 @@ pub fn codex_rates(model: &str) -> Option<(f64, f64, f64)> {
         return Some((1.25, 0.125, 10.00));
     }
 
-    // GPT-5 family — match the most specific suffix first, or "gpt-5-nano"
-    // would fall into the generic branch and bill at 25× its real rate.
-    if m.contains("gpt-5") && m.contains("nano") {
-        return Some((0.05, 0.005, 0.40));
-    }
-    if m.contains("gpt-5") && m.contains("mini") {
-        return Some((0.25, 0.025, 2.00));
-    }
+    // GPT-5 family (mini / nano handled above).
     if m.contains("gpt-5") {
         // Includes gpt-5-codex, which bills at plain GPT-5 rates.
         return Some((1.25, 0.125, 10.00));
@@ -446,6 +475,30 @@ mod tests {
     }
 
     #[test]
+    fn claude_5_5_models_use_their_own_rates() {
+        assert_eq!(
+            claude_rates("claude-opus-5-5"),
+            Some((4.00, 0.20, 5.00, 20.00))
+        );
+        assert_eq!(
+            claude_rates("claude-haiku-5-5"),
+            Some((0.10, 0.01, 0.125, 0.50))
+        );
+        assert_eq!(
+            claude_rates("claude-opus-5"),
+            Some((5.00, 0.50, 6.25, 25.00))
+        );
+    }
+
+    #[test]
+    fn codex_gpt6_tiers_are_distinct() {
+        assert_eq!(codex_rates("gpt-6.1-sol"), Some((2.00, 0.10, 10.00)));
+        assert_eq!(codex_rates("gpt-6-sol"), Some((2.00, 0.20, 10.00)));
+        assert_eq!(codex_rates("gpt-6-luna"), Some((0.10, 0.01, 0.50)));
+        assert_eq!(codex_rates("gpt-6-astra"), Some((10.00, 1.00, 50.00)));
+    }
+
+    #[test]
     fn claude_legacy_opus_keeps_premium_rates() {
         // Opus 4.0 / 4.1 predate the price cut.
         let cost = claude_cost_usd("claude-opus-4-1", M, 0, 0, M);
@@ -501,6 +554,13 @@ mod tests {
     fn claude_unknown_model_costs_nothing() {
         assert!(claude_rates("unknown-model").is_none());
         assert_eq!(claude_cost_usd("unknown-model", 1000, 0, 0, 500), 0.0);
+    }
+
+    #[test]
+    fn codex_point_release_mini_uses_mini_tier() {
+        assert_eq!(codex_rates("gpt-5.1-codex-mini"), Some((0.25, 0.025, 2.00)));
+        assert_eq!(codex_rates("gpt-5.2-mini"), Some((0.25, 0.025, 2.00)));
+        assert_eq!(codex_rates("gpt-5.1-codex"), Some((1.25, 0.125, 10.00)));
     }
 
     #[test]

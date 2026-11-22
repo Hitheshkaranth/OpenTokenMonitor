@@ -908,8 +908,9 @@
   transform: translateY(-1px);
 }
 
-/* Whole-modal text scaled to match the ~5px period pills. Same selectors as the
-   rules above, later source position, so they win by source order. */
+/* Whole-modal text scale (7 / 7.5 / 8px tiers; 7px is the smallest legible
+   size). Same selectors as the rules above, later source position, so they
+   win by source order. */
 
 .stg-badge,
 .stg-metric-label,
@@ -933,7 +934,7 @@
 .abt-signal-label,
 .abt-project-desc,
 .abt-version-label {
-  font-size: 5px;
+  font-size: 7px;
 }
 
 .stg-toggle-btn,
@@ -946,18 +947,18 @@
 .abt-signal-value,
 .abt-section-title,
 .abt-version-value {
-  font-size: 6px;
+  font-size: 7.5px;
 }
 
 .abt-app-name,
 .abt-maintainer {
-  font-size: 7px;
+  font-size: 8px;
 }
 
 .stg-page .glass-pill input,
 .stg-pp-field .glass-pill input,
 .stg-pp-field-select .glass-pill input {
-  font-size: 5px;
+  font-size: 7px;
 }
 
 /* Keyboard focus ring for settings controls — matches .glass-pill:focus-visible */

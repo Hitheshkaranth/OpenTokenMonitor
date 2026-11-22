@@ -17,11 +17,6 @@ use crate::usage::models::{
 };
 use crate::usage_scanners::read_codex_auth_bridge;
 
-/// Serialises OAuth refreshes. Codex rotates the refresh token on every use,
-/// so two overlapping refreshes would have the second one present an
-/// already-rotated token and can invalidate the CLI's session.
-static REFRESH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-
 pub struct CodexProvider {
     descriptor: ProviderDescriptor,
 }
@@ -38,17 +33,10 @@ impl CodexProvider {
             AuthKind::ApiKey => format!("Codex API key auth loaded from {}", state.source_path),
             AuthKind::Oauth => {
                 if state.is_expired_with_skew(60) {
-                    if state.has_refresh_token {
-                        format!(
-                            "Codex OAuth loaded from {} (token expired, refresh available)",
-                            state.source_path
-                        )
-                    } else {
-                        format!(
-                            "Codex OAuth loaded from {} (token expired, no refresh token)",
-                            state.source_path
-                        )
-                    }
+                    format!(
+                        "Codex OAuth loaded from {} (token expired, run `codex` to refresh)",
+                        state.source_path
+                    )
                 } else {
                     format!("Codex OAuth loaded from {}", state.source_path)
                 }
@@ -121,34 +109,18 @@ impl UsageProvider for CodexProvider {
             && auth_state.kind == AuthKind::Oauth
             && auth_state.is_expired_with_skew(60)
         {
-            let _refresh_guard = REFRESH_LOCK.lock().await;
-            // Another task may have refreshed while we waited; re-read and reuse it.
+            // Never spend the CLI's rotating refresh_token from the monitor
+            // (see oauth_refresh.rs). The CLI may already have refreshed on its
+            // own, so re-read auth.json once and use a fresh token if present.
             let latest = read_codex_auth_bridge();
-            let already_refreshed = latest.access_token != auth.access_token
-                && !latest.access_token.is_empty()
-                && !oauth_refresh::is_jwt_expired_with_skew(&latest.access_token, 60);
-            if already_refreshed {
+            if !latest.access_token.is_empty()
+                && !oauth_refresh::is_jwt_expired_with_skew(&latest.access_token, 60)
+            {
                 bearer_token = latest.access_token;
-            } else if let Some(refresh_token) = latest.refresh_token.as_deref() {
-                match oauth_refresh::refresh_access_token(refresh_token).await {
-                    Ok(refreshed) => {
-                        if let Some(expires_in) = refreshed.expires_in_secs {
-                            info!("[codex] token refresh OK, expires_in={expires_in}s");
-                        }
-                        if let Err(e) = oauth_refresh::persist_refreshed_tokens(&refreshed) {
-                            warn!("[codex] token refresh persist FAILED: {e}");
-                        }
-                        bearer_token = refreshed.access_token;
-                    }
-                    Err(e) => {
-                        let reason = format!("Codex token expired and refresh failed: {e}");
-                        warn!("[codex] {reason}");
-                        local_log_reason = Some(reason);
-                    }
-                }
             } else {
+                bearer_token.clear();
                 local_log_reason =
-                    Some("Codex token expired and no refresh token was available".to_string());
+                    Some("Codex token expired - run `codex` to refresh it.".to_string());
             }
         }
 
@@ -193,7 +165,7 @@ impl UsageProvider for CodexProvider {
         }
 
         if ctx.allow_cli_strategy {
-            if let Ok(cli) = rpc_fetcher::fetch_usage() {
+            if let Ok(cli) = rpc_fetcher::fetch_usage().await {
                 return Ok(UsageSnapshot {
                     provider: ProviderId::Codex,
                     windows: vec![

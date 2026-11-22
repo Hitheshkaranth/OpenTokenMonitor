@@ -131,10 +131,14 @@ pub async fn get_recent_activity(
     provider: ProviderId,
     limit: u32,
 ) -> Result<Vec<RecentActivityEntry>, String> {
-    Ok(usage_scanners::scan_recent_activity(
-        provider,
-        limit.max(1) as usize,
-    ))
+    // Clamp so the webview can't request an unbounded scan (the activity cache
+    // is also keyed on limit), and keep the file scan off the async workers.
+    let limit = limit.clamp(1, 200) as usize;
+    tauri::async_runtime::spawn_blocking(move || {
+        usage_scanners::scan_recent_activity(provider, limit)
+    })
+    .await
+    .map_err(|e| format!("recent activity scan failed: {e}"))
 }
 
 #[tauri::command]

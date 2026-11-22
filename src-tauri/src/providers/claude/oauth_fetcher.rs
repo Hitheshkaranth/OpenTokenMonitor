@@ -99,14 +99,14 @@ async fn try_endpoint(
 
         let status = res.status();
         if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            let body = res.text().await.unwrap_or_default();
+            let body = crate::providers::error_body_snippet(res).await;
             last_err = format!("{RATE_LIMITED_PREFIX} (attempt {}): {body}", attempt + 1);
             warn!("[claude] OAuth: {last_err}");
             continue;
         }
 
         if !status.is_success() {
-            let body = res.text().await.unwrap_or_default();
+            let body = crate::providers::error_body_snippet(res).await;
             // Non-retryable error — bail out of this endpoint immediately
             return Err(format!("{status}: {body}"));
         }

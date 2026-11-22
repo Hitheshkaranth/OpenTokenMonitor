@@ -18,7 +18,7 @@ const meta: Record<ProviderId, { name: string; tint: 'claude' | 'codex' | 'antig
   antigravity: { name: 'Antigravity', tint: 'antigravity' },
 };
 
-const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
+const allProviders: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
 const widgetWindowLabel = (windowType?: WindowType) => {
   switch (windowType) {
@@ -44,6 +44,8 @@ type WidgetModeProps = {
   statuses: Partial<Record<ProviderId, ProviderStatus>>;
   modelBreakdowns: Record<ProviderId, ModelBreakdownEntry[]>;
   recentActivity: Record<ProviderId, RecentActivityEntry[]>;
+  /** Enabled providers; disabled ones get no widget card. */
+  activeProviders?: ProviderId[];
   onExpand: () => void;
   onRefresh: () => void;
   refreshBusy: boolean;
@@ -56,21 +58,27 @@ const WidgetMode = ({
   statuses,
   modelBreakdowns,
   recentActivity,
+  activeProviders = allProviders,
   onExpand,
   onRefresh,
   refreshBusy,
 }: WidgetModeProps) => {
+  const providers = activeProviders;
   const [screen, setScreen] = useState<WidgetScreen>('usage');
-  const [activityProvider, setActivityProvider] = useState<ProviderId>('codex');
+  const [activityProvider, setActivityProvider] = useState<ProviderId>(
+    providers.includes('codex') ? 'codex' : providers[0] ?? 'codex'
+  );
   const allForecasts = useUsageStore((s) => s.forecasts);
 
   useEffect(() => {
-    if (recentActivity[activityProvider]?.length > 0) return;
-    const fallback = providers.find((provider) => recentActivity[provider]?.length > 0);
+    const enabled = providers.includes(activityProvider);
+    if (enabled && recentActivity[activityProvider]?.length > 0) return;
+    const fallback =
+      providers.find((provider) => recentActivity[provider]?.length > 0) ?? (enabled ? undefined : providers[0]);
     if (fallback) {
       setActivityProvider(fallback);
     }
-  }, [activityProvider, recentActivity]);
+  }, [activityProvider, recentActivity, providers]);
 
   const openActivity = (provider: ProviderId) => {
     setActivityProvider(provider);
@@ -153,6 +161,7 @@ const WidgetMode = ({
                 className="widget-provider-card"
                 tint={meta[id].tint}
                 onClick={() => openActivity(id)}
+                ariaLabel={`${meta[id].name} activity`}
                 title={access.detail}
               >
                 <div className="widget-provider-header">
@@ -220,6 +229,7 @@ const WidgetMode = ({
           modelBreakdowns={modelBreakdowns}
           recentActivity={recentActivity}
           onSelectProvider={setActivityProvider}
+          providers={providers}
         />
       )}
     </div>

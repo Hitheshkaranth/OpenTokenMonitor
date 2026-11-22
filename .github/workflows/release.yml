@@ -6,19 +6,23 @@ on:
       - "v*.*.*"
   workflow_dispatch:
 
+# Least privilege by default; only the jobs that create, upload to or publish
+# the GitHub release get a write-capable token.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   create-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       release_id: ${{ steps.create_release.outputs.id }}
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - name: Create draft GitHub release
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           draft: true
           generate_release_notes: true
@@ -27,6 +31,8 @@ jobs:
     name: Build (${{ matrix.target }})
     needs: create-release
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     env:
       HAS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
       HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
@@ -78,18 +84,20 @@ jobs:
             patchelf
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        # Pinned by SHA; with a SHA ref the toolchain must be named explicitly.
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri
 
       - name: Import macOS code-signing certificate
         if: runner.os == 'macOS' && env.HAS_APPLE_CERTIFICATE == 'true'
-        uses: apple-actions/import-codesign-certs@v3
+        uses: apple-actions/import-codesign-certs@63fff01cd422d4b7b855d40ca1e9d34d2de9427d # v3.0.0
         with:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -130,6 +138,20 @@ jobs:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
 
+      # Signing updater artifacts with a key whose public half is not in
+      # tauri.conf.json produces updates no installed build will accept. Fail
+      # here instead of after users have installed the build.
+      - name: Verify updater public key is configured
+        if: env.HAS_UPDATER_KEY == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pubkey="$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['plugins']['updater']['pubkey'])")"
+          if [ -z "$pubkey" ] || [ "$pubkey" = "PUBKEY_PLACEHOLDER" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY is set but plugins.updater.pubkey in src-tauri/tauri.conf.json is still a placeholder. Commit the matching public key (tauri signer generate) before releasing."
+            exit 1
+          fi
+
       # `createUpdaterArtifacts` ships false so a keyless build succeeds --
       # Tauri fails the bundle step if asked to emit updater artifacts it cannot
       # sign. Turn it on only when the signing key is available.
@@ -149,14 +171,15 @@ jobs:
 
       - name: Build Tauri bundle
         shell: bash
+        # Secrets arrive via env, never interpolated into the script text.
+        # Unset the notary vars when empty so Tauri does not try to notarize.
         run: |
-          if [ "${{ secrets.APPLE_ID }}" != "" ]; then
-            export APPLE_ID="${{ secrets.APPLE_ID }}"
-            export APPLE_PASSWORD="${{ secrets.APPLE_PASSWORD }}"
-            export APPLE_TEAM_ID="${{ secrets.APPLE_TEAM_ID }}"
-          fi
+          [ -n "${APPLE_ID:-}" ] || unset APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
           ${{ matrix.bundle_cmd }}
         env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
@@ -211,7 +234,7 @@ jobs:
           retention-days: 1
 
       - name: Upload build artifacts to draft release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
@@ -223,6 +246,8 @@ jobs:
     name: Build latest.json
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      contents: write
     steps:
       - name: Download staged signatures
         uses: actions/download-artifact@v4
@@ -292,7 +317,7 @@ jobs:
 
       - name: Attach latest.json to the draft release
         if: hashFiles('latest.json') != ''
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
@@ -300,13 +325,15 @@ jobs:
 
   publish-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     needs:
       - create-release
       - build
       - updater-manifest
     steps:
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ github.ref_name }}
           draft: false
@@ -328,6 +355,8 @@ jobs:
     name: Update package managers
     runs-on: ubuntu-latest
     needs: publish-release
+    permissions:
+      contents: read
     env:
       HAS_WINGET_TOKEN: ${{ secrets.WINGET_TOKEN != '' }}
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
@@ -338,7 +367,7 @@ jobs:
 
       - name: winget
         if: ${{ !cancelled() && env.HAS_WINGET_TOKEN == 'true' }}
-        uses: vedantmgoyal9/winget-releaser@v2
+        uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
         with:
           identifier: Hitheshkaranth.OpenTokenMonitor
           release-tag: ${{ github.ref_name }}
@@ -384,7 +413,7 @@ jobs:
 
       - name: AUR
         if: ${{ !cancelled() && env.HAS_AUR_KEY == 'true' }}
-        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
+        uses: KSXGitHub/github-actions-deploy-aur@084b0d9b15415bf9cdb65d44dad1efe37a354050 # v4.2.0
         with:
           pkgname: opentokenmonitor-bin
           pkgbuild: packaging/aur/PKGBUILD

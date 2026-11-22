@@ -17,11 +17,12 @@ export type ProviderAccessState = {
   color: string;
 };
 
+// CSS tokens (glass.css) so badge text keeps contrast in both themes.
 export const providerAccessColor = (health: ProviderAccessHealth) => {
-  if (health === 'active') return '#34d399';
-  if (health === 'error') return '#f87171';
+  if (health === 'active') return 'var(--status-active)';
+  if (health === 'error') return 'var(--status-error)';
   if (health === 'unknown') return 'var(--text-muted)';
-  return '#fbbf24';
+  return 'var(--status-waiting)';
 };
 
 export const providerAccessDotClass = (health: ProviderAccessHealth) =>

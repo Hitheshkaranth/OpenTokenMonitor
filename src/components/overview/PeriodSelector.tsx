@@ -47,6 +47,7 @@ const PeriodSelector = () => {
             value={customDays > 0 ? String(customDays) : ''}
             onChange={(next) => setCustomDays(next === '' ? 0 : Number(next))}
             style={{ minWidth: 56 }}
+            aria-label="Custom period in days"
           />
         </div>
       ) : null}

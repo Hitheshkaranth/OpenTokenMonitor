@@ -1,9 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use std::process::Command;
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::process::Command;
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -17,10 +16,20 @@ pub struct CodexCliWindow {
     pub resets_at: Option<DateTime<Utc>>,
 }
 
-pub fn fetch_usage() -> Result<CodexCliWindow, String> {
-    let output = cli_command()
-        .args(["--usage", "--json"])
-        .output()
+/// Upper bound on how long `codex --usage` may run. The caller holds the
+/// per-provider refresh lock, so a hung CLI (login prompt, update check, a
+/// shim that never exits) must not wedge every later Codex refresh.
+const CLI_TIMEOUT: Duration = Duration::from_secs(5);
+
+pub async fn fetch_usage() -> Result<CodexCliWindow, String> {
+    let mut cmd = cli_command();
+    cmd.args(["--usage", "--json"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    let output = tokio::time::timeout(CLI_TIMEOUT, cmd.output())
+        .await
+        .map_err(|_| "codex --usage timed out".to_string())?
         .map_err(|e| e.to_string())?;
     if !output.status.success() {
         return Err("codex --usage failed".to_string());

@@ -8,27 +8,21 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "store:allow-load",
-    "store:allow-get",
-    "store:allow-set",
-    "store:allow-save",
     {
-      "identifier": "http:default",
+      "identifier": "opener:allow-open-path",
       "allow": [
         {
-          "url": "https://api.anthropic.com/*"
+          "path": "$APPDATA/logs"
         },
         {
-          "url": "https://chatgpt.com/*"
+          "path": "$APPDATA/logs/**"
         },
         {
-          "url": "https://auth.openai.com/*"
+          "path": "$APPDATA/exports/**"
         }
       ]
     },
-    "fs:default",
     "notification:default",
-    "shell:allow-open",
     "updater:default",
     "process:default",
     "core:window:allow-start-dragging",

@@ -61,14 +61,12 @@ where
         return;
     }
 
-    let mut keep_days = std::collections::BTreeSet::<String>::new();
-    for point in points.iter().rev() {
-        if keep_days.len() >= days as usize && !keep_days.contains(point.day()) {
-            break;
-        }
-        keep_days.insert(point.day().to_string());
-    }
-    points.retain(|point| keep_days.contains(point.day()));
+    // Calendar window (today and the previous `days - 1` UTC days), not "the
+    // last N days that happen to have data".
+    let cutoff = (chrono::Utc::now().date_naive() - chrono::Duration::days(days as i64 - 1))
+        .format("%Y-%m-%d")
+        .to_string();
+    points.retain(|point| point.day() >= cutoff.as_str());
 }
 
 trait HasDay {

@@ -27,7 +27,7 @@ export default defineConfig(async () => ({
       output: {
         manualChunks: {
           chart_vendor: ["recharts"],
-          tauri_vendor: ["@tauri-apps/api", "@tauri-apps/plugin-store"],
+          tauri_vendor: ["@tauri-apps/api"],
           ui_vendor: ["lucide-react", "zustand"],
         },
       },

@@ -91,12 +91,30 @@ pub async fn refresh_provider(
         );
     }
 
-    let history = provider_impl.fetch_cost_history(30).await?;
+    // Backfill a year of history on the first refresh of each provider in this
+    // process so 90d views are populated; afterwards only the recent window
+    // needs re-upserting.
+    let days = if first_history_refresh(provider) {
+        365
+    } else {
+        30
+    };
+    let history = provider_impl.fetch_cost_history(days).await?;
     if !history.is_empty() {
         store.save_cost_entries(&history)?;
     }
 
     Ok(snapshot)
+}
+
+fn first_history_refresh(provider: ProviderId) -> bool {
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+    static DONE: OnceLock<Mutex<HashSet<ProviderId>>> = OnceLock::new();
+    DONE.get_or_init(|| Mutex::new(HashSet::new()))
+        .lock()
+        .map(|mut done| done.insert(provider))
+        .unwrap_or(false)
 }
 
 // Refresh every provider but keep partial success useful. The UI can still render

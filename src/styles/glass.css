@@ -55,6 +55,21 @@
   --widget-gauge-core-stroke: rgba(255, 255, 255, 0.08);
   --widget-gauge-core-inner: rgba(255, 255, 255, 0.03);
   --widget-gauge-track-empty: rgba(255, 255, 255, 0.08);
+  /* Semantic text colors: pastel on dark, deep hues on light (WCAG contrast). */
+  --status-active: #34d399;
+  --status-waiting: #fbbf24;
+  --status-error: #f87171;
+  --severity-warning: #f59e0b;
+  --severity-high: #f97316;
+  --severity-critical: #ef4444;
+  --urgency-soon: #fef3c7;
+  --urgency-warn: #ffedd5;
+  --urgency-crit: #fee2e2;
+  --pager-dot: rgba(255, 255, 255, 0.18);
+  --pager-dot-active: rgba(255, 255, 255, 0.78);
+  /* Opaque surfaces for prefers-reduced-transparency. */
+  --glass-solid: #2e3b42;
+  --glass-solid-strong: #58636a;
 }
 
 html[data-theme='light'] {
@@ -106,6 +121,19 @@ html[data-theme='light'] {
   --widget-gauge-core-stroke: rgba(123, 148, 166, 0.18);
   --widget-gauge-core-inner: rgba(211, 223, 232, 0.38);
   --widget-gauge-track-empty: rgba(148, 171, 186, 0.24);
+  --status-active: #047857;
+  --status-waiting: #b45309;
+  --status-error: #b91c1c;
+  --severity-warning: #b45309;
+  --severity-high: #c2410c;
+  --severity-critical: #b91c1c;
+  --urgency-soon: #92400e;
+  --urgency-warn: #9a3412;
+  --urgency-crit: #991b1b;
+  --pager-dot: rgba(53, 77, 92, 0.22);
+  --pager-dot-active: rgba(15, 32, 41, 0.7);
+  --glass-solid: #eef3f7;
+  --glass-solid-strong: #dde6ec;
 }
 
 html[data-theme='dark'] { color-scheme: dark; }
@@ -153,7 +181,17 @@ body {
   padding: 6px 12px;
 }
 
-.glass-pill:focus-visible {
+.glass-pill:focus-visible,
+.overview-card-v2:focus-visible,
+.glass-panel[role='button']:focus-visible {
+  outline: 2px solid var(--text-secondary); /* fallback for engines without color-mix() */
+  outline: 2px solid color-mix(in srgb, var(--text-secondary) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* Text inputs live inside a div.glass-pill wrapper (GlassInput); ring the
+   wrapper while its input has focus. */
+.glass-pill:focus-within:not(button) {
   outline: 2px solid var(--text-secondary); /* fallback for engines without color-mix() */
   outline: 2px solid color-mix(in srgb, var(--text-secondary) 55%, transparent);
   outline-offset: 2px;
@@ -255,8 +293,7 @@ select.glass-pill option {
 
 @media (prefers-reduced-transparency: reduce) {
   .glass-panel {
-    background: #2e3b42; /* fallback for engines without color-mix() */
-    background: color-mix(in srgb, #112028 88%, white 12%);
+    background: var(--glass-solid);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

@@ -1,5 +1,7 @@
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useMemo } from 'react';
 import { TrendPoint } from '@/types';
+import { formatUsd, zeroFillDaily } from '@/utils/format';
 
 type CostTrendChartProps = {
   points: TrendPoint[];
@@ -10,6 +12,7 @@ type CostTrendChartProps = {
 
 const CostTrendChart = ({ points, color, compact, days }: CostTrendChartProps) => {
   const height = compact ? 80 : 150;
+  const data = useMemo(() => zeroFillDaily(points), [points]);
 
   return (
     <div style={{ height, padding: compact ? 0 : 8, display: 'flex', flexDirection: 'column', gap: compact ? 0 : 2 }}>
@@ -29,7 +32,7 @@ const CostTrendChart = ({ points, color, compact, days }: CostTrendChartProps) =
         </div>
       ) : null}
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={points} margin={{ top: 4, right: 4, left: compact ? -20 : -16, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 4, right: 4, left: compact ? -20 : -16, bottom: 0 }}>
           <defs>
             <linearGradient id="costFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity={0.5} />
@@ -56,6 +59,7 @@ const CostTrendChart = ({ points, color, compact, days }: CostTrendChartProps) =
               borderRadius: 10,
               fontSize: compact ? 10 : 12,
             }}
+            formatter={(value) => [formatUsd(Number(value)), 'Cost']}
           />
           <Area type="monotone" dataKey="cost_usd" stroke={color} fill="url(#costFill)" strokeWidth={compact ? 1.5 : 2} />
         </AreaChart>

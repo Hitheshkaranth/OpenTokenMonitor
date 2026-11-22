@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openPath } from '@tauri-apps/plugin-opener';
 import { create } from 'zustand';
 import {
   AuthState,
@@ -198,7 +198,7 @@ export const useUsageStore = create<UsageState>((set, get) => ({
     if (!isTauriRuntime()) return;
     try {
       const path = await invoke<string>('export_report', { days, format });
-      openUrl(path, '_self');
+      await openPath(path);
     } catch (error) {
       console.error('export report failed', error);
     }

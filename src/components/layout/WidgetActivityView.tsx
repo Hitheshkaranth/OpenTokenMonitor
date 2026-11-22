@@ -11,7 +11,7 @@ const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex'
   antigravity: { label: 'Antigravity', tint: 'antigravity' },
 };
 
-const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
+const allProviders: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
 const formatTokens = (value: number) => {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -26,6 +26,7 @@ type WidgetActivityViewProps = {
   modelBreakdowns: Record<ProviderId, ModelBreakdownEntry[]>;
   recentActivity: Record<ProviderId, RecentActivityEntry[]>;
   onSelectProvider: (provider: ProviderId) => void;
+  providers?: ProviderId[];
 };
 
 const WidgetActivityView = ({
@@ -35,6 +36,7 @@ const WidgetActivityView = ({
   modelBreakdowns,
   recentActivity,
   onSelectProvider,
+  providers = allProviders,
 }: WidgetActivityViewProps) => {
   const meta = providerMeta[provider];
   const topModel = modelBreakdowns[provider][0];

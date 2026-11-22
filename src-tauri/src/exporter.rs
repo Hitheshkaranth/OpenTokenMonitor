@@ -337,6 +337,16 @@ pub async fn export_report(
 }
 
 fn csv_field(value: &str) -> String {
+    // Neutralise spreadsheet formula injection: model ids come from local
+    // logs, so a value like `=HYPERLINK(...)` must not be evaluated when the
+    // export is opened in Excel / Sheets.
+    let neutralised;
+    let value = if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        neutralised = format!("'{value}");
+        neutralised.as_str()
+    } else {
+        value
+    };
     if value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r') {
         let mut quoted = String::with_capacity(value.len() + 2);
         quoted.push('"');
@@ -394,6 +404,18 @@ fn window_label(window_type: crate::usage::models::WindowType) -> &'static str {
 mod tests {
     use super::*;
     use crate::usage::models::ModelBreakdownEntry;
+
+    #[test]
+    fn csv_field_neutralises_formula_prefixes() {
+        assert_eq!(csv_field("=1+1"), "'=1+1");
+        assert_eq!(csv_field("@SUM(A1)"), "'@SUM(A1)");
+        assert_eq!(csv_field("-cmd"), "'-cmd");
+        assert_eq!(
+            csv_field("=HYPERLINK(\"x\",\"y\")"),
+            "\"'=HYPERLINK(\"\"x\"\",\"\"y\"\")\""
+        );
+        assert_eq!(csv_field("claude-opus"), "claude-opus");
+    }
 
     fn sample_report() -> UsageReport {
         UsageReport {

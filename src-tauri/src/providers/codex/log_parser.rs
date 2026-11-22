@@ -1,7 +1,5 @@
 use crate::usage::models::{CostEntry, ProviderId};
-use crate::usage_scanners::{
-    scan_codex_cost_snapshot, scan_codex_daily_usage, scan_codex_model_daily_usage,
-};
+use crate::usage_scanners::{scan_codex_daily_usage, scan_codex_model_daily_usage};
 
 pub fn cost_history(days: u32) -> Vec<CostEntry> {
     let mut points = scan_codex_model_daily_usage();
@@ -27,22 +25,23 @@ pub fn cost_history(days: u32) -> Vec<CostEntry> {
 }
 
 pub fn usage_windows() -> (u64, u64) {
-    let mut points = scan_codex_daily_usage();
-    points.sort_by(|a, b| a.day.cmp(&b.day));
-    let session = points.last().map(|p| p.total_tokens).unwrap_or(0);
-    let weekly = points
-        .iter()
-        .rev()
-        .take(7)
-        .map(|p| p.total_tokens)
+    // Anchor on UTC today (as the Claude parser does), not on the most recent
+    // day with data: weeks-old usage must not show up as the current session.
+    let by_day: std::collections::BTreeMap<String, u64> = scan_codex_daily_usage()
+        .into_iter()
+        .map(|p| (p.day, p.total_tokens))
+        .collect();
+    let now = chrono::Utc::now();
+    let today = now.format("%Y-%m-%d").to_string();
+    let week_cutoff = (now - chrono::Duration::days(6))
+        .format("%Y-%m-%d")
+        .to_string();
+    let session = by_day.get(&today).copied().unwrap_or(0);
+    let weekly = by_day
+        .range(week_cutoff..=today)
+        .map(|(_, v)| *v)
         .sum::<u64>();
-    let fallback = scan_codex_cost_snapshot();
-    let safe_session = if session == 0 {
-        fallback.total_tokens
-    } else {
-        session
-    };
-    (safe_session, weekly)
+    (session, weekly)
 }
 
 fn retain_recent_days<T>(points: &mut Vec<T>, days: u32)
@@ -53,14 +52,12 @@ where
         return;
     }
 
-    let mut keep_days = std::collections::BTreeSet::<String>::new();
-    for point in points.iter().rev() {
-        if keep_days.len() >= days as usize && !keep_days.contains(point.day()) {
-            break;
-        }
-        keep_days.insert(point.day().to_string());
-    }
-    points.retain(|point| keep_days.contains(point.day()));
+    // Calendar window (today and the previous `days - 1` UTC days), not "the
+    // last N days that happen to have data".
+    let cutoff = (chrono::Utc::now().date_naive() - chrono::Duration::days(days as i64 - 1))
+        .format("%Y-%m-%d")
+        .to_string();
+    points.retain(|point| point.day() >= cutoff.as_str());
 }
 
 trait HasDay {

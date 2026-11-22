@@ -71,7 +71,7 @@ pub async fn fetch_usage(access_token: &str) -> Result<CodexBearerWindow, String
         }
 
         if !status.is_success() {
-            let body = res.text().await.unwrap_or_default();
+            let body = crate::providers::error_body_snippet(res).await;
             return Err(format!("Codex bearer API returned {status}: {body}"));
         }
 

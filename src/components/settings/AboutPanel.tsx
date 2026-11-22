@@ -1,6 +1,5 @@
 import { Activity, Cpu, FolderOpen, Github, LayoutDashboard, Package } from 'lucide-react';
-import { openUrl } from '@tauri-apps/plugin-opener';
-import { open as openWithShell } from '@tauri-apps/plugin-shell';
+import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import { invoke } from '@tauri-apps/api/core';
 import GlassButton from '@/components/glass/GlassButton';
 import { APP_NAME, APP_REPO_URL, APP_VERSION } from '@/constants/appMeta';
@@ -32,7 +31,7 @@ const openLogFolder = async () => {
   if (!isTauriRuntime()) return;
   try {
     const dir = await invoke<string>('get_log_directory');
-    await openWithShell(dir);
+    await openPath(dir);
   } catch (error) {
     console.error('failed to open log directory', error);
   }

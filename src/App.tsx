@@ -138,6 +138,11 @@ const App = () => {
 
   // Redirect to valid page if current provider gets disabled
   useEffect(() => {
+    // Compare's nav tab only exists with >=2 enabled providers (Sidebar).
+    if (page === 'comparison' && activeProviders.length < 2) {
+      setPage('overview');
+      return;
+    }
     if (page === 'overview' || page === 'settings' || page === 'projects' || !isProviderPage(page)) return;
     if (enabledProviders[page]) return;
     setPage(activeProviders.length > 0 ? activeProviders[0] : 'overview');
@@ -215,7 +220,7 @@ const App = () => {
     }
   };
 
-  useKeyboardShortcuts(setPage, refreshEverything);
+  useKeyboardShortcuts(setPage, refreshEverything, enabledProviders);
 
   // Keep the render branching in one place so widget mode, settings, overview,
   // and provider detail screens all share the same loading/error rules.
@@ -281,6 +286,7 @@ const App = () => {
           alerts={alerts}
           statuses={statuses}
           trendDays={trendDays}
+          activeProviders={activeProviders}
           onNavigate={(provider) => setPage(provider)}
         />
       );
@@ -321,6 +327,7 @@ const App = () => {
         statuses={statuses}
         modelBreakdowns={modelBreakdowns}
         recentActivity={recentActivity}
+        activeProviders={activeProviders}
         onExpand={() => setWidgetMode(false)}
         onRefresh={refreshEverything}
         refreshBusy={refreshBusy}

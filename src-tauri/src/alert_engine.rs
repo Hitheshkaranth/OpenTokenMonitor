@@ -165,6 +165,14 @@ pub fn evaluate(app: &AppHandle, snapshots: &[UsageSnapshot]) {
                 .copied()
                 .unwrap_or_default();
             for window in &snapshot.windows {
+                // Local-log estimates use invented limits and can be days old;
+                // never fire threshold or pace notifications on them.
+                if matches!(
+                    window.accuracy,
+                    crate::usage::models::WindowAccuracy::Approximate
+                ) {
+                    continue;
+                }
                 let key = (snapshot.provider, window.window_type);
                 let resets_at = window.resets_at.map(|d| d.timestamp());
                 let (mut next, fired) =

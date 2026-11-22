@@ -9,8 +9,9 @@ import { getProviderAccessState, providerAccessColor } from '@/utils/providerAcc
 import { displayWindows } from '@/utils/usageWindows';
 import '@/components/comparison/comparison.css';
 import { formatUsd } from '@/utils/format';
+import { activateOnKey } from '@/components/glass/GlassPanel';
 
-const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
+const allProviders: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
 const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex' | 'antigravity'; color: string }> = {
   claude: { label: 'Claude', tint: 'claude', color: '#d97757' },
@@ -19,9 +20,9 @@ const providerMeta: Record<ProviderId, { label: string; tint: 'claude' | 'codex'
 };
 
 const severityColor: Record<UsageAlert['severity'], string> = {
-  warning: '#f59e0b',
-  high: '#f97316',
-  critical: '#ef4444',
+  warning: 'var(--severity-warning)',
+  high: 'var(--severity-high)',
+  critical: 'var(--severity-critical)',
 };
 
 const formatTokens = (value: number) => {
@@ -83,7 +84,15 @@ const ComparisonRow = ({ provider, snapshot, cost, tokens, alerts, status, trend
   const pct = Math.max(0, Math.min(100, headline?.utilization ?? 0));
 
   return (
-    <div className={`overview-card-v2 glass-${meta.tint} cmp-row`} onClick={onClick} title={access.detail}>
+    <div
+      className={`overview-card-v2 glass-${meta.tint} cmp-row`}
+      onClick={onClick}
+      onKeyDown={onClick ? activateOnKey(onClick) : undefined}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? `${meta.label} details` : undefined}
+      title={access.detail}
+    >
       <div className="overview-card-gauge-wrap">
         <WidgetGauge provider={provider} primaryPct={pct} />
       </div>
@@ -154,6 +163,8 @@ type ComparisonViewProps = {
   alerts: Record<ProviderId, UsageAlert[]>;
   statuses: Record<ProviderId, ProviderStatus | undefined>;
   trendDays: number;
+  /** Enabled providers; disabled ones get no row or legend entry. */
+  activeProviders?: ProviderId[];
   onNavigate?: (provider: ProviderId) => void;
 };
 
@@ -164,8 +175,10 @@ const ComparisonView = ({
   alerts,
   statuses,
   trendDays,
+  activeProviders = allProviders,
   onNavigate,
 }: ComparisonViewProps) => {
+  const providers = activeProviders;
   const fetchSnapshot = useUsageStore((s) => s.fetchSnapshot);
   const fetchCostHistory = useUsageStore((s) => s.fetchCostHistory);
   const fetchStatus = useUsageStore((s) => s.fetchStatus);
@@ -179,7 +192,7 @@ const ComparisonView = ({
       ]);
     };
     run().catch((err) => console.warn('comparison data fetch failed', err));
-  }, [fetchSnapshot, fetchCostHistory, fetchStatus, fetchUsageReport, trendDays]);
+  }, [fetchSnapshot, fetchCostHistory, fetchStatus, fetchUsageReport, trendDays, providers]);
 
   const rows = providers.map((provider) => ({
     provider,

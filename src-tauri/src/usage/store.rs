@@ -60,6 +60,15 @@ impl UsageStore {
         if removed > 0 {
             tracing::info!("[store] purged {removed} legacy cost rows on open");
         }
+        // Snapshots for retired providers can't deserialize into `ProviderId`,
+        // so every read logs a warning for them. They're latest-only caches.
+        for table in ["snapshots", "snapshot_history"] {
+            conn.execute(
+                &format!("DELETE FROM {table} WHERE provider NOT IN ({known})"),
+                [],
+            )
+            .map_err(|e| e.to_string())?;
+        }
         Ok(())
     }
 
@@ -386,11 +395,6 @@ impl UsageStore {
         provider: ProviderId,
         days: u32,
     ) -> Result<Vec<CostEntry>, String> {
-        let since_day = (chrono::Utc::now().date_naive()
-            - chrono::Duration::days(i64::from(days.max(1)) - 1))
-        .format("%Y-%m-%d")
-        .to_string();
-
         let conn = self
             .conn
             .lock()
@@ -404,13 +408,16 @@ impl UsageStore {
             )
             .map_err(|e| e.to_string())?;
 
+        // Calendar window: today (UTC) and the previous `days - 1` days. Days
+        // without usage simply have no rows; they are not skipped over.
+        let cutoff = calendar_cutoff(days);
         let mut rows = stmt
-            .query(params![provider.as_str(), since_day])
+            .query(params![provider.as_str(), cutoff])
             .map_err(|e| e.to_string())?;
 
         let mut out = Vec::new();
         while let Some(row) = rows.next().map_err(|e| e.to_string())? {
-            out.push(CostEntry {
+            let mut entry = CostEntry {
                 date: row.get(0).map_err(|e| e.to_string())?,
                 provider,
                 model: row.get(1).map_err(|e| e.to_string())?,
@@ -419,7 +426,9 @@ impl UsageStore {
                 cache_read_tokens: row.get(4).map_err(|e| e.to_string())?,
                 cache_write_tokens: row.get(5).map_err(|e| e.to_string())?,
                 estimated_cost_usd: row.get(6).map_err(|e| e.to_string())?,
-            });
+            };
+            entry.estimated_cost_usd = current_cost(&entry);
+            out.push(entry);
         }
         out.reverse();
         Ok(out)
@@ -432,11 +441,7 @@ impl UsageStore {
         let mut total_tokens = 0u64;
 
         for entry in entries {
-            let tokens = entry
-                .input_tokens
-                .saturating_add(entry.output_tokens)
-                .saturating_add(entry.cache_read_tokens)
-                .saturating_add(entry.cache_write_tokens);
+            let tokens = entry_total(&entry);
             total_cost += entry.estimated_cost_usd;
             total_tokens = total_tokens.saturating_add(tokens);
             let point = by_day
@@ -471,11 +476,7 @@ impl UsageStore {
         let mut by_model = std::collections::BTreeMap::<String, ModelBreakdownEntry>::new();
 
         for entry in entries {
-            let total_tokens = entry
-                .input_tokens
-                .saturating_add(entry.output_tokens)
-                .saturating_add(entry.cache_read_tokens)
-                .saturating_add(entry.cache_write_tokens);
+            let total_tokens = entry_total(&entry);
             let slot = by_model
                 .entry(entry.model.clone())
                 .or_insert_with(|| ModelBreakdownEntry {
@@ -537,7 +538,7 @@ impl UsageStore {
             .map_err(|_| "store lock poisoned".to_string())?;
         let mut stmt = conn
             .prepare(
-                "SELECT day, model, input_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_usd
+                "SELECT day, model, input_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_usd, output_tokens
                  FROM cost_entries
                  WHERE provider = ?1 AND day >= ?2",
             )
@@ -565,7 +566,9 @@ impl UsageStore {
             let input: u64 = row.get(2).map_err(|e| e.to_string())?;
             let read: u64 = row.get(3).map_err(|e| e.to_string())?;
             let write: u64 = row.get(4).map_err(|e| e.to_string())?;
-            let cost: f64 = row.get(5).map_err(|e| e.to_string())?;
+            let output: u64 = row.get(6).map_err(|e| e.to_string())?;
+            let stored_cost: f64 = row.get(5).map_err(|e| e.to_string())?;
+            let cost = reprice(provider, &model, input, read, write, output, stored_cost);
             let Ok(date) = chrono::NaiveDate::parse_from_str(&day, "%Y-%m-%d") else {
                 continue;
             };
@@ -625,9 +628,77 @@ impl UsageStore {
     }
 }
 
+/// First day (inclusive, `YYYY-MM-DD`) of a `days`-long calendar window
+/// ending today (UTC).
+fn calendar_cutoff(days: u32) -> String {
+    let span = i64::from(days.max(1)) - 1;
+    (chrono::Utc::now().date_naive() - chrono::Duration::days(span))
+        .format("%Y-%m-%d")
+        .to_string()
+}
+
+/// Token total for one cost row. Codex and Antigravity already count cached
+/// tokens inside `input_tokens`, so only Claude adds `cache_read` on top.
+fn entry_total(e: &CostEntry) -> u64 {
+    let base = e
+        .input_tokens
+        .saturating_add(e.output_tokens)
+        .saturating_add(e.cache_write_tokens);
+    // Claude and Codex rows store cache reads beside the uncached input
+    // (Codex since migration v4); Antigravity counts them inside input.
+    match e.provider {
+        ProviderId::Claude | ProviderId::Codex => base.saturating_add(e.cache_read_tokens),
+        ProviderId::Antigravity => base,
+    }
+}
+
+/// Cost of a stored row at today's rates, so rows written under an older
+/// price table (or before a pricing fix) are not frozen at a wrong price.
+/// Falls back to the stored cost for models the rate tables don't know.
+fn reprice(
+    provider: ProviderId,
+    model: &str,
+    input: u64,
+    cache_read: u64,
+    cache_write: u64,
+    output: u64,
+    stored: f64,
+) -> f64 {
+    use crate::pricing;
+    match provider {
+        ProviderId::Claude if pricing::claude_rates(model).is_some() => {
+            pricing::claude_cost_usd(model, input, cache_read, cache_write, output)
+        }
+        ProviderId::Codex if pricing::codex_rates(model).is_some() => {
+            // Rows hold uncached input; codex_cost_usd expects the total.
+            pricing::codex_cost_usd(model, input.saturating_add(cache_read), cache_read, output)
+        }
+        ProviderId::Antigravity => pricing::antigravity_cost_usd(model, input, cache_read, output),
+        _ => stored,
+    }
+}
+
+fn current_cost(e: &CostEntry) -> f64 {
+    reprice(
+        e.provider,
+        &e.model,
+        e.input_tokens,
+        e.cache_read_tokens,
+        e.cache_write_tokens,
+        e.output_tokens,
+        e.estimated_cost_usd,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn days_ago(n: i64) -> String {
+        (chrono::Utc::now().date_naive() - chrono::Duration::days(n))
+            .format("%Y-%m-%d")
+            .to_string()
+    }
 
     fn temp_store(name: &str) -> UsageStore {
         let path = std::env::temp_dir().join(format!(
@@ -635,7 +706,7 @@ mod tests {
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
-                .as_millis()
+                .as_nanos()
         ));
         UsageStore::open(&path).expect("open temp store")
     }
@@ -645,7 +716,7 @@ mod tests {
         let store = temp_store("migration-v1");
 
         let entry = |model: &str| CostEntry {
-            date: day_ago(1),
+            date: days_ago(0),
             provider: ProviderId::Claude,
             model: model.to_string(),
             input_tokens: 10,
@@ -726,7 +797,7 @@ mod tests {
     fn migration_v4_stops_double_counting_codex_cached_input() {
         let store = temp_store("migration-v4");
         let row = |provider: ProviderId| CostEntry {
-            date: day_ago(1),
+            date: days_ago(1),
             provider,
             model: "gpt-5".to_string(),
             // Legacy Codex shape: input includes the 200 cached tokens.
@@ -774,20 +845,16 @@ mod tests {
         }
     }
 
-    /// UTC calendar day `n` days before today, in the store's `day` format.
-    fn day_ago(n: i64) -> String {
-        (chrono::Utc::now().date_naive() - chrono::Duration::days(n))
-            .format("%Y-%m-%d")
-            .to_string()
-    }
-
     #[test]
-    fn cost_history_keeps_every_model_row_in_window() {
-        let store = temp_store("distinct-days");
+    fn cost_history_uses_a_calendar_window() {
+        let store = temp_store("calendar-window-gaps");
         let entries = vec![
-            sample_entry(&day_ago(1), "gpt-5", 10, 5, 1.0),
-            sample_entry(&day_ago(1), "gpt-5-mini", 4, 2, 0.2),
-            sample_entry(&day_ago(0), "gpt-5", 8, 4, 0.8),
+            sample_entry(&days_ago(1), "gpt-5", 10, 5, 1.0),
+            sample_entry(&days_ago(1), "gpt-5-mini", 4, 2, 0.2),
+            sample_entry(&days_ago(0), "gpt-5", 8, 4, 0.8),
+            // Outside a 2-day calendar window; the old "last N active days"
+            // query would have pulled this row in.
+            sample_entry(&days_ago(5), "gpt-5", 8, 4, 0.8),
         ];
         store
             .save_cost_entries(&entries)
@@ -797,6 +864,49 @@ mod tests {
             .get_cost_history(ProviderId::Codex, 2)
             .expect("load cost history");
         assert_eq!(history.len(), 3);
+        assert!(history.iter().all(|e| e.date != days_ago(5)));
+    }
+
+    #[test]
+    fn cost_history_skips_inactive_gaps_instead_of_reaching_back() {
+        let store = temp_store("calendar-gap");
+        store
+            .save_cost_entries(&[sample_entry(&days_ago(40), "gpt-5", 8, 4, 0.8)])
+            .expect("save");
+        assert!(store
+            .get_cost_history(ProviderId::Codex, 30)
+            .expect("load")
+            .is_empty());
+    }
+
+    #[test]
+    fn cost_history_reprices_from_stored_tokens() {
+        let store = temp_store("reprice");
+        // Stored at a stale price; gpt-5.1-codex-mini is $0.25 / $2.00 per 1M.
+        store
+            .save_cost_entries(&[sample_entry(
+                &days_ago(0),
+                "gpt-5.1-codex-mini",
+                1_000_000,
+                1_000_000,
+                99.0,
+            )])
+            .expect("save");
+        let history = store.get_cost_history(ProviderId::Codex, 1).expect("load");
+        assert!((history[0].estimated_cost_usd - 2.25).abs() < 1e-9);
+    }
+
+    #[test]
+    fn codex_totals_do_not_double_count_cached_input() {
+        let store = temp_store("codex-cached-total");
+        // Uncached input 1M beside 9M cache reads (migration-v4 shape).
+        let mut e = sample_entry(&days_ago(0), "custom-model", 1_000_000, 100_000, 1.0);
+        e.cache_read_tokens = 9_000_000;
+        store.save_cost_entries(&[e]).expect("save");
+        let trend = store.get_usage_trends(ProviderId::Codex, 7).expect("trend");
+        assert_eq!(trend.total_tokens, 10_100_000);
+        let breakdown = store.get_model_breakdown(ProviderId::Codex, 7).expect("bd");
+        assert_eq!(breakdown[0].total_tokens, 10_100_000);
     }
 
     #[test]
@@ -805,9 +915,9 @@ mod tests {
         // Only two active days, but one is outside a 7-day window. The old
         // "last N distinct days" query returned both.
         let entries = vec![
-            sample_entry(&day_ago(20), "gpt-5", 100, 50, 10.0),
-            sample_entry(&day_ago(6), "gpt-5", 10, 5, 1.0),
-            sample_entry(&day_ago(7), "gpt-5", 1, 1, 0.1),
+            sample_entry(&days_ago(20), "gpt-5", 100, 50, 10.0),
+            sample_entry(&days_ago(6), "gpt-5", 10, 5, 1.0),
+            sample_entry(&days_ago(7), "gpt-5", 1, 1, 0.1),
         ];
         store
             .save_cost_entries(&entries)
@@ -817,16 +927,16 @@ mod tests {
             .get_cost_history(ProviderId::Codex, 7)
             .expect("load cost history");
         let days: Vec<String> = history.into_iter().map(|e| e.date).collect();
-        assert_eq!(days, vec![day_ago(6)]);
+        assert_eq!(days, vec![days_ago(6)]);
     }
 
     #[test]
     fn model_breakdown_aggregates_rows_per_model() {
         let store = temp_store("breakdown");
         let entries = vec![
-            sample_entry(&day_ago(1), "gpt-5", 10, 5, 1.0),
-            sample_entry(&day_ago(0), "gpt-5", 12, 6, 1.2),
-            sample_entry(&day_ago(0), "gpt-5-mini", 4, 2, 0.2),
+            sample_entry(&days_ago(1), "gpt-5", 10, 5, 1.0),
+            sample_entry(&days_ago(0), "gpt-5", 12, 6, 1.2),
+            sample_entry(&days_ago(0), "gpt-5-mini", 4, 2, 0.2),
         ];
         store
             .save_cost_entries(&entries)
@@ -845,8 +955,9 @@ mod tests {
     fn usage_trends_aggregate_multiple_models_into_one_day() {
         let store = temp_store("trends");
         let entries = vec![
-            sample_entry(&day_ago(1), "gpt-5", 10, 5, 1.0),
-            sample_entry(&day_ago(1), "gpt-5-mini", 4, 2, 0.2),
+            // Unpriced model ids keep their stored cost.
+            sample_entry(&days_ago(1), "custom-a", 10, 5, 1.0),
+            sample_entry(&days_ago(1), "custom-b", 4, 2, 0.2),
         ];
         store
             .save_cost_entries(&entries)
@@ -856,7 +967,7 @@ mod tests {
             .get_usage_trends(ProviderId::Codex, 30)
             .expect("load usage trends");
         assert_eq!(trend.points.len(), 1);
-        assert_eq!(trend.points[0].date, day_ago(1));
+        assert_eq!(trend.points[0].date, days_ago(1));
         assert_eq!(trend.points[0].total_tokens, 21);
         assert!((trend.points[0].cost_usd - 1.2).abs() < f64::EPSILON);
     }
@@ -939,7 +1050,7 @@ mod tests {
         ));
         let store = UsageStore::open(&path).unwrap();
         let entry = |provider: ProviderId, model: &str| CostEntry {
-            date: day_ago(1),
+            date: days_ago(0),
             provider,
             model: model.to_string(),
             input_tokens: 10,

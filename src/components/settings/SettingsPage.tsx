@@ -10,6 +10,7 @@ import AboutPanel from '@/components/settings/AboutPanel';
 import { Budget, BudgetForecast, ExportFormat, PerProviderThresholds, ProviderId, ProviderStatus, RefreshCadence, TrayTitleMode } from '@/types';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useUsageStore } from '@/stores/usageStore';
+import { providerAccessColor } from '@/utils/providerAccess';
 
 const providers: ProviderId[] = ['claude', 'codex', 'antigravity'];
 
@@ -350,6 +351,7 @@ const SettingsPage = () => {
                 checked={launchAtStartup}
                 onChange={setLaunchAtStartup}
                 label={launchAtStartup ? 'On' : 'Off'}
+                ariaLabel="Launch at startup"
               />
             </div>
           </div>
@@ -379,7 +381,7 @@ const SettingsPage = () => {
                     <div className="stg-provider-top">
                       <ProviderLogo provider={provider} size={16} />
                       <span className="stg-provider-name">{providerLabels[provider]}</span>
-                      <span className="stg-badge" style={{ color: status?.health === 'active' ? '#34d399' : status?.health === 'error' ? '#f87171' : '#fbbf24' }}>
+                      <span className="stg-badge" style={{ color: providerAccessColor(status?.health ?? 'waiting') }}>
                         {healthLabel(status?.health)}
                       </span>
                       <span className="stg-badge">{providerAlertCount} alerts</span>
@@ -387,6 +389,7 @@ const SettingsPage = () => {
                         checked={isEnabled}
                         onChange={(next) => setProviderEnabled(provider, next)}
                         label={isEnabled ? 'On' : 'Off'}
+                        ariaLabel={`${providerLabels[provider]} enabled`}
                       />
                     </div>
                     <div className="stg-provider-key-row">
@@ -395,6 +398,7 @@ const SettingsPage = () => {
                         value={apiKeys[provider]}
                         onChange={(value) => setApiKeyLocal(provider, value)}
                         placeholder={placeholders[provider]}
+                        aria-label={`${providerLabels[provider]} API key`}
                         monospace
                       />
                       <GlassButton variant="primary" size="sm" onClick={() => saveKey(provider)}>
@@ -458,6 +462,7 @@ const SettingsPage = () => {
                 checked={notificationsEnabled}
                 onChange={setNotificationsEnabled}
                 label={notificationsEnabled ? 'On' : 'Off'}
+                ariaLabel="Desktop notifications"
               />
             </div>
             <div className="stg-note">
@@ -496,6 +501,7 @@ const SettingsPage = () => {
                               })
                             }
                             style={{ minWidth: 60 }}
+                            aria-label={`${providerLabels[provider]} ${field} threshold (%)`}
                           />
                         </div>
                       ))}
@@ -539,6 +545,7 @@ const SettingsPage = () => {
                             applyProviderBudget(provider, { ...budget, amount_usd: Math.max(0, Number(next) || 0) })
                           }
                           style={{ minWidth: 66 }}
+                          aria-label={`${providerLabels[provider]} budget amount (USD)`}
                         />
                       </div>
                       <div className="stg-pp-field">
@@ -551,6 +558,7 @@ const SettingsPage = () => {
                             applyProviderBudget(provider, { ...budget, period_days: Math.max(1, Number(next) || 1) })
                           }
                           style={{ minWidth: 66 }}
+                          aria-label={`${providerLabels[provider]} budget period (days)`}
                         />
                       </div>
                     </div>

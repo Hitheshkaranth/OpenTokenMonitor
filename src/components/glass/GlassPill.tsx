@@ -8,7 +8,7 @@ type GlassPillProps = PropsWithChildren<{
   style?: CSSProperties;
 }>;
 
-const GlassPill = ({ children, onClick, active = false, title, className = '', style }: GlassPillProps) => {
+const GlassPill = ({ children, onClick, active, title, className = '', style }: GlassPillProps) => {
   return (
     <button
       type="button"
@@ -21,6 +21,8 @@ const GlassPill = ({ children, onClick, active = false, title, className = '', s
         ...style,
       }}
       onClick={onClick}
+      // Only segmented/toggle uses pass `active`; plain pills stay plain buttons.
+      aria-pressed={active}
     >
       {children}
     </button>

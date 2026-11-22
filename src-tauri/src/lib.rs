@@ -146,9 +146,46 @@ fn secrets_store_path(app: &AppHandle) -> PathBuf {
         .join("secrets.json")
 }
 
+/// Make sure secrets.json is owner-only (0600) before the store plugin reads
+/// or writes it. The plugin creates files with the default umask (often
+/// 0644), which on Linux leaves pasted session cookies readable by other
+/// local users. Creating it ourselves first means every later save (which
+/// truncates in place) keeps the private mode.
+fn ensure_secrets_file_private(path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        if path.exists() {
+            if let Err(err) = fs::set_permissions(path, fs::Permissions::from_mode(0o600)) {
+                tracing::warn!("failed to restrict {}: {err}", path.display());
+            }
+        } else {
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(path)
+            {
+                Ok(mut file) => {
+                    let _ = file.write_all(b"{}");
+                }
+                Err(err) => tracing::warn!("failed to create {}: {err}", path.display()),
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
+}
+
 fn load_persisted_api_keys(app: &AppHandle) -> HashMap<ProviderId, String> {
     let mut out = HashMap::new();
     let store_path = secrets_store_path(app);
+    ensure_secrets_file_private(&store_path);
     let Ok(store) = app.store(store_path) else {
         return out;
     };
@@ -169,9 +206,9 @@ pub(crate) fn persist_api_key(
     provider: ProviderId,
     key: &str,
 ) -> Result<(), String> {
-    let store = app
-        .store(secrets_store_path(app))
-        .map_err(|e| e.to_string())?;
+    let store_path = secrets_store_path(app);
+    ensure_secrets_file_private(&store_path);
+    let store = app.store(store_path).map_err(|e| e.to_string())?;
     store.set(
         api_key_store_key(provider),
         serde_json::Value::String(key.to_string()),
@@ -433,9 +470,6 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {

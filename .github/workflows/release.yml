@@ -60,7 +60,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js 20
         uses: actions/setup-node@v7
@@ -363,7 +363,7 @@ jobs:
       HAS_AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY != '' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: winget
         if: ${{ !cancelled() && env.HAS_WINGET_TOKEN == 'true' }}
